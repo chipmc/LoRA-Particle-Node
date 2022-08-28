@@ -119,7 +119,12 @@ void loop() {
 				int randomDelay = random(10);
 				Log.info("Node is preparing to send report with a randomDelay of %i", randomDelay);
 				delay(randomDelay *1000);
-				composeDataReportNode();							// Initiate send data report
+				if (!composeDataReportNode())	{						// Initiate send data report
+					sysStatus.frequencyMinutes = 1;						// Rescue mode
+					Log.info("Send failed - going to send every minute");
+					publishSchedule.withMinuteOfHour(sysStatus.frequencyMinutes, LocalTimeRange(LocalTimeHMS("06:00:00"), LocalTimeHMS("21:59:59")));	 // Publish every 15 minutes from 6am to 10pm
+					state = IDLE_STATE;
+				}
 			} 
 			// The big difference between a node and a gateway - the Node initiates a LoRA exchance by sending data
 			if (receiveAcknowledmentDataReportNode()) {					// Listen for acknowledgement
