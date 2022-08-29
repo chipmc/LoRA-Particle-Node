@@ -6,7 +6,7 @@
 #include "device_pinout.h"
 #include "storage_objects.h"
 
-
+// Format of a data report
 /*
 buf[0] = 0;                                     // to be replaced/updated
 buf[1] = 0;                                     // to be replaced/updated
@@ -21,12 +21,23 @@ buf[9] = temp;							        // Enclosure temp
 buf[10] = battChg;						        // State of charge
 buf[11] = battState; 					        // Battery State
 buf[12] = resets						        // Reset count
-buf[13] = alerts						        // Current alerts
+buf[13] = 1						        		// Reserve for later
 buf[14] = highByte(rssi);				        // Signal strength
 buf[15] = lowByte(rssi); 
 buf[16] = msgCnt++;						       	// Sequential message number
 */
-
+// Format of a data acknowledgement
+/*    
+buf[0] = buf[16];							// Message number
+buf[1] = ((uint8_t) ((Time.now()) >> 24)); // Fourth byte - current time
+buf[2] = ((uint8_t) ((Time.now()) >> 16));	// Third byte
+buf[3] = ((uint8_t) ((Time.now()) >> 8));	// Second byte
+buf[4] = ((uint8_t) (Time.now()));		    // First byte	
+buf[5] = highByte(sysStat.freqencyMinutes);	// For the Gateway minutes on the hour
+buf[6] = lowByte(sysStatus.frequencyMinutes)'		
+buf[5] = highByte(sysStatus.nextReportSeconds);	// Seconds until next report - 16-bit number can go over 2 days
+buf[6] = lowByte(sysStatus.nextReportSeconds);	
+*/
 
 // ************************************************************************
 // *****                      LoRA Setup                              *****
@@ -95,6 +106,8 @@ bool listenForLoRAMessageGateway() {
 		lora_state = (LoRA_State)(0x0F & messageFlag);				// Strip out the overhead byte
 		Log.info("Received from node %d with rssi=%d - a %s message of length %d", from, driver.lastRssi(), loraStateNames[messageFlag] ,len);
 
+		if (lora_state == DATA_RPT) { if(deciperDataReportGateway()) return true;}
+
 	}
 	return false; 
 }
@@ -116,23 +129,27 @@ bool deciperDataReportGateway() {
 	}
 	else Log.info("Message intended for another node");
 
-	// This is a response to a data message it has a length of 9 and a specific payload and message flag
-	// Send a reply back to the originator client
-	buf[0] = 0;                                // to be replaced/updated
-	buf[1] = 0;                                // to be replaced/updated       
-	buf[2] = buf[16];							// Message number
-	buf[3] = ((uint8_t) ((Time.now()) >> 24)); // Fourth byte - current time
-	buf[4] = ((uint8_t) ((Time.now()) >> 16));	// Third byte
-	buf[5] = ((uint8_t) ((Time.now()) >> 8));	// Second byte
-	buf[6] = ((uint8_t) (Time.now()));		    // First byte			
-	buf[7] = highByte(sysStatus.frequencyMinutes);	// Time till next report
-	buf[8] = lowByte(sysStatus.frequencyMinutes);		
-
 	return true;
 }
 
-bool acknowledgeDataReportGateway() {
-	Log.info("Sent response to client message = %d, time = %s, next report = %u minutes", buf[2], Time.timeStr(buf[3] << 24 | buf[4] << 16 | buf[5] <<8 | buf[6]).c_str(), (buf[7] << 8 | buf[8]));
+bool acknowledgeDataReportGateway(int nextSeconds) {
+
+	sysStatus.nextReportSeconds = nextSeconds;
+
+	// This is a response to a data message it has a length of 9 and a specific payload and message flag
+	// Send a reply back to the originator client
+     
+	buf[0] = buf[16];							// Message number
+	buf[1] = ((uint8_t) ((Time.now()) >> 24)); // Fourth byte - current time
+	buf[2] = ((uint8_t) ((Time.now()) >> 16));	// Third byte
+	buf[3] = ((uint8_t) ((Time.now()) >> 8));	// Second byte
+	buf[4] = ((uint8_t) (Time.now()));		    // First byte			
+	buf[5] = highByte(sysStatus.frequencyMinutes);	// Frequency of reports - for Gateways
+	buf[6] = lowByte(sysStatus.frequencyMinutes);	
+	buf[7] = highByte(sysStatus.nextReportSeconds);	// Seconds until next report - for Nodes
+	buf[8] = lowByte(sysStatus.nextReportSeconds);
+	
+	Log.info("Sent response to client message = %d, time = %s, next report = %u seconds", buf[0], Time.timeStr(buf[1] << 24 | buf[2] << 16 | buf[3] <<8 | buf[4]).c_str(), (buf[7] << 8 | buf[8]));
 
 	digitalWrite(BLUE_LED,HIGH);			        // Sending data
 
@@ -171,7 +188,7 @@ bool composeDataReportNode() {
 	buf[10] = current.stateOfCharge;
 	buf[11] = current.batteryState;	
 	buf[12] = sysStatus.resetCount;
-	buf[13] = sysStatus.lastAlertCode;
+	buf[13] = 1;				// reserved for later
 	buf[14] = highByte(driver.lastRssi());
 	buf[15] = lowByte(driver.lastRssi()); 
 	buf[16] = msgCnt++;
@@ -198,10 +215,10 @@ bool receiveAcknowledmentDataReportNode() {
 		buf[len] = 0;
 		lora_state = (LoRA_State)messageFlag;
 		Log.info("Received from node %d with rssi=%d - a %s message of length %d", from, driver.lastRssi(), loraStateNames[lora_state] ,len);
-		sysStatus.frequencyMinutes = ((buf[7] << 8) | buf[8]);
-		uint32_t newTime = ((buf[3] << 24) | (buf[4] << 16) | (buf[5] << 8) | buf[6]);
+		sysStatus.nextReportSeconds = ((buf[7] << 8) | buf[8]);
+		uint32_t newTime = ((buf[1] << 24) | (buf[2] << 16) | (buf[3] << 8) | buf[4]);
 		Time.setTime(newTime);  // Set time based on response from gateway
-		Log.info("Time set to %s and next report is in %u minutes", Time.timeStr(newTime).c_str(),sysStatus.frequencyMinutes);
+		Log.info("Time set to %s and next report is in %u seconds", Time.timeStr(newTime).c_str(),sysStatus.nextReportSeconds);
 		return true;
 	}
 	else {

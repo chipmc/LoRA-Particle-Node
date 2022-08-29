@@ -22,7 +22,7 @@ bool initializeLoRA();                      // Initialize the LoRA Radio
 // Gateway Functions
 bool listenForLoRAMessageGateway();                // When we are in listening mode
 bool deciperDataReportGateway();                   // Gateway - decodes data from report
-bool acknowledgeDataReportGateway();               // Gateway- acknowledged recipt of a data report
+bool acknowledgeDataReportGateway(int nextSeconds);// Gateway- acknowledged recipt of a data report
 
 // Node Functions
 bool composeDataReportNode();                  // Node - Composes data report
