@@ -69,13 +69,15 @@ void setup() {
         ab1805.setWDT(AB1805::WATCHDOG_MAX_SECONDS);// Enable watchdog
     }
 
-	initializeLoRA();								// Start the LoRA radio
+	initializeLoRA(false);								// Start the LoRA radio - Node
 
 	// Local nodes don't need to know the actual time - their clocks will be set by the gateway
 	if (!Time.isValid()) rescueMode = true;
   	Log.info("Startup complete with %s time and with battery %4.2f", (Time.isValid())? "valid" : "invalid", System.batteryCharge());
 
   	attachInterrupt(BUTTON_PIN,userSwitchISR,CHANGE); // We may need to monitor the user switch to change behaviours / modes
+
+	if (!Time.isValid() || sysStatus.nodeNumber < 10) state = ERROR_STATE;
 
 	if (state == INITIALIZATION_STATE) state = LoRA_STATE;  // This is not a bad way to start - could also go to the LoRA_STATE
 }
@@ -119,6 +121,12 @@ void loop() {
 			}
 			else rescueMode = true;
 		} break;
+
+		case ERROR_STATE: {														// Where we go if things are not quite right
+			composeJoinRequesttNode();
+			if (receiveAcknowledmentJoinRequestNode()) state = IDLE_STATE;
+			else rescueMode = true;
+		}
 	}
 
 	ab1805.loop();                                  							// Keeps the RTC synchronized with the Boron's clock
