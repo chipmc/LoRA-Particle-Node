@@ -9,6 +9,7 @@
 // v0.01 - initial attempt - no sleep
 // v0.02 - Adding sleep and scheduling using localTimeRK
 // v0.03 - Refactoring the code to break up the main file monolith
+// v0.04 - Tested with Join and Report - works!
 
 // Particle Libraries
 #include <RHMesh.h>
@@ -72,7 +73,6 @@ void setup() {
 	initializeLoRA(false);								// Start the LoRA radio - Node
 
 	// Local nodes don't need to know the actual time - their clocks will be set by the gateway
-	if (!Time.isValid()) rescueMode = true;
   	Log.info("Startup complete with %s time and with battery %4.2f", (Time.isValid())? "valid" : "invalid", System.batteryCharge());
 
   	attachInterrupt(BUTTON_PIN,userSwitchISR,CHANGE); // We may need to monitor the user switch to change behaviours / modes
@@ -123,8 +123,12 @@ void loop() {
 		} break;
 
 		case ERROR_STATE: {														// Where we go if things are not quite right
+			if (state != oldState) publishStateTransition();                   // We will apply the back-offs before sending to ERROR state - so if we are here we will take action
 			composeJoinRequesttNode();
-			if (receiveAcknowledmentJoinRequestNode()) state = IDLE_STATE;
+			if (receiveAcknowledmentJoinRequestNode()) {
+				lastPublish = Time.now();
+				state = IDLE_STATE;
+			}
 			else rescueMode = true;
 		}
 	}
