@@ -12,9 +12,9 @@
  * !MODE -
  * GND -
  * D19 - A0 -               
- * D18 - A1 -               
- * D17 - A2 -               
- * D16 - A3 -
+ * D18 - A1 -               PIR sensor intPin         
+ * D17 - A2 -               disable power module pin     
+ * D16 - A3 -               led enable pin
  * D15 - A4 -               Internal (TMP32) Temp Sensor
  * D14 - A5 / SPI SS -      RFM9x
  * D13 - SCK - SPI Clock -  
@@ -38,6 +38,7 @@
  * D0 - SDA - I2C Data -    FRAM / RTX and I2C Bus
 ***********************************************************************************************************************/
 
+
 //Define pins for the RFM9x on my Particle carrier board
 const pin_t RFM95_CS =      A5;                     // SPI Chip select pin - Standard SPI pins otherwise
 const pin_t RFM95_RST =     D3;                     // Radio module reset
@@ -47,6 +48,11 @@ const pin_t TMP36_SENSE_PIN   = A4;
 const pin_t BUTTON_PIN        = D4;
 const pin_t BLUE_LED          = D7;
 const pin_t WAKEUP_PIN        = D8;
+// Sensor specific Pins
+// Specific to the sensor
+extern const pin_t INT_PIN = A1;                   // May need to change this
+extern const pin_t MODULE_POWER_PIN = A2;          // Make sure we document this above
+const pin_t LED_POWER_PIN = A3;
 
 bool initializePinModes() {
     Log.info("Initalizing the pinModes");
@@ -54,6 +60,11 @@ bool initializePinModes() {
     pinMode(BUTTON_PIN,INPUT_PULLUP);               // User button on the carrier board - active LOW
     pinMode(WAKEUP_PIN,INPUT);                      // This pin is active HIGH
     pinMode(BLUE_LED,OUTPUT);                       // On the Boron itself
+    pinMode(INT_PIN, INPUT);
+    pinMode(MODULE_POWER_PIN, OUTPUT);
+    pinMode(LED_POWER_PIN,OUTPUT);
+    digitalWrite(LED_POWER_PIN,LOW);                // Turns on the LEd on the PIR sensor
+    digitalWrite(MODULE_POWER_PIN,LOW);             // Enable (LOW) or disable (HIGH) the sensor
     return true;
 }
 

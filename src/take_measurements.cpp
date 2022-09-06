@@ -135,3 +135,27 @@ void getSignalStrength() {
 
   snprintf(signalStr,sizeof(signalStr), "%s S:%2.0f%%, Q:%2.0f%% ", radioTech[rat], strengthPercentage, qualityPercentage);
 }
+
+
+
+/**
+ * @brief This function is called once a hardware interrupt is triggered by the device's sensor
+ * 
+ * @details The sensor may change based on the settings in sysSettings but the overall concept of operations
+ * is the same regardless.  The sensor will trigger an interrupt, which will set a flag. In the main loop
+ * that flag will call this function which will determine if this event should "count" as a visitor.
+ * 
+ */
+void recordCount() // This is where we check to see if an interrupt is set when not asleep or act on a tap that woke the device
+{
+  pinSetFast(BLUE_LED);                                               // Turn on the blue LED
+
+  current.lastCountTime = Time.now();
+  current.hourlyCount++;                                              // Increment the PersonCount
+  current.dailyCount++;                                               // Increment the PersonCount
+  Log.info("Count, hourly: %i. daily: %i",current.hourlyCount,current.dailyCount);
+  delay(200);
+  pinResetFast(BLUE_LED);
+}
+
+

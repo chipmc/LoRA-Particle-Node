@@ -25,5 +25,5 @@ float tmp36TemperatureC (int adcValue);                // Temperature from the t
 bool batteryState();                                   // Data on state of charge and battery status. Returns true if SOC over 60%
 bool isItSafeToCharge();                               // See if it is safe to charge based on the temperature
 void getSignalStrength();
-
+void recordCount();
 #endif
