@@ -35,6 +35,7 @@ void publishStateTransition(void);                  // Keeps track of state mach
 void userSwitchISR();                               // interrupt service routime for the user switch
 int secondsUntilNextEvent(); 						// Time till next scheduled event
 void sensorISR();
+int secondsTillNextEvent();						// This is the node version
 
 // State Machine Variables
 enum State { INITIALIZATION_STATE, ERROR_STATE, IDLE_STATE, SLEEPING_STATE, LoRA_STATE, CONNECTING_STATE, DISCONNECTING_STATE, REPORTING_STATE};
@@ -66,7 +67,7 @@ void setup() {
 
     {                                               // Initialize AB1805 Watchdog and RTC                                 
         ab1805.withFOUT(D8).setup();                // The carrier board has D8 connected to FOUT for wake interrupts
-        ab1805.resetConfig();                       // Reset the AB1805 configuration to default values
+        // ab1805.resetConfig();                       // Reset the AB1805 configuration to default values
         ab1805.setWDT(AB1805::WATCHDOG_MAX_SECONDS);// Enable watchdog
     }
 
@@ -85,10 +86,13 @@ void setup() {
 		current.alertCodeNode = 1; // For testing
 		sysStatus.nextReportSeconds = 10;
 	}
+
+	/*
 	else if (!Time.isValid()) {
 		current.alertCodeNode = 2;
 		sysStatus.nextReportSeconds = 10;
 	}
+	*/
 
   	takeMeasurements();                                                  // Populates values so you can read them before the hour
   
@@ -96,7 +100,7 @@ void setup() {
     attachInterrupt(INT_PIN, sensorISR, RISING);                     	// Pressure Sensor interrupt from low to high
 	attachInterrupt(BUTTON_PIN,userSwitchISR,CHANGE); // We may need to monitor the user switch to change behaviours / modes
 
-	if (state == INITIALIZATION_STATE) state = IDLE_STATE;               // IDLE unless otherwise from above code
+	if (state == INITIALIZATION_STATE) state = LoRA_STATE;               // IDLE unless otherwise from above code
   	Log.info("Startup complete for the Node with alert code %d", current.alertCodeNode);
   	digitalWrite(BLUE_LED,LOW);                                           // Signal the end of startup
 }
@@ -114,10 +118,11 @@ void loop() {
 		} break;
 
 		case SLEEPING_STATE: {
+			int wakeInSeconds = 0;
 			if (state != oldState) publishStateTransition();                   // We will apply the back-offs before sending to ERROR state - so if we are here we will take action
 			ab1805.stopWDT();  												   // No watchdogs interrupting our slumber
-			int wakeInSeconds = sysStatus.nextReportSeconds - (Time.now() - lastPublish);  // sleep till next event
-			Log.info("Sleep for %i seconds until next event at %s", wakeInSeconds, Time.timeStr(Time.now()+wakeInSeconds).c_str());
+			wakeInSeconds = secondsTillNextEvent();								// Figure out how long to sleep 
+			Log.info("Sleep for %i seconds until next event %s", wakeInSeconds, (Time.isValid()) ? Time.timeStr(Time.now()+wakeInSeconds).c_str(): " ");
 			delay(2000);									// Make sure message gets out
 			config.mode(SystemSleepMode::ULTRA_LOW_POWER)
 				.gpio(BUTTON_PIN,CHANGE)
@@ -131,7 +136,7 @@ void loop() {
 			}
 			else if (result.wakeupPin() == INT_PIN) sensorDetect = true;
 			state = IDLE_STATE;
-			delay(2000);
+			delay(10000);					// Debugging 
 			Log.info("Awoke at %s with %li free memory", Time.timeStr(Time.now()+wakeInSeconds).c_str(), System.freeMemory());
 
 		} break;
@@ -150,7 +155,7 @@ void loop() {
 
 			system_tick_t startListening = millis();
 
-			while (millis() - startListening < 5000) {
+			while (millis() - startListening < 10000) {
 				// The big difference between a node and a gateway - the Node initiates a LoRA exchange by sending data
 				if (listenForLoRAMessageNode()) {									// Listen for acknowledgement
 					current.hourlyCount = 0;										// Zero the hourly count
@@ -241,7 +246,7 @@ void publishStateTransition(void)
 	char stateTransitionString[256];
 	if (state == IDLE_STATE) {
 		if (!Time.isValid()) snprintf(stateTransitionString, sizeof(stateTransitionString), "From %s to %s with invalid time", stateNames[oldState],stateNames[state]);
-		else snprintf(stateTransitionString, sizeof(stateTransitionString), "From %s to %s for %lu seconds", stateNames[oldState],stateNames[state],(sysStatus.nextReportSeconds - (Time.now() - sysStatus.lastConnection)));
+		else snprintf(stateTransitionString, sizeof(stateTransitionString), "From %s to %s for %u seconds", stateNames[oldState],stateNames[state],sysStatus.nextReportSeconds);
 	}
 	else snprintf(stateTransitionString, sizeof(stateTransitionString), "From %s to %s", stateNames[oldState],stateNames[state]);
 	oldState = state;
@@ -260,4 +265,16 @@ void sensorISR()
     frontTireFlag = false;
   }
   else frontTireFlag = true;
+}
+
+int secondsTillNextEvent() {										// This is the node version
+	int returnSeconds = 60;
+
+	if (Time.isValid()) {											// We may need to sleep when time is not valid
+		if (sysStatus.nextReportSeconds > (Time.now() - sysStatus.lastConnection)) {						// If this is false, we missed the last event.
+			return (sysStatus.nextReportSeconds - (Time.now() - sysStatus.lastConnection) + 5);  			// sleep till next event - Add 5 seconds so it does not miss the gateway
+		}
+	}
+
+	return returnSeconds;
 }

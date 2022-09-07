@@ -402,7 +402,7 @@ bool receiveAcknowledmentDataReportNode() {
 	sysStatus.nextReportSeconds = ((buf[7] << 8) | buf[8]);
 	uint32_t newTime = ((buf[1] << 24) | (buf[2] << 16) | (buf[3] << 8) | buf[4]);
 	Time.setTime(newTime);  // Set time based on response from gateway
-	Log.info("Time set to %s and next report is in %u seconds", Time.timeStr(newTime).c_str(),sysStatus.nextReportSeconds);
+		Log.info("Time set to %s and next report is in %u seconds at %s", Time.timeStr(newTime).c_str(),sysStatus.nextReportSeconds, Time.timeStr(newTime + sysStatus.nextReportSeconds).c_str());
 	return true;
 }
 
