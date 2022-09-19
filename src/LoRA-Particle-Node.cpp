@@ -11,24 +11,27 @@
 // v0.03 - Refactoring the code to break up the main file monolith
 // v0.04 - Tested with Join and Report - works!
 // v0.05 - Added the Alert Report type 
-// v0.06 - Added settings for selecting sensor type and recording counts
+// v0.06 - Added settings for selecting sensor type and recording counts - 
+// v0.07 - StorageHelperRK support
+// v0.08 - LoRA Functions moved to Class
+
 
 // Particle Libraries
 #include <RHMesh.h>
 #include <RH_RF95.h>						        // https://docs.particle.io/reference/device-os/libraries/r/RH_RF95/
 #include "AB1805_RK.h"                              // Watchdog and Real Time Clock - https://github.com/rickkas7/AB1805_RK
-#include "MB85RC256V-FRAM-RK.h"                     // Rickkas Particle based FRAM Library
+// #include "MB85RC256V-FRAM-RK.h"                     // Rickkas Particle based FRAM Library
 #include "Particle.h"                               // Because it is a CPP file not INO
 // Application Files
 #include "LoRA_Functions.h"							// Where we store all the information on our LoRA implementation - application specific not a general library
 #include "device_pinout.h"							// Define pinouts and initialize them
 #include "particle_fn.h"							// Particle specific functions
-#include "storage_objects.h"						// Manage the initialization and storage of persistent objects
 #include "take_measurements.h"						// Manages interactions with the sensors (default is temp for charging)
+#include "MyPersistentData.h"						// Persistent Storage
 
 // Support for Particle Products (changes coming in 4.x - https://docs.particle.io/cards/firmware/macros/product_id/)
 PRODUCT_VERSION(0);
-char currentPointRelease[6] ="0.05";
+char currentPointRelease[6] ="0.08";
 
 // Prototype functions
 void publishStateTransition(void);                  // Keeps track of state machine changes - for debugging
@@ -45,7 +48,6 @@ State oldState = INITIALIZATION_STATE;
 
 // Initialize Functions
 SystemSleepConfiguration config;                    // Initialize new Sleep 2.0 Api
-MB85RC64 fram(Wire, 0);                             // Rickkas' FRAM library
 AB1805 ab1805(Wire);                                // Rickkas' RTC / Watchdog library
 
 // Program Variables
@@ -55,36 +57,34 @@ bool rescueMode = false;
 time_t lastPublish = Time.now();
 
 void setup() {
-	delay(5000);	// Wait for serial 
+	waitFor(Serial.isConnected, 10000);				// Wait for serial connection
 
     initializePinModes();                           // Sets the pinModes
 
     initializePowerCfg();                           // Sets the power configuration for solar
 
-    storageObjectStart();                           // Sets up the storage for system and current status in storage_objects.h
-
-    // particleInitialize();                           // Sets up all the Particle functions and variables defined in particle_fn.h
+	current.setup();
+	sysStatus.setup();								// Initialize persistent storage
 
     {                                               // Initialize AB1805 Watchdog and RTC                                 
         ab1805.withFOUT(D8).setup();                // The carrier board has D8 connected to FOUT for wake interrupts
-        // ab1805.resetConfig();                       // Reset the AB1805 configuration to default values
         ab1805.setWDT(AB1805::WATCHDOG_MAX_SECONDS);// Enable watchdog
     }
 
-	initializeLoRA(false);								// Start the LoRA radio - Node
+	LoRA_Functions::instance().setup(false);		// Start the LoRA radio - Node
 
 	// Local nodes don't need to know the actual time - their clocks will be set by the gateway
   	Log.info("Startup complete with %s time and with battery %4.2f", (Time.isValid())? "valid" : "invalid", System.batteryCharge());
 
 
   	// Deterimine when the last counts were taken check when starting test to determine if we reload values or start counts over
-  	if (Time.day() != Time.day(current.lastCountTime)) {                 // Check to see if the device was last on in a different day
+  	if (Time.day() != Time.day(current.get_lastCountTime())) {                 // Check to see if the device was last on in a different day
     	resetEverything();                                               // Zero the counts for the new day
   	}
 
-	if (sysStatus.nodeNumber < 10) {
-		current.alertCodeNode = 1; // For testing
-		sysStatus.nextReportSeconds = 10;
+	if (sysStatus.get_nodeNumber() < 10) {
+		current.set_alertCodeNode(1); // For testing
+		sysStatus.set_nextReportSeconds(10);
 	}
 
 	/*
@@ -101,7 +101,7 @@ void setup() {
 	attachInterrupt(BUTTON_PIN,userSwitchISR,CHANGE); // We may need to monitor the user switch to change behaviours / modes
 
 	if (state == INITIALIZATION_STATE) state = LoRA_STATE;               // IDLE unless otherwise from above code
-  	Log.info("Startup complete for the Node with alert code %d", current.alertCodeNode);
+  	Log.info("Startup complete for the Node with alert code %d", current.get_alertCodeNode());
   	digitalWrite(BLUE_LED,LOW);                                           // Signal the end of startup
 }
 
@@ -110,8 +110,8 @@ void loop() {
 		case IDLE_STATE: {
 			if (state != oldState) publishStateTransition();                   // We will apply the back-offs before sending to ERROR state - so if we are here we will take action
 
-			if ((Time.now() - lastPublish) > sysStatus.nextReportSeconds) {
-				if (current.alertCodeNode) state = ERROR_STATE;
+			if ((Time.now() - lastPublish) > sysStatus.get_nextReportSeconds()) {
+				if (current.get_alertCodeNode()) state = ERROR_STATE;
 				else state = LoRA_STATE;		   								// If time is valid - wake on the right minute of the hour
 			}
 			else state = SLEEPING_STATE;										// If we have time, let's take a nap
@@ -136,7 +136,7 @@ void loop() {
 			}
 			else if (result.wakeupPin() == INT_PIN) sensorDetect = true;
 			state = IDLE_STATE;
-			delay(10000);					// Debugging 
+			waitFor(Serial.isConnected, 10000);				// Wait for serial connection
 			Log.info("Awoke at %s with %li free memory", Time.timeStr(Time.now()+wakeInSeconds).c_str(), System.freeMemory());
 
 		} break;
@@ -146,7 +146,7 @@ void loop() {
 				publishStateTransition();                   					// We will apply the back-offs before sending to ERROR state - so if we are here we will take action
 				takeMeasurements();
 				lastPublish = Time.now();
-				if (!composeDataReportNode()) {
+				if (!LoRA_Functions::instance().composeDataReportNode()) {
 					rescueMode = true;											// Initiate sending report
 					Log.info("Failed in send and rescue is %s", (rescueMode) ? "On" : "Off");
 					break;
@@ -157,10 +157,10 @@ void loop() {
 
 			while (millis() - startListening < 10000) {
 				// The big difference between a node and a gateway - the Node initiates a LoRA exchange by sending data
-				if (listenForLoRAMessageNode()) {									// Listen for acknowledgement
-					current.hourlyCount = 0;										// Zero the hourly count
+				if (LoRA_Functions::instance().listenForLoRAMessageNode()) {									// Listen for acknowledgement
+					current.set_hourlyCount(0);										// Zero the hourly count
 					rescueMode = false;
-					sysStatus.lastConnection = Time.now();
+					sysStatus.set_lastConnection(Time.now());
 					Log.info("Send and Ack succeeded and rescue is %s", (rescueMode) ? "On" : "Off");
 					state = IDLE_STATE;
 					break;
@@ -176,18 +176,18 @@ void loop() {
 		case ERROR_STATE: {														// Where we go if things are not quite right
 			if (state != oldState) publishStateTransition();                   // We will apply the back-offs before sending to ERROR state - so if we are here we will take action
 
-			switch (current.alertCodeNode)
+			switch (current.get_alertCodeNode())
 			{
 			case 1:	{															// Case 1 is an unconfigured node - needs to send join request
-					if(composeJoinRequesttNode()) {
+					if(LoRA_Functions::instance().composeJoinRequesttNode()) {
 						system_tick_t startListening = millis();
 						while (millis() - startListening < 3000) {
-							if (listenForLoRAMessageNode()) {
+							if (LoRA_Functions::instance().listenForLoRAMessageNode()) {
 								lastPublish = Time.now();
 								rescueMode = false;
-								sysStatus.lastConnection = Time.now();
-								current.alertTimestampNode = Time.now();
-								current.alertCodeNode = 0;
+								sysStatus.set_lastConnection(Time.now());
+								current.set_alertTimestampNode(Time.now());
+								current.set_alertCodeNode(0);
 							}
 						}
 					}
@@ -195,15 +195,15 @@ void loop() {
 				} break;
 
 			case 2:	{															// Case 2 is for Time not synced
-					if(composeAlertReportNode()) {
+					if(LoRA_Functions::instance().composeAlertReportNode()) {
 						system_tick_t startListening = millis();
 						while (millis() - startListening < 3000) {
-							if (listenForLoRAMessageNode()) {
+							if (LoRA_Functions::instance().listenForLoRAMessageNode()) {
 								lastPublish = Time.now();
 								rescueMode = false;
-								sysStatus.lastConnection = Time.now();
-								current.alertTimestampNode = Time.now();
-								current.alertCodeNode = 0;
+								sysStatus.set_lastConnection(Time.now());
+								current.set_alertTimestampNode(Time.now());
+								current.set_alertCodeNode(0);
 							}
 						}
 					}
@@ -220,12 +220,13 @@ void loop() {
 
 	ab1805.loop();                                  							// Keeps the RTC synchronized with the Boron's clock
 
-	storageObjectLoop();   // Compares current system and current objects and stores if the hash changes (once / second) in storage_objects.h
+	current.loop();
+	sysStatus.loop();
 
 	if (rescueMode) {
 		rescueMode = false;
-		sysStatus.nextReportSeconds = 60;										// Rescue mode publish evert minute until we can connect
-		sysStatus.lowPowerMode = false;
+		sysStatus.set_nextReportSeconds(60);										// Rescue mode publish evert minute until we can connect
+		sysStatus.set_lowPowerMode(false);
 		Log.info("Send failed - going to send every minute");
 		state = IDLE_STATE;
 	}
@@ -246,7 +247,7 @@ void publishStateTransition(void)
 	char stateTransitionString[256];
 	if (state == IDLE_STATE) {
 		if (!Time.isValid()) snprintf(stateTransitionString, sizeof(stateTransitionString), "From %s to %s with invalid time", stateNames[oldState],stateNames[state]);
-		else snprintf(stateTransitionString, sizeof(stateTransitionString), "From %s to %s for %u seconds", stateNames[oldState],stateNames[state],sysStatus.nextReportSeconds);
+		else snprintf(stateTransitionString, sizeof(stateTransitionString), "From %s to %s for %u seconds", stateNames[oldState],stateNames[state],sysStatus.get_nextReportSeconds());
 	}
 	else snprintf(stateTransitionString, sizeof(stateTransitionString), "From %s to %s", stateNames[oldState],stateNames[state]);
 	oldState = state;
@@ -260,7 +261,7 @@ void userSwitchISR() {
 void sensorISR()
 {
   static bool frontTireFlag = false;
-  if (frontTireFlag || sysStatus.sensorType == 1) {                   // Counts the rear tire for pressure sensors and once for PIR
+  if (frontTireFlag || sysStatus.get_sensorType() == 1) {                   // Counts the rear tire for pressure sensors and once for PIR
     sensorDetect = true;                                              // sets the sensor flag for the main loop
     frontTireFlag = false;
   }
@@ -271,8 +272,8 @@ int secondsTillNextEvent() {										// This is the node version
 	int returnSeconds = 60;
 
 	if (Time.isValid()) {											// We may need to sleep when time is not valid
-		if (sysStatus.nextReportSeconds > (Time.now() - sysStatus.lastConnection)) {						// If this is false, we missed the last event.
-			return (sysStatus.nextReportSeconds - (Time.now() - sysStatus.lastConnection) + 5);  			// sleep till next event - Add 5 seconds so it does not miss the gateway
+		if (sysStatus.get_nextReportSeconds() > (Time.now() - sysStatus.get_lastConnection())) {						// If this is false, we missed the last event.
+			return (sysStatus.get_nextReportSeconds() - (Time.now() - sysStatus.get_lastConnection()) + 5);  			// sleep till next event - Add 5 seconds so it does not miss the gateway
 		}
 	}
 

@@ -12,9 +12,9 @@
  * !MODE -
  * GND -
  * D19 - A0 -               
- * D18 - A1 -               PIR sensor intPin         
- * D17 - A2 -               disable power module pin     
- * D16 - A3 -               led enable pin
+ * D18 - A1 -               
+ * D17 - A2 -               
+ * D16 - A3 -
  * D15 - A4 -               Internal (TMP32) Temp Sensor
  * D14 - A5 / SPI SS -      RFM9x
  * D13 - SCK - SPI Clock -  
@@ -37,7 +37,6 @@
  * D1 - SCL - I2C Clock -   FRAM / RTC and I2C Bus
  * D0 - SDA - I2C Data -    FRAM / RTX and I2C Bus
 ***********************************************************************************************************************/
-
 
 //Define pins for the RFM9x on my Particle carrier board
 const pin_t RFM95_CS =      A5;                     // SPI Chip select pin - Standard SPI pins otherwise
@@ -67,6 +66,7 @@ bool initializePinModes() {
     digitalWrite(MODULE_POWER_PIN,LOW);             // Enable (LOW) or disable (HIGH) the sensor
     return true;
 }
+
 
 bool initializePowerCfg() {
     Log.info("Initializing Power Config");
