@@ -71,21 +71,24 @@ void setup() {
         ab1805.setWDT(AB1805::WATCHDOG_MAX_SECONDS);// Enable watchdog
     }
 
-	LoRA_Functions::instance().setup(false);		// Start the LoRA radio - Node
-
-	// Local nodes don't need to know the actual time - their clocks will be set by the gateway
-  	Log.info("Startup complete with %s time and with battery %4.2f", (Time.isValid())? "valid" : "invalid", System.batteryCharge());
-
-
   	// Deterimine when the last counts were taken check when starting test to determine if we reload values or start counts over
   	if (Time.day() != Time.day(current.get_lastCountTime())) {                 // Check to see if the device was last on in a different day
     	resetEverything();                                               // Zero the counts for the new day
   	}
 
-	if (sysStatus.get_nodeNumber() < 10) {
+	if (! LoRA_Functions::instance().setup(false)) 	{	// Start the LoRA radio - Node
+		current.set_alertCodeNode(3);				// Initialization failure
+		current.set_alertTimestampNode(Time.now());
+		Log.info("LoRA Initialization failure alert code %d - power cycle in 30", current.get_alertCodeNode());
+	}
+
+	if ((current.get_alertCodeNode() == 0) && (sysStatus.get_nodeNumber() < 10)) {	// If there is already a hardware alert - deal with that first
 		current.set_alertCodeNode(1); // For testing
 		sysStatus.set_nextReportSeconds(10);
+		Log.info("Node number indicated unconfigured node of %d setting alert code to  %d", current.get_nodeNumber(), current.get_alertCodeNode());
 	}
+
+	sysStatus.set_nextReportSeconds(10);
 
 	/*
 	else if (!Time.isValid()) {
@@ -100,7 +103,7 @@ void setup() {
     attachInterrupt(INT_PIN, sensorISR, RISING);                     	// Pressure Sensor interrupt from low to high
 	attachInterrupt(BUTTON_PIN,userSwitchISR,CHANGE); // We may need to monitor the user switch to change behaviours / modes
 
-	if (state == INITIALIZATION_STATE) state = LoRA_STATE;               // IDLE unless otherwise from above code
+	if (state == INITIALIZATION_STATE) state = IDLE_STATE;               // IDLE unless otherwise from above code
   	Log.info("Startup complete for the Node with alert code %d", current.get_alertCodeNode());
   	digitalWrite(BLUE_LED,LOW);                                           // Signal the end of startup
 }
@@ -111,7 +114,8 @@ void loop() {
 			if (state != oldState) publishStateTransition();                   // We will apply the back-offs before sending to ERROR state - so if we are here we will take action
 
 			if ((Time.now() - lastPublish) > sysStatus.get_nextReportSeconds()) {
-				if (current.get_alertCodeNode()) state = ERROR_STATE;
+				Log.info("Time to publish with alert code %d", current.get_alertCodeNode());
+				if (current.get_alertCodeNode() != 0) state = ERROR_STATE;
 				else state = LoRA_STATE;		   								// If time is valid - wake on the right minute of the hour
 			}
 			else state = SLEEPING_STATE;										// If we have time, let's take a nap
@@ -124,19 +128,19 @@ void loop() {
 			wakeInSeconds = secondsTillNextEvent();								// Figure out how long to sleep 
 			Log.info("Sleep for %i seconds until next event %s", wakeInSeconds, (Time.isValid()) ? Time.timeStr(Time.now()+wakeInSeconds).c_str(): " ");
 			delay(2000);									// Make sure message gets out
+						state = IDLE_STATE;
 			config.mode(SystemSleepMode::ULTRA_LOW_POWER)
 				.gpio(BUTTON_PIN,CHANGE)
 				.gpio(INT_PIN,RISING)
 				.duration(wakeInSeconds * 1000L);
 			SystemSleepResult result = System.sleep(config);                   // Put the device to sleep device continues operations from here
 			ab1805.resumeWDT();                                                // Wakey Wakey - WDT can resume
+			waitFor(Serial.isConnected, 10000);				// Wait for serial connection
 			if (result.wakeupPin() == BUTTON_PIN) {                            // If the user woke the device we need to get up - device was sleeping so we need to reset opening hours
-				setLowPowerMode("0");                                          // We are waking the device for a reason
-				Log.info("Woke with user button - normal operations");
+				state = LoRA_STATE;
+				Log.info("Woke with user button - LoRA State");
 			}
 			else if (result.wakeupPin() == INT_PIN) sensorDetect = true;
-			state = IDLE_STATE;
-			waitFor(Serial.isConnected, 10000);				// Wait for serial connection
 			Log.info("Awoke at %s with %li free memory", Time.timeStr(Time.now()+wakeInSeconds).c_str(), System.freeMemory());
 
 		} break;
@@ -170,6 +174,7 @@ void loop() {
 					Log.info("Failed in ack and rescue is %s", (rescueMode) ? "On" : "Off");
 				}
 			}
+			delay(1000);  // Temporary - prevents muliple sends
 
 		} break;
 
@@ -179,42 +184,51 @@ void loop() {
 			switch (current.get_alertCodeNode())
 			{
 			case 1:	{															// Case 1 is an unconfigured node - needs to send join request
-					if(LoRA_Functions::instance().composeJoinRequesttNode()) {
-						system_tick_t startListening = millis();
-						while (millis() - startListening < 3000) {
-							if (LoRA_Functions::instance().listenForLoRAMessageNode()) {
-								lastPublish = Time.now();
-								rescueMode = false;
-								sysStatus.set_lastConnection(Time.now());
-								current.set_alertTimestampNode(Time.now());
-								current.set_alertCodeNode(0);
-							}
+				if(LoRA_Functions::instance().composeJoinRequesttNode()) {
+					system_tick_t startListening = millis();
+					while (millis() - startListening < 3000) {
+						if (LoRA_Functions::instance().listenForLoRAMessageNode()) {
+							lastPublish = Time.now();
+							rescueMode = false;
+							sysStatus.set_lastConnection(Time.now());
+							current.set_alertTimestampNode(Time.now());
+							current.set_alertCodeNode(0);
 						}
 					}
-					else rescueMode = true;
-				} break;
+				}
+				else rescueMode = true;
+				state = IDLE_STATE;
+			} break;
 
 			case 2:	{															// Case 2 is for Time not synced
-					if(LoRA_Functions::instance().composeAlertReportNode()) {
-						system_tick_t startListening = millis();
-						while (millis() - startListening < 3000) {
-							if (LoRA_Functions::instance().listenForLoRAMessageNode()) {
-								lastPublish = Time.now();
-								rescueMode = false;
-								sysStatus.set_lastConnection(Time.now());
-								current.set_alertTimestampNode(Time.now());
-								current.set_alertCodeNode(0);
-							}
+				if(LoRA_Functions::instance().composeAlertReportNode()) {
+					system_tick_t startListening = millis();
+					while (millis() - startListening < 3000) {
+						if (LoRA_Functions::instance().listenForLoRAMessageNode()) {
+							lastPublish = Time.now();
+							rescueMode = false;
+							sysStatus.set_lastConnection(Time.now());
+							current.set_alertTimestampNode(Time.now());
+							current.set_alertCodeNode(0);
 						}
 					}
-					else rescueMode = true;
-				} break;
+				}
+				else rescueMode = true;
+				state = IDLE_STATE;
+			} break;
+			case 3: {
+				static system_tick_t enteredState = millis();
+				if (millis() - enteredState > 30000L) {
+					Log.info("Resetting device");
+					delay(2000);
+					ab1805.deepPowerDown();
+				}
+			} break;
 
 			default:
 
 				break;
 			}
-			state = IDLE_STATE;
 		}
 	}
 
@@ -225,7 +239,7 @@ void loop() {
 
 	if (rescueMode) {
 		rescueMode = false;
-		sysStatus.set_nextReportSeconds(60);										// Rescue mode publish evert minute until we can connect
+		sysStatus.set_nextReportSeconds(10);										// Rescue mode publish evert minute until we can connect
 		sysStatus.set_lowPowerMode(false);
 		Log.info("Send failed - going to send every minute");
 		state = IDLE_STATE;
