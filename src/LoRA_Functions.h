@@ -37,8 +37,7 @@ buf[16] = msgCnt++;						       	// Sequential message number
 	buf[4] = ((uint8_t) (Time.now()));		    	// First byte	
 	buf[5] = highByte(sysStat.freqencyMinutes);		// For the Gateway minutes on the hour
 	buf[6] = lowByte(sysStatus.frequencyMinutes);	// 16-bit minutes		
-	buf[5] = highByte(sysStatus.nextReportSeconds);	// Seconds until next report - 16-bit number can go over 2 days
-	buf[6] = lowByte(sysStatus.nextReportSeconds);	// 16-bit minutes
+
 */
 // Format of a join request
 /*
@@ -56,11 +55,12 @@ buf[4] = lowByte(rssi);
 	buf[1] = ((uint8_t) ((Time.now()) >> 24));  // Fourth byte - current time
 	buf[2] = ((uint8_t) ((Time.now()) >> 16));	// Third byte
 	buf[3] = ((uint8_t) ((Time.now()) >> 8));	// Second byte
-	buf[4] = ((uint8_t) (Time.now()));		    // First byte			
-	buf[5] = highByte(newNodeNumber);			// New Node Number for device
-	buf[6] = lowByte(newNodeNumber);	
-	buf[7] = highByte(nextSecondsShort);		// Seconds until next report - for Nodes
-	buf[8] = lowByte(nextSecondsShort);
+	buf[4] = ((uint8_t) (Time.now()));		    // First byte	
+    buf[5] = highByte(sysStat.freqencyMinutes);		// For the Gateway minutes on the hour
+	buf[6] = lowByte(sysStatus.frequencyMinutes);	// 16-bit minutes			
+	buf[7] = highByte(newNodeNumber);			// New Node Number for device
+	buf[8] = lowByte(newNodeNumber);	
+
 */
 // Format for an alert Report
 /*
@@ -82,9 +82,10 @@ buf[10] = lowByte(driver.lastRssi());
 	buf[1] = ((uint8_t) ((Time.now()) >> 24));  // Fourth byte - current time
 	buf[2] = ((uint8_t) ((Time.now()) >> 16));	// Third byte
 	buf[3] = ((uint8_t) ((Time.now()) >> 8));	// Second byte
-	buf[4] = ((uint8_t) (Time.now()));		    // First byte			
-	buf[5] = highByte(nextSecondsShort);		// Seconds until next report - for Nodes
-	buf[6] = lowByte(nextSecondsShort);
+	buf[4] = ((uint8_t) (Time.now()));		    // First byte	
+    buf[5] = highByte(sysStat.freqencyMinutes);		// For the Gateway minutes on the hour
+	buf[6] = lowByte(sysStatus.frequencyMinutes);	// 16-bit minutes			
+
 */
 
 #ifndef __LORA_FUNCTIONS_H
@@ -124,76 +125,25 @@ public:
      */
     void loop();
 
-    // Generic Gateway Functions
+
+    // Common Functions
     /**
-     * @brief This function is used to listen for all message types
+     * @brief Clear whatever message is in the buffer - good for waking
      * 
-     * @details - Use polling with this function - executed in main LoRA_STATE every loop transit
+     * @details calls the driver and iterates through the message queue
      * 
-     * @param None
-     * 
-     * @return true - if a message has been returned (sets message flag value)
-     * @return false - no message received
-     */
-    bool listenForLoRAMessageGateway();     
+    */
+    void clearBuffer();
 
     /**
-     * @brief Function used to respond to messages from nodes to the gateway
+     * @brief Class to put the LoRA Radio to sleep when we exit the LoRa state
      * 
-     * @param nextSeconds - the number of seconds till next transmission window
-     * @return true - response acknowledged
-     * @return false 
-     */
-    bool respondForLoRAMessageGateway(int nextSeconds);  
+     * @details May help prevent the radio locking up based on local LoRA traffic interference
+     * 
+    */
+    void sleepLoRaRadio();
 
-    // Specific Gateway Message Functions
-    /**
-     * @brief Function that unpacks a data report from a node
-     * 
-     * @return true 
-     * @return false 
-     */
-    bool decipherDataReportGateway();   
-    /**
-     * @brief Function that unpacks a Join request from a node
-     * 
-     * @return true 
-     * @return false 
-     */
-    bool decipherJoinRequestGateway();     
-    /**
-     * @brief Function that unpacks an alert report from a node
-     * 
-     * @return true 
-     * @return false 
-     */
-    bool decipherAlertReportGateway();  
-    /**    
-     * @brief Sends an acknolwedgement from the gateway to the node after successfully unpacking an alert report.
-     * Also sends the number of seconds until next transmission window.
-     * 
-     * @param nextSeconds 
-     * @return true 
-     * @return false 
-     */
-    bool acknowledgeDataReportGateway(int nextSeconds);    // Gateway- acknowledged receipt of a data report
-    /**
-     * @brief Sends an acknolwedgement from the gateway to the node after successfully unpacking a data report.
-     * Also sends the number of seconds until next transmission window.
-     * @param nextSeconds 
-     * @return true 
-     * @return false 
-     */
-    bool acknowledgeJoinRequestGateway(int nextSeconds);   // Gateway - acknowledged receipt of a join request
-    /**
-     * @brief Sends an acknolwedgement from the gateway to the node after successfully unpacking a join request.
-     * Also sends the number of seconds until next transmission window.
-     * @param nextSeconds 
-     * @return true 
-     * @return false 
-     */
-    bool acknowledgeAlertReportGateway(int nextSeconds);   // Gateway - acknowledged receipt of an alert report
-
+ 
     // Node Functions
     /**
      * @brief Listens for the gateway to respond to the node - takes note of message flag

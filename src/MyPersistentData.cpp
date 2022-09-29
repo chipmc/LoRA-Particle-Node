@@ -160,14 +160,6 @@ void sysStatusData::set_lastConnectionDuration(uint16_t value) {
     setValue<uint16_t>(offsetof(SysData,lastConnectionDuration), value);
 }
 
-uint16_t sysStatusData::get_nextReportSeconds() const {
-    return getValue<uint16_t>(offsetof(SysData,nextReportSeconds ));
-}
-
-void sysStatusData::set_nextReportSeconds(uint16_t value) {
-    setValue<uint16_t>(offsetof(SysData, nextReportSeconds), value);
-}
-
 uint16_t sysStatusData::get_frequencyMinutes() const {
     return getValue<uint16_t>(offsetof(SysData,frequencyMinutes));
 }

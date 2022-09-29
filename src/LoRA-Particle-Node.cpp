@@ -14,7 +14,7 @@
 // v0.06 - Added settings for selecting sensor type and recording counts - 
 // v0.07 - StorageHelperRK support
 // v0.08 - LoRA Functions moved to Class
-
+// v0.09 - Added LoRA Radio sleep / clear buffer
 
 // Particle Libraries
 #include <RHMesh.h>
@@ -25,13 +25,12 @@
 // Application Files
 #include "LoRA_Functions.h"							// Where we store all the information on our LoRA implementation - application specific not a general library
 #include "device_pinout.h"							// Define pinouts and initialize them
-#include "particle_fn.h"							// Particle specific functions
 #include "take_measurements.h"						// Manages interactions with the sensors (default is temp for charging)
 #include "MyPersistentData.h"						// Persistent Storage
 
 // Support for Particle Products (changes coming in 4.x - https://docs.particle.io/cards/firmware/macros/product_id/)
 PRODUCT_VERSION(0);
-char currentPointRelease[6] ="0.08";
+char currentPointRelease[6] ="0.09";
 
 // Prototype functions
 void publishStateTransition(void);                  // Keeps track of state machine changes - for debugging
@@ -53,7 +52,6 @@ AB1805 ab1805(Wire);                                // Rickkas' RTC / Watchdog l
 // Program Variables
 volatile bool userSwitchDectected = false;		
 volatile bool sensorDetect = false;
-bool rescueMode = false;
 time_t lastPublish = Time.now();
 
 void setup() {
@@ -63,8 +61,10 @@ void setup() {
 
     initializePowerCfg();                           // Sets the power configuration for solar
 
-	current.setup();
-	sysStatus.setup();								// Initialize persistent storage
+	{
+		current.setup();
+		sysStatus.setup();								// Initialize persistent storage
+	}
 
     {                                               // Initialize AB1805 Watchdog and RTC                                 
         ab1805.withFOUT(D8).setup();                // The carrier board has D8 connected to FOUT for wake interrupts
@@ -76,36 +76,29 @@ void setup() {
     	resetEverything();                                               // Zero the counts for the new day
   	}
 
+	// In this section we test for issues and set alert codes as needed
 	if (! LoRA_Functions::instance().setup(false)) 	{	// Start the LoRA radio - Node
 		current.set_alertCodeNode(3);				// Initialization failure
 		current.set_alertTimestampNode(Time.now());
 		Log.info("LoRA Initialization failure alert code %d - power cycle in 30", current.get_alertCodeNode());
 	}
-
-	if ((current.get_alertCodeNode() == 0) && (sysStatus.get_nodeNumber() < 10)) {	// If there is already a hardware alert - deal with that first
-		current.set_alertCodeNode(1); // For testing
-		sysStatus.set_nextReportSeconds(10);
-		Log.info("Node number indicated unconfigured node of %d setting alert code to  %d", current.get_nodeNumber(), current.get_alertCodeNode());
-	}
-
-	sysStatus.set_nextReportSeconds(10);
-
-	/*
 	else if (!Time.isValid()) {
-		current.alertCodeNode = 2;
-		sysStatus.nextReportSeconds = 10;
+		current.set_alertCodeNode(2);
 	}
-	*/
+	else if (sysStatus.get_nodeNumber() < 10) {			// If there is already a hardware alert - deal with that first
+		current.set_alertCodeNode(1); // For testing
+		Log.info("Node number indicated unconfigured node of %d setting alert code to %d", current.get_nodeNumber(), current.get_alertCodeNode());
+	}
 
-  	takeMeasurements();                                                  // Populates values so you can read them before the hour
+  	takeMeasurements();                                                  	// Populates values so you can read them before the hour
   
 	// Nodes don't worry about open and close they just folow orders from the gateway
-    attachInterrupt(INT_PIN, sensorISR, RISING);                     	// Pressure Sensor interrupt from low to high
-	attachInterrupt(BUTTON_PIN,userSwitchISR,CHANGE); // We may need to monitor the user switch to change behaviours / modes
+    attachInterrupt(INT_PIN, sensorISR, RISING);                     		// Pressure Sensor interrupt from low to high
+	attachInterrupt(BUTTON_PIN,userSwitchISR,CHANGE); 						// We may need to monitor the user switch to change behaviours / modes
 
-	if (state == INITIALIZATION_STATE) state = IDLE_STATE;               // IDLE unless otherwise from above code
+	if (state == INITIALIZATION_STATE) state = IDLE_STATE;               	// IDLE unless otherwise from above code
   	Log.info("Startup complete for the Node with alert code %d", current.get_alertCodeNode());
-  	digitalWrite(BLUE_LED,LOW);                                           // Signal the end of startup
+  	digitalWrite(BLUE_LED,LOW);                                          	 // Signal the end of startup
 }
 
 void loop() {
@@ -113,22 +106,18 @@ void loop() {
 		case IDLE_STATE: {
 			if (state != oldState) publishStateTransition();                   // We will apply the back-offs before sending to ERROR state - so if we are here we will take action
 
-			if ((Time.now() - lastPublish) > sysStatus.get_nextReportSeconds()) {
-				Log.info("Time to publish with alert code %d", current.get_alertCodeNode());
-				if (current.get_alertCodeNode() != 0) state = ERROR_STATE;
-				else state = LoRA_STATE;		   								// If time is valid - wake on the right minute of the hour
-			}
-			else state = SLEEPING_STATE;										// If we have time, let's take a nap
+			if (current.get_alertCodeNode() != 0) state = ERROR_STATE;
+			else state = LoRA_STATE;		   								// If time is valid - wake on the right minute of the hour
+
 		} break;
 
 		case SLEEPING_STATE: {
 			int wakeInSeconds = 0;
 			if (state != oldState) publishStateTransition();                   // We will apply the back-offs before sending to ERROR state - so if we are here we will take action
 			ab1805.stopWDT();  												   // No watchdogs interrupting our slumber
-			wakeInSeconds = secondsTillNextEvent();								// Figure out how long to sleep 
+			wakeInSeconds = secondsUntilNextEvent();							// Figure out how long to sleep 
 			Log.info("Sleep for %i seconds until next event %s", wakeInSeconds, (Time.isValid()) ? Time.timeStr(Time.now()+wakeInSeconds).c_str(): " ");
-			delay(2000);									// Make sure message gets out
-						state = IDLE_STATE;
+			state = IDLE_STATE;
 			config.mode(SystemSleepMode::ULTRA_LOW_POWER)
 				.gpio(BUTTON_PIN,CHANGE)
 				.gpio(INT_PIN,RISING)
@@ -148,33 +137,28 @@ void loop() {
 		case LoRA_STATE: {
 			if (state != oldState) {
 				publishStateTransition();                   					// We will apply the back-offs before sending to ERROR state - so if we are here we will take action
+				LoRA_Functions::instance().clearBuffer();
 				takeMeasurements();
 				lastPublish = Time.now();
 				if (!LoRA_Functions::instance().composeDataReportNode()) {
-					rescueMode = true;											// Initiate sending report
-					Log.info("Failed in send and rescue is %s", (rescueMode) ? "On" : "Off");
+					Log.info("Failed in data send");
 					break;
 				}
 			} 
 
 			system_tick_t startListening = millis();
 
-			while (millis() - startListening < 10000) {
+			while (millis() - startListening < 5000) {
 				// The big difference between a node and a gateway - the Node initiates a LoRA exchange by sending data
-				if (LoRA_Functions::instance().listenForLoRAMessageNode()) {									// Listen for acknowledgement
+				if (LoRA_Functions::instance().listenForLoRAMessageNode()) {		// Listen for acknowledgement
 					current.set_hourlyCount(0);										// Zero the hourly count
-					rescueMode = false;
 					sysStatus.set_lastConnection(Time.now());
-					Log.info("Send and Ack succeeded and rescue is %s", (rescueMode) ? "On" : "Off");
-					state = IDLE_STATE;
 					break;
 				}
-				else {
-					rescueMode = true;
-					Log.info("Failed in ack and rescue is %s", (rescueMode) ? "On" : "Off");
-				}
 			}
-			delay(1000);  // Temporary - prevents muliple sends
+
+			LoRA_Functions::instance().sleepLoRaRadio();						// Done with LoRA - put radio to sleep
+			state = SLEEPING_STATE;
 
 		} break;
 
@@ -189,14 +173,13 @@ void loop() {
 					while (millis() - startListening < 3000) {
 						if (LoRA_Functions::instance().listenForLoRAMessageNode()) {
 							lastPublish = Time.now();
-							rescueMode = false;
 							sysStatus.set_lastConnection(Time.now());
 							current.set_alertTimestampNode(Time.now());
 							current.set_alertCodeNode(0);
 						}
 					}
 				}
-				else rescueMode = true;
+				LoRA_Functions::instance().sleepLoRaRadio();					// Done for now, put radio to sleep
 				state = IDLE_STATE;
 			} break;
 
@@ -206,14 +189,13 @@ void loop() {
 					while (millis() - startListening < 3000) {
 						if (LoRA_Functions::instance().listenForLoRAMessageNode()) {
 							lastPublish = Time.now();
-							rescueMode = false;
 							sysStatus.set_lastConnection(Time.now());
 							current.set_alertTimestampNode(Time.now());
 							current.set_alertCodeNode(0);
 						}
 					}
 				}
-				else rescueMode = true;
+				LoRA_Functions::instance().sleepLoRaRadio();					// Done for now, put radio to sleep
 				state = IDLE_STATE;
 			} break;
 			case 3: {
@@ -226,8 +208,9 @@ void loop() {
 			} break;
 
 			default:
+				Log.info("Undefined Error State");
 
-				break;
+			break;
 			}
 		}
 	}
@@ -236,14 +219,6 @@ void loop() {
 
 	current.loop();
 	sysStatus.loop();
-
-	if (rescueMode) {
-		rescueMode = false;
-		sysStatus.set_nextReportSeconds(10);										// Rescue mode publish evert minute until we can connect
-		sysStatus.set_lowPowerMode(false);
-		Log.info("Send failed - going to send every minute");
-		state = IDLE_STATE;
-	}
 
 	if (sensorDetect) {															// Count the pulse and reset for next
 		sensorDetect = false;
@@ -261,7 +236,7 @@ void publishStateTransition(void)
 	char stateTransitionString[256];
 	if (state == IDLE_STATE) {
 		if (!Time.isValid()) snprintf(stateTransitionString, sizeof(stateTransitionString), "From %s to %s with invalid time", stateNames[oldState],stateNames[state]);
-		else snprintf(stateTransitionString, sizeof(stateTransitionString), "From %s to %s for %u seconds", stateNames[oldState],stateNames[state],sysStatus.get_nextReportSeconds());
+		else snprintf(stateTransitionString, sizeof(stateTransitionString), "From %s to %s", stateNames[oldState],stateNames[state]);
 	}
 	else snprintf(stateTransitionString, sizeof(stateTransitionString), "From %s to %s", stateNames[oldState],stateNames[state]);
 	oldState = state;
@@ -282,14 +257,19 @@ void sensorISR()
   else frontTireFlag = true;
 }
 
-int secondsTillNextEvent() {										// This is the node version
-	int returnSeconds = 60;
-
-	if (Time.isValid()) {											// We may need to sleep when time is not valid
-		if (sysStatus.get_nextReportSeconds() > (Time.now() - sysStatus.get_lastConnection())) {						// If this is false, we missed the last event.
-			return (sysStatus.get_nextReportSeconds() - (Time.now() - sysStatus.get_lastConnection()) + 5);  			// sleep till next event - Add 5 seconds so it does not miss the gateway
-		}
-	}
-
-	return returnSeconds;
+/**
+ * @brief Function to compute time to next scheduled event
+ * 
+ * @details - Computes seconds and returns 0 if no event is scheduled or time is invalid
+ * 
+ * 
+ */
+int secondsUntilNextEvent() {											// Time till next scheduled event
+	unsigned long secondsToReturn = 0;
+	unsigned long wakeBoundary = sysStatus.get_frequencyMinutes() * 60UL;
+   	if (Time.isValid()) {
+		secondsToReturn = constrain( wakeBoundary - Time.now() % wakeBoundary, 0UL, wakeBoundary);  // Adding one second to reduce prospect of round tripping to IDLE
+        Log.info("Time: %s and next event is %lu seconds away", Time.timeStr().c_str(), secondsToReturn);
+    }
+	return secondsToReturn + 10;		// Add an off-set - need to refine this later.
 }
