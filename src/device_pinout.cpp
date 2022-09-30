@@ -12,14 +12,14 @@
  * !MODE -
  * GND -
  * D19 - A0 -               
- * D18 - A1 -               
- * D17 - A2 -               
- * D16 - A3 -
+ * D18 - A1 -               INT_PIN - PIR sensor interrupt pin       
+ * D17 - A2 -               MODULE_POWER_PIN - Bringing this low powers up the PIR sensor          
+ * D16 - A3 -               LED_POWER_PIN - Enables or disables the LED on the PIR module
  * D15 - A4 -               Internal (TMP32) Temp Sensor
- * D14 - A5 / SPI SS -      RFM9x
- * D13 - SCK - SPI Clock -  
- * D12 - MO - SPI MOSI -    RFM9x
- * D11 - MI - SPI MISO -    RFM9x
+ * D14 - A5 / SPI SS -      
+ * D13 - SCK - SPI Clock -  RFM9x SPI
+ * D12 - MO - SPI MOSI -    RFM9x SPI
+ * D11 - MI - SPI MISO -    RFM9x SPI
  * D10 - UART RX -
  * D9 - UART TX -
 
@@ -29,11 +29,11 @@
  * VUSB -
  * D8 -                     Wake Connected to Watchdog Timer
  * D7 -                     Blue Led
- * D6 -                     
- * D5 -                     
+ * D6 -                     RFM9x - Reset Pin
+ * D5 -                     RFM9x - Chip Select
  * D4 -                     User Switch
  * D3 - 
- * D2 -                     RFM9x
+ * D2 -                     RFM9x Interrupt Pin
  * D1 - SCL - I2C Clock -   FRAM / RTC and I2C Bus
  * D0 - SDA - I2C Data -    FRAM / RTX and I2C Bus
 ***********************************************************************************************************************/
@@ -47,8 +47,8 @@ const pin_t TMP36_SENSE_PIN   = A4;
 const pin_t BUTTON_PIN        = D4;
 const pin_t BLUE_LED          = D7;
 const pin_t WAKEUP_PIN        = D8;
+
 // Sensor specific Pins
-// Specific to the sensor
 extern const pin_t INT_PIN = A1;                   // May need to change this
 extern const pin_t MODULE_POWER_PIN = A2;          // Make sure we document this above
 const pin_t LED_POWER_PIN = A3;

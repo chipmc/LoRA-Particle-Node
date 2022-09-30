@@ -74,7 +74,8 @@ bool LoRA_Functions::setup(bool gatewayID) {
 
 	manager.setThisAddress(sysStatus.get_nodeNumber());	// Assign the NodeNumber to this node
 	
-	Log.info("LoRA Radio initialized as NodeNumber of %i and DeviceID of %i and a magic number of %i", manager.thisAddress(), sysStatus.get_deviceID(), sysStatus.get_structuresVersion());
+	if (manager.thisAddress() > 0) Log.info("LoRA Radio initialized as node %i and with a DeviceID of %i", manager.thisAddress(), sysStatus.get_deviceID());
+	else Log.info("LoRA Radio initialized as a gateway with a deviceID of %i", sysStatus.get_deviceID());
 	return true;
 }
 
@@ -136,7 +137,7 @@ bool LoRA_Functions::composeDataReportNode() {
 	digitalWrite(BLUE_LED,HIGH);
 	attempts++;
 	msgCnt++;
-	Log.info("Sending data %d report to Gateway",msgCnt);
+	Log.info("Sending data report number %d",msgCnt);
 
 	buf[0] = highByte(sysStatus.get_deviceID());					// Set for device
 	buf[1] = lowByte(sysStatus.get_deviceID());
@@ -164,7 +165,7 @@ bool LoRA_Functions::composeDataReportNode() {
 		// It has been reliably delivered to the next node.
 		// Now wait for a reply from the ultimate server 
 		success++;
-		Log.info("Node %d - Data report send to gateway %d successfully - success rate %4.2f", sysStatus.get_nodeNumber(), GATEWAY_ADDRESS, ((success * 1.0)/ attempts)*100.0);
+		Log.info("Data report delivered - success rate %4.2f",((success * 1.0)/ attempts)*100.0);
 		digitalWrite(BLUE_LED, LOW);
 		return true;
 	}

@@ -239,11 +239,11 @@ currentStatusData::~currentStatusData() {
 
 void currentStatusData::setup() {
     fram.begin();
-    sysStatus.load();
+    current.load();
 }
 
 void currentStatusData::loop() {
-    sysStatus.flush(false);
+    current.flush(false);
 }
 
 
