@@ -2,7 +2,6 @@
 #include "MB85RC256V-FRAM-RK.h"
 #include "StorageHelperRK.h"
 #include "MyPersistentData.h"
-#include "node_configuration.h"
 
 MB85RC64 fram(Wire, 0);   
 
@@ -17,8 +16,6 @@ void resetEverything() {                                              // The dev
   current.set_dailyCount(0);                                            // Reset the counts in FRAM as well
   current.set_hourlyCount(0);
   current.set_lastCountTime(Time.now());
-  current.set_alertCodeNode(0);
-  current.set_alertTimestampNode(Time.now());
   sysStatus.set_resetCount(0);                                           // Reset the reset count as well
 }
 
@@ -32,8 +29,9 @@ void loadSystemDefaults() {                         // This code is only execute
   }
   Log.info("Loading system defaults");              // Letting us know that defaults are being loaded
 
-  sysStatus.set_nodeNumber(2);
+  sysStatus.set_nodeNumber(11);
   sysStatus.set_structuresVersion(1);
+  sysStatus.set_magicNumber(27617);
   sysStatus.set_firmwareRelease(1);
   sysStatus.set_solarPowerMode(true);
   sysStatus.set_lowPowerMode(true);
@@ -46,7 +44,6 @@ void loadSystemDefaults() {                         // This code is only execute
   sysStatus.set_closeTime(22);
   sysStatus.set_verizonSIM(false);
 
-  setNodeConfiguration();                             // Here we will fix the settings specific to the node
 }
 
 // *******************  SysStatus Storage Object **********************
@@ -73,27 +70,18 @@ sysStatusData::~sysStatusData() {
 void sysStatusData::setup() {
     fram.begin();
     sysStatus.load();
-    setNodeConfiguration();                             // Here we will fix the settings specific to the node
 }
 
 void sysStatusData::loop() {
     sysStatus.flush(false);
 }
 
-uint16_t sysStatusData::get_deviceID() const {
-    return getValue<uint16_t>(offsetof(SysData, deviceID));
+uint8_t sysStatusData::get_nodeNumber() const {
+    return getValue<uint8_t>(offsetof(SysData, nodeNumber));
 }
 
-void sysStatusData::set_deviceID(uint16_t value) {
-    setValue<uint16_t>(offsetof(SysData, deviceID), value);
-}
-
-uint16_t sysStatusData::get_nodeNumber() const {
-    return getValue<uint16_t>(offsetof(SysData, nodeNumber));
-}
-
-void sysStatusData::set_nodeNumber(uint16_t value) {
-    setValue<uint16_t>(offsetof(SysData, nodeNumber), value);
+void sysStatusData::set_nodeNumber(uint8_t value) {
+    setValue<uint8_t>(offsetof(SysData, nodeNumber), value);
 }
 
 uint8_t sysStatusData::get_structuresVersion() const {
@@ -103,6 +91,15 @@ uint8_t sysStatusData::get_structuresVersion() const {
 void sysStatusData::set_structuresVersion(uint8_t value) {
     setValue<uint8_t>(offsetof(SysData, structuresVersion), value);
 }
+
+uint16_t sysStatusData::get_magicNumber() const {
+    return getValue<uint16_t>(offsetof(SysData, magicNumber));
+}
+
+void sysStatusData::set_magicNumber(uint16_t value) {
+    setValue<uint16_t>(offsetof(SysData, magicNumber), value);
+}
+
 
 uint8_t sysStatusData::get_firmwareRelease() const {
     return getValue<uint8_t>(offsetof(SysData, firmwareRelease));
@@ -246,23 +243,6 @@ void currentStatusData::loop() {
     current.flush(false);
 }
 
-
-uint16_t currentStatusData::get_deviceID() const {
-    return getValue<uint16_t>(offsetof(CurrentData, deviceID));
-}
-
-void currentStatusData::set_deviceID(uint16_t value) {
-    setValue<uint16_t>(offsetof(CurrentData, deviceID), value);
-}
-
-uint16_t currentStatusData::get_nodeNumber() const {
-    return getValue<uint16_t>(offsetof(CurrentData, nodeNumber));
-}
-
-void currentStatusData::set_nodeNumber(uint16_t value) {
-    setValue<uint16_t>(offsetof(CurrentData, nodeNumber), value);
-}
-
 uint8_t currentStatusData::get_internalTempC() const {
     return getValue<uint8_t>(offsetof(CurrentData, internalTempC));
 }
@@ -352,6 +332,6 @@ void currentStatusData::set_alertTimestampNode(time_t value) {
 }
 
 void currentStatusData::logData(const char *msg) {
-    Log.info("Current Structure values - %d, %d, %d, %4.2f", currentData.deviceID, currentData.nodeNumber, currentData.internalTempC, currentData.stateOfCharge);
+    Log.info("Current Structure values - %d, %4.2f", currentData.internalTempC, currentData.stateOfCharge);
 }
 

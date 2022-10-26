@@ -66,9 +66,9 @@ public:
 		// Your fields go here. Once you've added a field you cannot add fields
 		// (except at the end), insert fields, remove fields, change size of a field.
 		// Doing so will cause the data to be corrupted!
-		uint16_t deviceID;                                // Unique to the device
 		uint16_t nodeNumber;                              // Assigned by the gateway on joining the network
 		uint8_t structuresVersion;                        // Version of the data structures (system and data)
+		uint16_t magicNumber;							  // A way to identify nodes and gateways so they can trust each other
 		uint8_t firmwareRelease;                          // Version of the device firmware (integer - aligned to particle prodict firmware)
 		bool solarPowerMode;                              // Powered by a solar panel or utility power
 		bool lowPowerMode;                                // Does the device need to run disconnected to save battery
@@ -111,14 +111,15 @@ public:
 	 * 
 	 */
 
-	uint16_t get_deviceID() const;
-	void set_deviceID(uint16_t value);
 
-	uint16_t get_nodeNumber() const;
-	void set_nodeNumber(uint16_t value);
+	uint8_t get_nodeNumber() const;
+	void set_nodeNumber(uint8_t value);
 
 	uint8_t get_structuresVersion() const ;
 	void set_structuresVersion(uint8_t value);
+
+	uint16_t get_magicNumber() const ;
+	void set_magicNumber(uint16_t value);
 
 	uint8_t get_firmwareRelease() const;
 	void set_firmwareRelease(uint8_t value);
@@ -238,8 +239,6 @@ public:
 		// (except at the end), insert fields, remove fields, change size of a field.
 		// Doing so will cause the data to be corrupted!
 		// You may want to keep a version number in your data.
-		uint16_t deviceID;                                // The deviceID of the device providing the current data - not the gateway
-		uint16_t nodeNumber;                              // The nodeNumber of the device providing the current data 
 		uint8_t internalTempC;                            // Enclosure temperature in degrees C
 		double stateOfCharge;                                // Battery charge level
 		uint8_t batteryState;                             // Stores the current battery state (charging, discharging, etc)
@@ -279,12 +278,6 @@ public:
 	 * 
 	 */
 
-
-	uint16_t get_deviceID() const;
-	void set_deviceID(uint16_t value);
-
-	uint16_t get_nodeNumber() const;
-	void set_nodeNumber(uint16_t value);
 
 	uint8_t get_internalTempC() const ;
 	void set_internalTempC(uint8_t value);

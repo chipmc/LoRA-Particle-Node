@@ -26,10 +26,9 @@ LoRA_Functions::~LoRA_Functions() {
 // ************************************************************************
 // *****                      LoRA Setup                              *****
 // ************************************************************************
-// In this implementation - we have one gateway and two nodes (will generalize later) - nodes are numbered 2 to ...
-// 2- 9 for new nodes making a join request
-// 10 - 255 nodes assigned to the mesh
-const uint8_t GATEWAY_ADDRESS = 0;			 // Gateway addess is always zero
+// In this implementation - we have one gateway numde number 0 and up to 10 nodes with node numbers 1-10
+// Node numbers greater than 10 initiate a join request
+const uint8_t GATEWAY_ADDRESS = 0;
 const double RF95_FREQ = 915.0;				 // Frequency - ISM
 
 // Define the message flags
@@ -41,7 +40,7 @@ static LoRA_State lora_state = NULL_STATE;
 RH_RF95 driver(RFM95_CS, RFM95_INT);
 
 // Class to manage message delivery and receipt, using the driver declared above
-RHMesh manager(driver, GATEWAY_ADDRESS);
+RHMesh manager(driver, sysStatus.get_nodeNumber());
 
 // Mesh has much greater memory requirements, and you may need to limit the
 // max message length to prevent wierd crashes
@@ -64,18 +63,10 @@ bool LoRA_Functions::setup(bool gatewayID) {
 	driver.setFrequency(RF95_FREQ);					// Frequency is typically 868.0 or 915.0 in the Americas, or 433.0 in the EU - Are there more settings possible here?
 	driver.setTxPower(23, false);                   // If you are using RFM95/96/97/98 modules which uses the PA_BOOST transmitter pin, then you can set transmitter powers from 5 to 23 dBm (13dBm default).  PA_BOOST?
 
-	if (!(sysStatus.get_structuresVersion() == 128)) {    	// This will be our indication that the deviceID and nodeID has not yet been set
-		randomSeed(sysStatus.get_lastConnection());			// 32-bit number for seed
-		sysStatus.set_deviceID(random(1,65535));			// 16-bit number for deviceID
-		if (!gatewayID) sysStatus.set_nodeNumber(random(10,255));		// Random number in - unconfigured - range will trigger a Join request
-		else sysStatus.set_nodeNumber(0);
-		sysStatus.set_structuresVersion(128);			// Set the structure to the magic number so we can have a stable deviceID
-	}
-
-	manager.setThisAddress(sysStatus.get_nodeNumber());	// Assign the NodeNumber to this node
+	if (sysStatus.get_nodeNumber() > 10)  current.set_alertCodeNode(1);
 	
-	if (manager.thisAddress() > 0) Log.info("LoRA Radio initialized as node %i and with a DeviceID of %i", manager.thisAddress(), sysStatus.get_deviceID());
-	else Log.info("LoRA Radio initialized as a gateway with a deviceID of %i", sysStatus.get_deviceID());
+	if (manager.thisAddress() > 0) Log.info("LoRA Radio initialized as node %i and a deviceID of %s", manager.thisAddress(), System.deviceID().c_str());
+	else Log.info("LoRA Radio initialized as a gateway with a deviceID of %s", System.deviceID().c_str());
 	return true;
 }
 
@@ -113,11 +104,15 @@ bool LoRA_Functions::listenForLoRAMessageNode() {
 	uint8_t hops;
 	if (manager.recvfromAck(buf, &len, &from, &dest, &id, &messageFlag, &hops))	{	// We have received a message
 		buf[len] = 0;
+		if ((buf[0] << 8 | buf[1]) != sysStatus.get_magicNumber()) {
+			Log.info("Magic Number mismatch - ignoring message");
+			return false;
+		} 
 		lora_state = (LoRA_State)messageFlag;
 		Log.info("Received from node %d with rssi=%d - a %s message", from, driver.lastRssi(), loraStateNames[lora_state]);
 
-		Time.setTime(((buf[1] << 24) | (buf[2] << 16) | (buf[3] << 8) | buf[4]));  // Set time based on response from gateway
-		sysStatus.set_frequencyMinutes((buf[5] << 8 | buf[6]));			// Frequency of reporting set by Gateway
+		Time.setTime(((buf[2] << 24) | (buf[3] << 16) | (buf[4] << 8) | buf[5]));  // Set time based on response from gateway
+		sysStatus.set_frequencyMinutes((buf[6] << 8 | buf[7]));			// Frequency of reporting set by Gateway
 		Log.info("Set clock to %s and report frequency to %d minutes", Time.timeStr().c_str(),sysStatus.get_frequencyMinutes());
 
 		if (lora_state == DATA_ACK) { if(LoRA_Functions::instance().receiveAcknowledmentDataReportNode()) return true;}
@@ -139,23 +134,18 @@ bool LoRA_Functions::composeDataReportNode() {
 	msgCnt++;
 	Log.info("Sending data report number %d",msgCnt);
 
-	buf[0] = highByte(sysStatus.get_deviceID());					// Set for device
-	buf[1] = lowByte(sysStatus.get_deviceID());
-	buf[2] = highByte(sysStatus.get_nodeNumber());				// NodeID for verification
-	buf[3] = lowByte(sysStatus.get_nodeNumber());				
-	buf[4] = 1;						// Set for code release - fix later
-	buf[5] = highByte(current.get_hourlyCount());
-	buf[6] = lowByte(current.get_hourlyCount()); 
-	buf[7] = highByte(current.get_dailyCount());
-	buf[8] = lowByte(current.get_dailyCount()); 
-	buf[9] = current.get_internalTempC();
-	buf[10] = current.get_stateOfCharge();
-	buf[11] = current.get_batteryState();	
-	buf[12] = sysStatus.get_resetCount();
-	buf[13] = 1;				// reserved for later
-	buf[14] = highByte(driver.lastRssi());
-	buf[15] = lowByte(driver.lastRssi()); 
-	buf[16] = msgCnt;
+	buf[0] = highByte(sysStatus.get_magicNumber());
+	buf[1] = lowByte(sysStatus.get_magicNumber());			
+	buf[2] = 1;						// Set for code release - fix later
+	buf[3] = highByte(current.get_hourlyCount());
+	buf[4] = lowByte(current.get_hourlyCount()); 
+	buf[5] = highByte(current.get_dailyCount());
+	buf[6] = lowByte(current.get_dailyCount()); 
+	buf[7] = current.get_internalTempC();
+	buf[8] = current.get_stateOfCharge();
+	buf[9] = current.get_batteryState();	
+	buf[10] = sysStatus.get_resetCount();
+	buf[11] = msgCnt;
 
 	// Send a message to manager_server
   	// A route to the destination will be automatically discovered.
@@ -184,26 +174,27 @@ bool LoRA_Functions::composeDataReportNode() {
 
 bool LoRA_Functions::receiveAcknowledmentDataReportNode() {
 		
-	Log.info("Data report acknowledged");
+	Log.info("Data report acknowledged for message %d", buf[8]);
 	return true;
 }
 
 bool LoRA_Functions::composeJoinRequesttNode() {
+
 	digitalWrite(BLUE_LED,HIGH);
 
-	buf[0] = highByte(sysStatus.get_deviceID());                      // deviceID is unique to the device
-	buf[1] = lowByte(sysStatus.get_deviceID());
-	buf[2] = highByte(sysStatus.get_nodeNumber());                  			// Node Number
-	buf[3] = lowByte(sysStatus.get_nodeNumber());
-	buf[4] = sysStatus.get_structuresVersion();						// Needs to equal 128
-	buf[5] = highByte(driver.lastRssi());				        // Signal strength
-	buf[6] = lowByte(driver.lastRssi()); 
+	char deviceID[25];
+	System.deviceID().toCharArray(deviceID, 25);					// the deviceID is 24 charcters long
 
-	
+	buf[0] = highByte(sysStatus.get_magicNumber());					// Needs to equal 128
+	buf[1] = lowByte(sysStatus.get_magicNumber());					// Needs to equal 128
+	for (uint8_t i=0; i < sizeof(deviceID); i++) {
+		buf[i+2] = deviceID[i];
+	}
+
 	// Send a message to manager_server
   	// A route to the destination will be automatically discovered.
-	Log.info("Sending join request because %s",(sysStatus.get_nodeNumber() < 10) ? "a NodeNumber is needed" : "the clock is not set");
-	if (manager.sendtoWait(buf, 7, GATEWAY_ADDRESS, JOIN_REQ) == RH_ROUTER_ERROR_NONE) {
+	Log.info("Sending join request because %s",(sysStatus.get_nodeNumber() > 10) ? "a NodeNumber is needed" : "the clock is not set");
+	if (manager.sendtoWait(buf, 27, GATEWAY_ADDRESS, JOIN_REQ) == RH_ROUTER_ERROR_NONE) {
 		// It has been reliably delivered to the next node.
 		// Now wait for a reply from the ultimate server 
 		Log.info("Data report send to gateway successfully");
@@ -219,29 +210,25 @@ bool LoRA_Functions::composeJoinRequesttNode() {
 
 bool LoRA_Functions::receiveAcknowledmentJoinRequestNode() {
 
-	if (sysStatus.get_nodeNumber() < 10 && buf[0] == 128) sysStatus.set_nodeNumber((buf[7] << 8 | buf[8]));
+	Log.info("In receive Join Acknowledge");
+
+	if (sysStatus.get_nodeNumber() > 10) sysStatus.set_nodeNumber(buf[8]);
 	Log.info("Join request acknowledged and node ID set to %d", sysStatus.get_nodeNumber());
+	manager.setThisAddress(sysStatus.get_nodeNumber());
 	return true;
 }
 
 bool LoRA_Functions::composeAlertReportNode() {
 	digitalWrite(BLUE_LED,HIGH);
 
-	buf[0] = highByte(sysStatus.get_deviceID());       // deviceID is unique to the device
-	buf[1] = lowByte(sysStatus.get_deviceID());
-	buf[2] = highByte(sysStatus.get_nodeNumber());     // Node Number
-	buf[3] = lowByte(sysStatus.get_nodeNumber());
-	buf[4] = highByte(current.get_alertCodeNode());   // Node's Alert Code
-	buf[5] = ((uint8_t) ((Time.now()) >> 24));  // Fourth byte - current time
-	buf[6] = ((uint8_t) ((Time.now()) >> 16));	// Third byte
-	buf[7] = ((uint8_t) ((Time.now()) >> 8));	// Second byte
-	buf[8] = ((uint8_t) (Time.now()));		    // First byte			
-	buf[9] = highByte(driver.lastRssi());		// Signal strength
-	buf[10] = lowByte(driver.lastRssi()); 
+	buf[0] = highByte(sysStatus.get_magicNumber());					// Magic Number
+	buf[1] = lowByte(sysStatus.get_magicNumber());					
+	buf[2] = current.get_alertCodeNode();   						// Node's Alert Code
+
 
 	// Send a message to manager_server
   	// A route to the destination will be automatically discovered.
-	if (manager.sendtoWait(buf, 11, GATEWAY_ADDRESS, ALERT_RPT) == RH_ROUTER_ERROR_NONE) {
+	if (manager.sendtoWait(buf, 3, GATEWAY_ADDRESS, ALERT_RPT) == RH_ROUTER_ERROR_NONE) {
 		// It has been reliably delivered to the next node.
 		// Now wait for a reply from the ultimate server 
 		Log.info("Success sending Alert Report number %d to gateway at %d", current.get_alertCodeNode(), GATEWAY_ADDRESS);
@@ -257,6 +244,7 @@ bool LoRA_Functions::composeAlertReportNode() {
 
 bool LoRA_Functions::receiveAcknowledmentAlertReportNode() {
 
+	current.set_alertCodeNode(buf[2]);
 	Log.info("Alert report acknowledged");
 	return true;
 }

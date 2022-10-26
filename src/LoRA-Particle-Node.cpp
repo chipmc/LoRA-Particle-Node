@@ -16,6 +16,7 @@
 // v0.08 - LoRA Functions moved to Class
 // v0.09 - Added LoRA Radio sleep / clear buffer
 // v0.10 - Lots of little fixes minimally works now
+// v0.11 - Big changes to messages and storage.  Works reliably now.
 
 // Particle Libraries
 #include "AB1805_RK.h"                              // Watchdog and Real Time Clock - https://github.com/rickkas7/AB1805_RK
@@ -25,10 +26,11 @@
 #include "device_pinout.h"							// Define pinouts and initialize them
 #include "take_measurements.h"						// Manages interactions with the sensors (default is temp for charging)
 #include "MyPersistentData.h"						// Persistent Storage
+#include "node_configuration.h"
 
 // Support for Particle Products (changes coming in 4.x - https://docs.particle.io/cards/firmware/macros/product_id/)
 PRODUCT_VERSION(0);
-char currentPointRelease[6] ="0.10";
+char currentPointRelease[6] ="0.11";
 
 // Prototype functions
 void publishStateTransition(void);                  // Keeps track of state machine changes - for debugging
@@ -66,13 +68,17 @@ void setup() {
 
 	{
 		current.setup();
-		sysStatus.setup();								// Initialize persistent storage
+		sysStatus.setup();							// Initialize persistent storage
 	}
+
+	setNodeConfiguration();                         // This is a function for development - allows us to over-ride stored system values
 
     {                                               // Initialize AB1805 Watchdog and RTC                                 
         ab1805.withFOUT(D8).setup();                // The carrier board has D8 connected to FOUT for wake interrupts
         ab1805.setWDT(AB1805::WATCHDOG_MAX_SECONDS);// Enable watchdog
     }
+
+	Log.info("RTC initialized, time is %s and RTC %s set", Time.timeStr(Time.now()).c_str(), (ab1805.isRTCSet()) ? "is" : "is not");
 
 	System.on(out_of_memory, outOfMemoryHandler);     // Enabling an out of memory handler is a good safety tip. If we run out of memory a System.reset() is done.
 
@@ -82,9 +88,9 @@ void setup() {
 		current.set_alertTimestampNode(Time.now());
 		Log.info("LoRA Initialization failure alert code %d - power cycle in 30", current.get_alertCodeNode());
 	}
-	else if (sysStatus.get_nodeNumber() < 10) {			// If there is already a hardware alert - deal with that first
-		current.set_alertCodeNode(1); // For testing
-		Log.info("Node number indicated unconfigured node of %d setting alert code to %d", current.get_nodeNumber(), current.get_alertCodeNode());
+	else if (sysStatus.get_nodeNumber() > 10 || !Time.isValid()) {			// If the node number indicates this node is uninitialized or the clock needs to be set, initiate a join request
+		current.set_alertCodeNode(1); 					// Will initiate a join request
+		Log.info("Node number indicated unconfigured node of %d setting alert code to %d", sysStatus.get_nodeNumber(), current.get_alertCodeNode());
 	}
 
   	takeMeasurements();                                                  	// Populates values so you can read them before the hour
@@ -92,7 +98,7 @@ void setup() {
     attachInterrupt(INT_PIN, sensorISR, RISING);                     		// PIR or Pressure Sensor interrupt from low to high
 	attachInterrupt(BUTTON_PIN,userSwitchISR,CHANGE); 						// We may need to monitor the user switch to change behaviours / modes
 
-	if (state == INITIALIZATION_STATE) state = IDLE_STATE;               	// IDLE unless otherwise from above code
+	if (state == INITIALIZATION_STATE) state = SLEEPING_STATE;               	// Sleep unless otherwise from above code
   	Log.info("Startup complete for the Node with alert code %d", current.get_alertCodeNode());
   	digitalWrite(BLUE_LED,LOW);                                          	// Signal the end of startup
 }
@@ -156,6 +162,7 @@ void loop() {
 				if (LoRA_Functions::instance().listenForLoRAMessageNode()) {// Listen for acknowledgement
 					current.set_hourlyCount(0);								// Zero the hourly count
 					sysStatus.set_lastConnection(Time.now());
+					ab1805.setRtcFromTime(Time.now());
 					break;
 				}
 			}
@@ -175,10 +182,12 @@ void loop() {
 					system_tick_t startListening = millis();
 					while (millis() - startListening < 3000) {
 						if (LoRA_Functions::instance().listenForLoRAMessageNode()) {
+							Log.info("Ack received - updating");
 							lastPublish = Time.now();
 							sysStatus.set_lastConnection(Time.now());
 							current.set_alertTimestampNode(Time.now());
 							current.set_alertCodeNode(0);
+							ab1805.setRtcFromTime(Time.now());
 						}
 					}
 				}
@@ -195,7 +204,9 @@ void loop() {
 							sysStatus.set_lastConnection(Time.now());
 							current.set_alertTimestampNode(Time.now());
 							current.set_alertCodeNode(0);
+							ab1805.setRtcFromTime(Time.now());
 						}
+						else Log.info("No join ack received");
 					}
 				}
 				LoRA_Functions::instance().sleepLoRaRadio();				// Done for now, put radio to sleep
