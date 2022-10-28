@@ -40,7 +40,7 @@ static LoRA_State lora_state = NULL_STATE;
 RH_RF95 driver(RFM95_CS, RFM95_INT);
 
 // Class to manage message delivery and receipt, using the driver declared above
-RHMesh manager(driver, sysStatus.get_nodeNumber());
+RHMesh manager(driver, GATEWAY_ADDRESS);
 
 // Mesh has much greater memory requirements, and you may need to limit the
 // max message length to prevent wierd crashes
@@ -60,13 +60,24 @@ bool LoRA_Functions::setup(bool gatewayID) {
 		Log.info("init failed");					// Defaults after init are 434.0MHz, 0.05MHz AFC pull-in, modulation FSK_Rb2_4Fd36
 		return false;
 	}
+
 	driver.setFrequency(RF95_FREQ);					// Frequency is typically 868.0 or 915.0 in the Americas, or 433.0 in the EU - Are there more settings possible here?
 	driver.setTxPower(23, false);                   // If you are using RFM95/96/97/98 modules which uses the PA_BOOST transmitter pin, then you can set transmitter powers from 5 to 23 dBm (13dBm default).  PA_BOOST?
-
-	if (sysStatus.get_nodeNumber() > 10)  current.set_alertCodeNode(1);
 	
-	if (manager.thisAddress() > 0) Log.info("LoRA Radio initialized as node %i and a deviceID of %s", manager.thisAddress(), System.deviceID().c_str());
-	else Log.info("LoRA Radio initialized as a gateway with a deviceID of %s", System.deviceID().c_str());
+	if (gatewayID == true) {
+		sysStatus.set_nodeNumber(GATEWAY_ADDRESS);							// Gateway - Manager is initialized by default with GATEWAY_ADDRESS - make sure it is stored in FRAM
+		Log.info("LoRA Radio initialized as a gateway with a deviceID of %s", System.deviceID().c_str());
+	}
+	else if (sysStatus.get_nodeNumber() > 0 && sysStatus.get_nodeNumber() <= 10) {
+		manager.setThisAddress(sysStatus.get_nodeNumber());// Node - use the Node address in valid range from memory
+		Log.info("LoRA Radio initialized as node %i and a deviceID of %s", manager.thisAddress(), System.deviceID().c_str());
+	}
+	else {																						// Else, we will set as an unconfigured node
+		sysStatus.set_nodeNumber(11);
+		manager.setThisAddress(11);
+		Log.info("LoRA Radio initialized as an unconfigured node %i and a deviceID of %s", manager.thisAddress(), System.deviceID().c_str());
+	}
+
 	return true;
 }
 

@@ -21,23 +21,23 @@ Idx Name          Size      VMA       LMA       File off  Algn
                   CONTENTS, ALLOC, LOAD, DATA
   8 .module_info_crc 00000004  000bd99c  000bd99c  0002d99c  2**0
                   CONTENTS, ALLOC, LOAD, READONLY, DATA
-  9 .debug_info   001fa2ef  00000000  00000000  0002d9a0  2**0
+  9 .debug_info   001fa2c3  00000000  00000000  0002d9a0  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 10 .debug_abbrev 0002527e  00000000  00000000  00227c8f  2**0
+ 10 .debug_abbrev 00025269  00000000  00000000  00227c63  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 11 .debug_loc    0004e69c  00000000  00000000  0024cf0d  2**0
+ 11 .debug_loc    0004e687  00000000  00000000  0024cecc  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 12 .debug_aranges 000041e0  00000000  00000000  0029b5a9  2**0
+ 12 .debug_aranges 000041e0  00000000  00000000  0029b553  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 13 .debug_ranges 0000dce0  00000000  00000000  0029f789  2**0
+ 13 .debug_ranges 0000dcb0  00000000  00000000  0029f733  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 14 .debug_macro  00056c45  00000000  00000000  002ad469  2**0
+ 14 .debug_macro  00056c45  00000000  00000000  002ad3e3  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 15 .debug_line   0007a176  00000000  00000000  003040ae  2**0
+ 15 .debug_line   0007a1a6  00000000  00000000  00304028  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 16 .debug_str    00146209  00000000  00000000  0037e224  2**0
+ 16 .debug_str    00146201  00000000  00000000  0037e1ce  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 17 .debug_frame  0000bcfc  00000000  00000000  004c4430  2**2
+ 17 .debug_frame  0000bd00  00000000  00000000  004c43d0  2**2
                   CONTENTS, READONLY, DEBUGGING, OCTETS
 
 Disassembly of section .text:
@@ -125,7 +125,7 @@ void module_user_init()
  */
 void module_user_setup() {
     setup();
-   b4084:	f000 bc36 	b.w	b48f4 <setup>
+   b4084:	f000 bc38 	b.w	b48f8 <setup>
 
 000b4088 <module_user_loop>:
 }
@@ -133,7 +133,7 @@ void module_user_setup() {
 void module_user_loop() {
    b4088:	b508      	push	{r3, lr}
     loop();
-   b408a:	f000 f935 	bl	b42f8 <loop>
+   b408a:	f000 f931 	bl	b42f0 <loop>
     _post_loop();
 }
    b408e:	e8bd 4008 	ldmia.w	sp!, {r3, lr}
@@ -588,1991 +588,1994 @@ int secondsUntilNextEvent() {												// Time till next scheduled event
    b42b2:	4605      	mov	r5, r0
    	if (Time.isValid()) {
    b42b4:	f006 fe6c 	bl	baf90 <_ZN9TimeClass7isValidEv>
-   b42b8:	4604      	mov	r4, r0
-   b42ba:	b1a8      	cbz	r0, b42e8 <_Z21secondsUntilNextEventv+0x40>
-		secondsToReturn = constrain( wakeBoundary - Time.now() % wakeBoundary, 0UL, wakeBoundary);  // Adding one second to reduce prospect of round tripping to IDLE
+   b42b8:	243c      	movs	r4, #60	; 0x3c
+   b42ba:	b1b8      	cbz	r0, b42ec <_Z21secondsUntilNextEventv+0x44>
+		secondsToReturn = constrain( wakeBoundary - Time.now() % wakeBoundary, 0UL, wakeBoundary);  // If Time is valid, we can compute time to the start of the next report window
    b42bc:	f006 fe85 	bl	bafca <_ZN9TimeClass3nowEv>
 	unsigned long wakeBoundary = sysStatus.get_frequencyMinutes() * 60UL;
-   b42c0:	243c      	movs	r4, #60	; 0x3c
-   b42c2:	4365      	muls	r5, r4
-		secondsToReturn = constrain( wakeBoundary - Time.now() % wakeBoundary, 0UL, wakeBoundary);  // Adding one second to reduce prospect of round tripping to IDLE
-   b42c4:	fbb0 f4f5 	udiv	r4, r0, r5
-   b42c8:	fb04 0015 	mls	r0, r4, r5, r0
-   b42cc:	1a2c      	subs	r4, r5, r0
-   b42ce:	42ac      	cmp	r4, r5
-   b42d0:	bf28      	it	cs
-   b42d2:	462c      	movcs	r4, r5
-        Log.info("Report frequency %d mins, next event in %lu seconds", sysStatus.get_frequencyMinutes(), secondsToReturn);
-   b42d4:	f001 f832 	bl	b533c <_ZN13sysStatusData8instanceEv>
-   b42d8:	f001 f957 	bl	b558a <_ZNK13sysStatusData20get_frequencyMinutesEv>
-   b42dc:	4904      	ldr	r1, [pc, #16]	; (b42f0 <_Z21secondsUntilNextEventv+0x48>)
-   b42de:	4602      	mov	r2, r0
-   b42e0:	4623      	mov	r3, r4
-   b42e2:	4804      	ldr	r0, [pc, #16]	; (b42f4 <_Z21secondsUntilNextEventv+0x4c>)
-   b42e4:	f7ff ff94 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
+   b42c0:	4365      	muls	r5, r4
+		secondsToReturn = constrain( wakeBoundary - Time.now() % wakeBoundary, 0UL, wakeBoundary);  // If Time is valid, we can compute time to the start of the next report window
+   b42c2:	fbb0 f4f5 	udiv	r4, r0, r5
+   b42c6:	fb04 0015 	mls	r0, r4, r5, r0
+   b42ca:	1a2c      	subs	r4, r5, r0
+   b42cc:	42ac      	cmp	r4, r5
+   b42ce:	bf28      	it	cs
+   b42d0:	462c      	movcs	r4, r5
+		if (sysStatus.get_nodeNumber() < 10) secondsToReturn += 10UL * sysStatus.get_nodeNumber();	// If the node is configured - add an offset to sequence node send windows - unconfigured nodes go first
+   b42d2:	f001 f833 	bl	b533c <_ZN13sysStatusData8instanceEv>
+   b42d6:	f001 f8ec 	bl	b54b2 <_ZNK13sysStatusData14get_nodeNumberEv>
+   b42da:	2809      	cmp	r0, #9
+   b42dc:	d806      	bhi.n	b42ec <_Z21secondsUntilNextEventv+0x44>
+   b42de:	f001 f82d 	bl	b533c <_ZN13sysStatusData8instanceEv>
+   b42e2:	f001 f8e6 	bl	b54b2 <_ZNK13sysStatusData14get_nodeNumberEv>
+   b42e6:	230a      	movs	r3, #10
+   b42e8:	fb13 4400 	smlabb	r4, r3, r0, r4
+		return secondsToReturn;
     }
-	return secondsToReturn + 10;											// Add an off-set - need to refine this later.
-   b42e8:	f104 000a 	add.w	r0, r4, #10
-   b42ec:	bd38      	pop	{r3, r4, r5, pc}
-   b42ee:	bf00      	nop
-   b42f0:	000bc443 	.word	0x000bc443
-   b42f4:	2003e658 	.word	0x2003e658
+	else return 60UL;	// If time is not valid, we need to keep trying to catch the Gateway when it next wakes up.
+   b42ec:	4620      	mov	r0, r4
+   b42ee:	bd38      	pop	{r3, r4, r5, pc}
 
-000b42f8 <loop>:
+000b42f0 <loop>:
 void loop() {
-   b42f8:	e92d 47f0 	stmdb	sp!, {r4, r5, r6, r7, r8, r9, sl, lr}
+   b42f0:	e92d 47f0 	stmdb	sp!, {r4, r5, r6, r7, r8, r9, sl, lr}
 	switch (state) {
-   b42fc:	4ca7      	ldr	r4, [pc, #668]	; (b459c <loop+0x2a4>)
-   b42fe:	7823      	ldrb	r3, [r4, #0]
-   b4300:	3b01      	subs	r3, #1
+   b42f4:	4caa      	ldr	r4, [pc, #680]	; (b45a0 <loop+0x2b0>)
+   b42f6:	7823      	ldrb	r3, [r4, #0]
+   b42f8:	3b01      	subs	r3, #1
 void loop() {
-   b4302:	b08c      	sub	sp, #48	; 0x30
-   b4304:	2b03      	cmp	r3, #3
-   b4306:	f200 80ba 	bhi.w	b447e <loop+0x186>
-   b430a:	e8df f013 	tbh	[pc, r3, lsl #1]
-   b430e:	016b      	.short	0x016b
-   b4310:	00240004 	.word	0x00240004
-   b4314:	00fc      	.short	0x00fc
+   b42fa:	b08c      	sub	sp, #48	; 0x30
+   b42fc:	2b03      	cmp	r3, #3
+   b42fe:	f200 80c1 	bhi.w	b4484 <loop+0x194>
+   b4302:	e8df f013 	tbh	[pc, r3, lsl #1]
+   b4306:	0171      	.short	0x0171
+   b4308:	00240004 	.word	0x00240004
+   b430c:	0103      	.short	0x0103
 			if (state != oldState) publishStateTransition();              	// We will apply the back-offs before sending to ERROR state - so if we are here we will take action
-   b4316:	4ba2      	ldr	r3, [pc, #648]	; (b45a0 <loop+0x2a8>)
-   b4318:	781b      	ldrb	r3, [r3, #0]
-   b431a:	2b02      	cmp	r3, #2
-   b431c:	d001      	beq.n	b4322 <loop+0x2a>
-   b431e:	f7ff ff8f 	bl	b4240 <_Z22publishStateTransitionv>
+   b430e:	4ba5      	ldr	r3, [pc, #660]	; (b45a4 <loop+0x2b4>)
+   b4310:	781b      	ldrb	r3, [r3, #0]
+   b4312:	2b02      	cmp	r3, #2
+   b4314:	d001      	beq.n	b431a <loop+0x2a>
+   b4316:	f7ff ff93 	bl	b4240 <_Z22publishStateTransitionv>
   			if (Time.isValid() && Time.day() != Time.day(current.get_lastCountTime())) resetEverything();           // Check to see if the device was last on in a different day
-   b4322:	f006 fe35 	bl	baf90 <_ZN9TimeClass7isValidEv>
-   b4326:	b160      	cbz	r0, b4342 <loop+0x4a>
-   b4328:	f006 fe60 	bl	bafec <_ZN9TimeClass3dayEv>
-   b432c:	4605      	mov	r5, r0
-   b432e:	f001 f847 	bl	b53c0 <_ZN17currentStatusData8instanceEv>
-   b4332:	f001 f9c0 	bl	b56b6 <_ZNK17currentStatusData17get_lastCountTimeEv>
-   b4336:	f006 fd27 	bl	bad88 <_ZN9TimeClass3dayEx>
-   b433a:	4285      	cmp	r5, r0
-   b433c:	d001      	beq.n	b4342 <loop+0x4a>
-   b433e:	f001 f9ed 	bl	b571c <_Z15resetEverythingv>
+   b431a:	f006 fe39 	bl	baf90 <_ZN9TimeClass7isValidEv>
+   b431e:	b160      	cbz	r0, b433a <loop+0x4a>
+   b4320:	f006 fe64 	bl	bafec <_ZN9TimeClass3dayEv>
+   b4324:	4605      	mov	r5, r0
+   b4326:	f001 f84b 	bl	b53c0 <_ZN17currentStatusData8instanceEv>
+   b432a:	f001 f9c4 	bl	b56b6 <_ZNK17currentStatusData17get_lastCountTimeEv>
+   b432e:	f006 fd2b 	bl	bad88 <_ZN9TimeClass3dayEx>
+   b4332:	4285      	cmp	r5, r0
+   b4334:	d001      	beq.n	b433a <loop+0x4a>
+   b4336:	f001 f9f1 	bl	b571c <_Z15resetEverythingv>
 			if (current.get_alertCodeNode() != 0) state = ERROR_STATE;
-   b4342:	f001 f83d 	bl	b53c0 <_ZN17currentStatusData8instanceEv>
-   b4346:	f001 f8c8 	bl	b54da <_ZNK17currentStatusData17get_alertCodeNodeEv>
-   b434a:	b110      	cbz	r0, b4352 <loop+0x5a>
-   b434c:	2301      	movs	r3, #1
+   b433a:	f001 f841 	bl	b53c0 <_ZN17currentStatusData8instanceEv>
+   b433e:	f001 f8cc 	bl	b54da <_ZNK17currentStatusData17get_alertCodeNodeEv>
+   b4342:	b110      	cbz	r0, b434a <loop+0x5a>
+   b4344:	2301      	movs	r3, #1
 				state = IDLE_STATE;
-   b434e:	7023      	strb	r3, [r4, #0]
+   b4346:	7023      	strb	r3, [r4, #0]
 			break;
-   b4350:	e095      	b.n	b447e <loop+0x186>
+   b4348:	e09c      	b.n	b4484 <loop+0x194>
 			else state = LoRA_STATE;		   								// If time is valid - wake on the right minute of the hour
-   b4352:	2304      	movs	r3, #4
-   b4354:	e7fb      	b.n	b434e <loop+0x56>
+   b434a:	2304      	movs	r3, #4
+   b434c:	e7fb      	b.n	b4346 <loop+0x56>
 			if (state != oldState) publishStateTransition();              	// We will apply the back-offs before sending to ERROR state - so if we are here we will take action
-   b4356:	4b92      	ldr	r3, [pc, #584]	; (b45a0 <loop+0x2a8>)
-   b4358:	781b      	ldrb	r3, [r3, #0]
-   b435a:	2b03      	cmp	r3, #3
-   b435c:	d001      	beq.n	b4362 <loop+0x6a>
-   b435e:	f7ff ff6f 	bl	b4240 <_Z22publishStateTransitionv>
+   b434e:	4b95      	ldr	r3, [pc, #596]	; (b45a4 <loop+0x2b4>)
+   b4350:	781b      	ldrb	r3, [r3, #0]
+   b4352:	2b03      	cmp	r3, #3
+   b4354:	d001      	beq.n	b435a <loop+0x6a>
+   b4356:	f7ff ff73 	bl	b4240 <_Z22publishStateTransitionv>
      * @brief Stops the watchdog timer. Useful before entering sleep mode.
      * 
      * This is done automatically right before reset (using the reset system event)
      * so the watchdog won't trigger during a firmware update. 
      */
     bool stopWDT() { return setWDT(0); };
-   b4362:	2100      	movs	r1, #0
-   b4364:	488f      	ldr	r0, [pc, #572]	; (b45a4 <loop+0x2ac>)
-   b4366:	f001 feaf 	bl	b60c8 <_ZN6AB18056setWDTEi>
+   b435a:	2100      	movs	r1, #0
+   b435c:	4892      	ldr	r0, [pc, #584]	; (b45a8 <loop+0x2b8>)
+   b435e:	f001 feb3 	bl	b60c8 <_ZN6AB18056setWDTEi>
 			wakeInSeconds = secondsUntilNextEvent();						// Figure out how long to sleep 
-   b436a:	f7ff ff9d 	bl	b42a8 <_Z21secondsUntilNextEventv>
-   b436e:	4607      	mov	r7, r0
-			Log.info("Sleep for %i seconds until next event %s", wakeInSeconds, (Time.isValid()) ? Time.timeStr(Time.now()+wakeInSeconds).c_str(): " ");
-   b4370:	f006 fe0e 	bl	baf90 <_ZN9TimeClass7isValidEv>
-   b4374:	4605      	mov	r5, r0
-   b4376:	2800      	cmp	r0, #0
-   b4378:	d034      	beq.n	b43e4 <loop+0xec>
-   b437a:	f006 fe26 	bl	bafca <_ZN9TimeClass3nowEv>
-   b437e:	19c2      	adds	r2, r0, r7
-   b4380:	17d3      	asrs	r3, r2, #31
-   b4382:	a808      	add	r0, sp, #32
-   b4384:	f006 fd1c 	bl	badc0 <_ZN9TimeClass7timeStrEx>
+   b4362:	f7ff ffa1 	bl	b42a8 <_Z21secondsUntilNextEventv>
+   b4366:	4607      	mov	r7, r0
+			Log.info("Report frequency of %d minutes.  Sleep for %i seconds until next event at %s", sysStatus.get_frequencyMinutes(), wakeInSeconds, (Time.isValid()) ? Time.timeStr(Time.now()+wakeInSeconds).c_str(): " ");
+   b4368:	f000 ffe8 	bl	b533c <_ZN13sysStatusData8instanceEv>
+   b436c:	f001 f90d 	bl	b558a <_ZNK13sysStatusData20get_frequencyMinutesEv>
+   b4370:	4606      	mov	r6, r0
+   b4372:	f006 fe0d 	bl	baf90 <_ZN9TimeClass7isValidEv>
+   b4376:	4605      	mov	r5, r0
+   b4378:	2800      	cmp	r0, #0
+   b437a:	d036      	beq.n	b43ea <loop+0xfa>
+   b437c:	f006 fe25 	bl	bafca <_ZN9TimeClass3nowEv>
+   b4380:	19c2      	adds	r2, r0, r7
+   b4382:	17d3      	asrs	r3, r2, #31
+   b4384:	a808      	add	r0, sp, #32
+   b4386:	f006 fd1b 	bl	badc0 <_ZN9TimeClass7timeStrEx>
 	char operator [] (unsigned int index) const;
 	char& operator [] (unsigned int index);
 	void getBytes(unsigned char *buf, unsigned int bufsize, unsigned int index=0) const;
 	void toCharArray(char *buf, unsigned int bufsize, unsigned int index=0) const
 		{getBytes((unsigned char *)buf, bufsize, index);}
 	const char * c_str() const { return buffer; }
-   b4388:	9b08      	ldr	r3, [sp, #32]
-   b438a:	4987      	ldr	r1, [pc, #540]	; (b45a8 <loop+0x2b0>)
-   b438c:	4887      	ldr	r0, [pc, #540]	; (b45ac <loop+0x2b4>)
-   b438e:	463a      	mov	r2, r7
-   b4390:	f7ff ff3e 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
-   b4394:	b115      	cbz	r5, b439c <loop+0xa4>
-   b4396:	a808      	add	r0, sp, #32
-   b4398:	f006 fb0a 	bl	ba9b0 <_ZN6StringD1Ev>
+   b438a:	9b08      	ldr	r3, [sp, #32]
+   b438c:	9300      	str	r3, [sp, #0]
+   b438e:	4987      	ldr	r1, [pc, #540]	; (b45ac <loop+0x2bc>)
+   b4390:	4887      	ldr	r0, [pc, #540]	; (b45b0 <loop+0x2c0>)
+   b4392:	463b      	mov	r3, r7
+   b4394:	4632      	mov	r2, r6
+   b4396:	f7ff ff3b 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
+   b439a:	b115      	cbz	r5, b43a2 <loop+0xb2>
+   b439c:	a808      	add	r0, sp, #32
+   b439e:	f006 fb07 	bl	ba9b0 <_ZN6StringD1Ev>
         if (valid_) {
-   b439c:	4b84      	ldr	r3, [pc, #528]	; (b45b0 <loop+0x2b8>)
-   b439e:	7d1a      	ldrb	r2, [r3, #20]
-   b43a0:	b10a      	cbz	r2, b43a6 <loop+0xae>
+   b43a2:	4b84      	ldr	r3, [pc, #528]	; (b45b4 <loop+0x2c4>)
+   b43a4:	7d1a      	ldrb	r2, [r3, #20]
+   b43a6:	b10a      	cbz	r2, b43ac <loop+0xbc>
             config_.mode = static_cast<hal_sleep_mode_t>(mode);
-   b43a2:	2202      	movs	r2, #2
-   b43a4:	721a      	strb	r2, [r3, #8]
+   b43a8:	2202      	movs	r2, #2
+   b43aa:	721a      	strb	r2, [r3, #8]
 				.gpio(BUTTON_PIN,CHANGE)
-   b43a6:	4b83      	ldr	r3, [pc, #524]	; (b45b4 <loop+0x2bc>)
-   b43a8:	4881      	ldr	r0, [pc, #516]	; (b45b0 <loop+0x2b8>)
-   b43aa:	f8b3 9000 	ldrh.w	r9, [r3]
-   b43ae:	2200      	movs	r2, #0
-   b43b0:	4649      	mov	r1, r9
-   b43b2:	f7ff fef9 	bl	b41a8 <_ZN8particle24SystemSleepConfiguration4gpioEt13InterruptMode>
+   b43ac:	4b82      	ldr	r3, [pc, #520]	; (b45b8 <loop+0x2c8>)
+   b43ae:	4881      	ldr	r0, [pc, #516]	; (b45b4 <loop+0x2c4>)
+   b43b0:	f8b3 9000 	ldrh.w	r9, [r3]
+   b43b4:	2200      	movs	r2, #0
+   b43b6:	4649      	mov	r1, r9
+   b43b8:	f7ff fef6 	bl	b41a8 <_ZN8particle24SystemSleepConfiguration4gpioEt13InterruptMode>
 				.gpio(INT_PIN,RISING)
-   b43b6:	4b80      	ldr	r3, [pc, #512]	; (b45b8 <loop+0x2c0>)
-   b43b8:	f8b3 a000 	ldrh.w	sl, [r3]
-   b43bc:	2201      	movs	r2, #1
-   b43be:	4651      	mov	r1, sl
-   b43c0:	f7ff fef2 	bl	b41a8 <_ZN8particle24SystemSleepConfiguration4gpioEt13InterruptMode>
+   b43bc:	4b7f      	ldr	r3, [pc, #508]	; (b45bc <loop+0x2cc>)
+   b43be:	f8b3 a000 	ldrh.w	sl, [r3]
+   b43c2:	2201      	movs	r2, #1
+   b43c4:	4651      	mov	r1, sl
+   b43c6:	f7ff feef 	bl	b41a8 <_ZN8particle24SystemSleepConfiguration4gpioEt13InterruptMode>
         }
         return *this;
     }
 
     SystemSleepConfiguration& duration(system_tick_t ms) {
         if (valid_) {
-   b43c4:	7d03      	ldrb	r3, [r0, #20]
-   b43c6:	4606      	mov	r6, r0
-   b43c8:	b313      	cbz	r3, b4410 <loop+0x118>
+   b43ca:	7d03      	ldrb	r3, [r0, #20]
+   b43cc:	4606      	mov	r6, r0
+   b43ce:	b313      	cbz	r3, b4416 <loop+0x126>
         return wakeupSourceFeatured(type, config_->wakeup_sources);
-   b43ca:	6803      	ldr	r3, [r0, #0]
+   b43d0:	6803      	ldr	r3, [r0, #0]
 				.duration(wakeInSeconds * 1000L);
-   b43cc:	f44f 787a 	mov.w	r8, #1000	; 0x3e8
-   b43d0:	68db      	ldr	r3, [r3, #12]
-   b43d2:	fb08 f807 	mul.w	r8, r8, r7
+   b43d2:	f44f 787a 	mov.w	r8, #1000	; 0x3e8
+   b43d6:	68d9      	ldr	r1, [r3, #12]
+   b43d8:	fb08 f807 	mul.w	r8, r8, r7
         if (!start) {
-   b43d6:	b13b      	cbz	r3, b43e8 <loop+0xf0>
+   b43dc:	b139      	cbz	r1, b43ee <loop+0xfe>
             if (start->type == type) {
-   b43d8:	889a      	ldrh	r2, [r3, #4]
-   b43da:	2a04      	cmp	r2, #4
-   b43dc:	f000 81db 	beq.w	b4796 <loop+0x49e>
+   b43de:	888b      	ldrh	r3, [r1, #4]
+   b43e0:	2b04      	cmp	r3, #4
+   b43e2:	f000 81da 	beq.w	b479a <loop+0x4aa>
             start = start->next;
-   b43e0:	689b      	ldr	r3, [r3, #8]
+   b43e6:	6889      	ldr	r1, [r1, #8]
         while (start) {
-   b43e2:	e7f8      	b.n	b43d6 <loop+0xde>
-			Log.info("Sleep for %i seconds until next event %s", wakeInSeconds, (Time.isValid()) ? Time.timeStr(Time.now()+wakeInSeconds).c_str(): " ");
-   b43e4:	4b75      	ldr	r3, [pc, #468]	; (b45bc <loop+0x2c4>)
-   b43e6:	e7d0      	b.n	b438a <loop+0x92>
+   b43e8:	e7f8      	b.n	b43dc <loop+0xec>
+			Log.info("Report frequency of %d minutes.  Sleep for %i seconds until next event at %s", sysStatus.get_frequencyMinutes(), wakeInSeconds, (Time.isValid()) ? Time.timeStr(Time.now()+wakeInSeconds).c_str(): " ");
+   b43ea:	4b75      	ldr	r3, [pc, #468]	; (b45c0 <loop+0x2d0>)
+   b43ec:	e7ce      	b.n	b438c <loop+0x9c>
             if (wakeup) {
                 reinterpret_cast<hal_wakeup_source_rtc_t*>(wakeup)->ms = ms;
                 return *this;
             }
             // Otherwise, configure RTC as wakeup source.
             auto wakeupSource = new(std::nothrow) hal_wakeup_source_rtc_t();
-   b43e8:	4975      	ldr	r1, [pc, #468]	; (b45c0 <loop+0x2c8>)
-   b43ea:	2010      	movs	r0, #16
-   b43ec:	f007 f8f6 	bl	bb5dc <_ZnwjRKSt9nothrow_t>
-   b43f0:	4605      	mov	r5, r0
-   b43f2:	2800      	cmp	r0, #0
-   b43f4:	f000 81cd 	beq.w	b4792 <loop+0x49a>
-   b43f8:	2210      	movs	r2, #16
-   b43fa:	2100      	movs	r1, #0
-   b43fc:	f007 fe24 	bl	bc048 <memset>
+   b43ee:	4975      	ldr	r1, [pc, #468]	; (b45c4 <loop+0x2d4>)
+   b43f0:	2010      	movs	r0, #16
+   b43f2:	f007 f8f3 	bl	bb5dc <_ZnwjRKSt9nothrow_t>
+   b43f6:	4605      	mov	r5, r0
+   b43f8:	2800      	cmp	r0, #0
+   b43fa:	f000 81cc 	beq.w	b4796 <loop+0x4a6>
+   b43fe:	2210      	movs	r2, #16
+   b4400:	2100      	movs	r1, #0
+   b4402:	f007 fe21 	bl	bc048 <memset>
             if (!wakeupSource) {
                 valid_ = false;
                 return *this;
             }
             wakeupSource->base.size = sizeof(hal_wakeup_source_rtc_t);
-   b4400:	4b70      	ldr	r3, [pc, #448]	; (b45c4 <loop+0x2cc>)
-   b4402:	602b      	str	r3, [r5, #0]
+   b4406:	4b70      	ldr	r3, [pc, #448]	; (b45c8 <loop+0x2d8>)
+   b4408:	602b      	str	r3, [r5, #0]
             wakeupSource->base.version = HAL_SLEEP_VERSION;
             wakeupSource->base.type = HAL_WAKEUP_SOURCE_TYPE_RTC;
-   b4404:	2304      	movs	r3, #4
-   b4406:	80ab      	strh	r3, [r5, #4]
+   b440a:	2304      	movs	r3, #4
+   b440c:	80ab      	strh	r3, [r5, #4]
             wakeupSource->base.next = config_.wakeup_sources;
-   b4408:	6933      	ldr	r3, [r6, #16]
+   b440e:	6933      	ldr	r3, [r6, #16]
             wakeupSource->ms = ms;
-   b440a:	e9c5 3802 	strd	r3, r8, [r5, #8]
+   b4410:	e9c5 3802 	strd	r3, r8, [r5, #8]
             config_.wakeup_sources = reinterpret_cast<hal_wakeup_source_base_t*>(wakeupSource);
-   b440e:	6135      	str	r5, [r6, #16]
+   b4414:	6135      	str	r5, [r6, #16]
 			SystemSleepResult result = System.sleep(config);              	// Put the device to sleep device continues operations from here
-   b4410:	4967      	ldr	r1, [pc, #412]	; (b45b0 <loop+0x2b8>)
-   b4412:	a805      	add	r0, sp, #20
-   b4414:	f006 fbf0 	bl	babf8 <_ZN11SystemClass5sleepERKN8particle24SystemSleepConfigurationE>
+   b4416:	4967      	ldr	r1, [pc, #412]	; (b45b4 <loop+0x2c4>)
+   b4418:	a805      	add	r0, sp, #20
+   b441a:	f006 fbed 	bl	babf8 <_ZN11SystemClass5sleepERKN8particle24SystemSleepConfigurationE>
         return hal_timer_millis(nullptr);
-   b4418:	2000      	movs	r0, #0
-   b441a:	f003 ff4d 	bl	b82b8 <hal_timer_millis>
+   b441e:	2000      	movs	r0, #0
+   b4420:	f003 ff4a 	bl	b82b8 <hal_timer_millis>
         while (_while() && !_condition()) {
-   b441e:	f242 7610 	movw	r6, #10000	; 0x2710
+   b4424:	f242 7610 	movw	r6, #10000	; 0x2710
         return hal_timer_millis(nullptr);
-   b4422:	4605      	mov	r5, r0
-   b4424:	2000      	movs	r0, #0
-   b4426:	f003 ff47 	bl	b82b8 <hal_timer_millis>
+   b4428:	4605      	mov	r5, r0
+   b442a:	2000      	movs	r0, #0
+   b442c:	f003 ff44 	bl	b82b8 <hal_timer_millis>
         return waitConditionWhile(_condition, [=]{ return (millis()-start)<timeout; });
-   b442a:	1b40      	subs	r0, r0, r5
-   b442c:	f161 0100 	sbc.w	r1, r1, #0
+   b4430:	1b40      	subs	r0, r0, r5
+   b4432:	f161 0100 	sbc.w	r1, r1, #0
         while (_while() && !_condition()) {
-   b4430:	42b0      	cmp	r0, r6
-   b4432:	f171 0300 	sbcs.w	r3, r1, #0
-   b4436:	d207      	bcs.n	b4448 <loop+0x150>
+   b4436:	42b0      	cmp	r0, r6
+   b4438:	f171 0300 	sbcs.w	r3, r1, #0
+   b443c:	d207      	bcs.n	b444e <loop+0x15e>
 	waitFor(Serial.isConnected, 10000);				// Wait for serial connection
-   b4438:	f006 feae 	bl	bb198 <_Z16_fetch_usbserialv>
-   b443c:	f006 fea1 	bl	bb182 <_ZN9USBSerial11isConnectedEv>
-   b4440:	b910      	cbnz	r0, b4448 <loop+0x150>
+   b443e:	f006 feab 	bl	bb198 <_Z16_fetch_usbserialv>
+   b4442:	f006 fe9e 	bl	bb182 <_ZN9USBSerial11isConnectedEv>
+   b4446:	b910      	cbnz	r0, b444e <loop+0x15e>
             spark_process();
-   b4442:	f004 f995 	bl	b8770 <spark_process>
+   b4448:	f004 f992 	bl	b8770 <spark_process>
         while (_while() && !_condition()) {
-   b4446:	e7ed      	b.n	b4424 <loop+0x12c>
-   b4448:	f006 fea6 	bl	bb198 <_Z16_fetch_usbserialv>
-   b444c:	f006 fe99 	bl	bb182 <_ZN9USBSerial11isConnectedEv>
+   b444c:	e7ed      	b.n	b442a <loop+0x13a>
+   b444e:	f006 fea3 	bl	bb198 <_Z16_fetch_usbserialv>
+   b4452:	f006 fe96 	bl	bb182 <_ZN9USBSerial11isConnectedEv>
      * sleep modes where executinon continues. You may also want to call `updateWakeReason()`.
      * 
      * It's safe to call resumeWDT() even if the WDT has never been set, it does nothing
      * in this case, leaving the watchdog off.
      */
     bool resumeWDT() { return setWDT(-1); };
-   b4450:	4854      	ldr	r0, [pc, #336]	; (b45a4 <loop+0x2ac>)
-   b4452:	f04f 31ff 	mov.w	r1, #4294967295	; 0xffffffff
-   b4456:	f001 fe37 	bl	b60c8 <_ZN6AB18056setWDTEi>
+   b4456:	4854      	ldr	r0, [pc, #336]	; (b45a8 <loop+0x2b8>)
+   b4458:	f04f 31ff 	mov.w	r1, #4294967295	; 0xffffffff
+   b445c:	f001 fe34 	bl	b60c8 <_ZN6AB18056setWDTEi>
         if (wakeupReason() == SystemSleepWakeupReason::BY_GPIO) {
-   b445a:	9b05      	ldr	r3, [sp, #20]
+   b4460:	9b05      	ldr	r3, [sp, #20]
         if (wakeupSource_) {
-   b445c:	b363      	cbz	r3, b44b8 <loop+0x1c0>
+   b4462:	b363      	cbz	r3, b44be <loop+0x1ce>
         if (wakeupReason() == SystemSleepWakeupReason::BY_GPIO) {
-   b445e:	889a      	ldrh	r2, [r3, #4]
-   b4460:	2a01      	cmp	r2, #1
-   b4462:	d129      	bne.n	b44b8 <loop+0x1c0>
+   b4464:	889a      	ldrh	r2, [r3, #4]
+   b4466:	2a01      	cmp	r2, #1
+   b4468:	d129      	bne.n	b44be <loop+0x1ce>
             return reinterpret_cast<hal_wakeup_source_gpio_t*>(wakeupSource_)->pin;
-   b4464:	899b      	ldrh	r3, [r3, #12]
+   b446a:	899b      	ldrh	r3, [r3, #12]
 			if (result.wakeupPin() == BUTTON_PIN) {                         // If the user woke the device we need to get up - device was sleeping so we need to reset opening hours
-   b4466:	4599      	cmp	r9, r3
-   b4468:	d129      	bne.n	b44be <loop+0x1c6>
+   b446c:	4599      	cmp	r9, r3
+   b446e:	d129      	bne.n	b44c4 <loop+0x1d4>
 				Log.info("Woke with user button - LoRA State");
-   b446a:	4957      	ldr	r1, [pc, #348]	; (b45c8 <loop+0x2d0>)
-   b446c:	484f      	ldr	r0, [pc, #316]	; (b45ac <loop+0x2b4>)
-   b446e:	f7ff fecf 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
+   b4470:	4956      	ldr	r1, [pc, #344]	; (b45cc <loop+0x2dc>)
+   b4472:	484f      	ldr	r0, [pc, #316]	; (b45b0 <loop+0x2c0>)
+   b4474:	f7ff fecc 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
 				state = LoRA_STATE;
-   b4472:	2304      	movs	r3, #4
+   b4478:	2304      	movs	r3, #4
         if (wakeupSource_) {
-   b4474:	9805      	ldr	r0, [sp, #20]
+   b447a:	9805      	ldr	r0, [sp, #20]
 				state = IDLE_STATE;
-   b4476:	7023      	strb	r3, [r4, #0]
-   b4478:	b108      	cbz	r0, b447e <loop+0x186>
+   b447c:	7023      	strb	r3, [r4, #0]
+   b447e:	b108      	cbz	r0, b4484 <loop+0x194>
             free(wakeupSource_);
-   b447a:	f004 fa11 	bl	b88a0 <free>
+   b4480:	f004 fa0e 	bl	b88a0 <free>
 	ab1805.loop();                                  						// Keeps the RTC synchronized with the Boron's clock
-   b447e:	4849      	ldr	r0, [pc, #292]	; (b45a4 <loop+0x2ac>)
+   b4484:	4848      	ldr	r0, [pc, #288]	; (b45a8 <loop+0x2b8>)
 	if (sensorDetect) {														// Count the pulse and reset for next
-   b4480:	4c52      	ldr	r4, [pc, #328]	; (b45cc <loop+0x2d4>)
+   b4486:	4c52      	ldr	r4, [pc, #328]	; (b45d0 <loop+0x2e0>)
 	ab1805.loop();                                  						// Keeps the RTC synchronized with the Boron's clock
-   b4482:	f002 f9cd 	bl	b6820 <_ZN6AB18054loopEv>
+   b4488:	f002 f9ca 	bl	b6820 <_ZN6AB18054loopEv>
 	current.loop();
-   b4486:	f000 ff9b 	bl	b53c0 <_ZN17currentStatusData8instanceEv>
-   b448a:	f000 ffb4 	bl	b53f6 <_ZN17currentStatusData4loopEv>
+   b448c:	f000 ff98 	bl	b53c0 <_ZN17currentStatusData8instanceEv>
+   b4490:	f000 ffb1 	bl	b53f6 <_ZN17currentStatusData4loopEv>
 	sysStatus.loop();
-   b448e:	f000 ff55 	bl	b533c <_ZN13sysStatusData8instanceEv>
-   b4492:	f000 ff6e 	bl	b5372 <_ZN13sysStatusData4loopEv>
+   b4494:	f000 ff52 	bl	b533c <_ZN13sysStatusData8instanceEv>
+   b4498:	f000 ff6b 	bl	b5372 <_ZN13sysStatusData4loopEv>
 	if (sensorDetect) {														// Count the pulse and reset for next
-   b4496:	7823      	ldrb	r3, [r4, #0]
-   b4498:	b123      	cbz	r3, b44a4 <loop+0x1ac>
+   b449c:	7823      	ldrb	r3, [r4, #0]
+   b449e:	b123      	cbz	r3, b44aa <loop+0x1ba>
 		if (recordCount()) sensorDetect = false;
-   b449a:	f001 fb9b 	bl	b5bd4 <_Z11recordCountv>
-   b449e:	b108      	cbz	r0, b44a4 <loop+0x1ac>
-   b44a0:	2300      	movs	r3, #0
-   b44a2:	7023      	strb	r3, [r4, #0]
+   b44a0:	f001 fb98 	bl	b5bd4 <_Z11recordCountv>
+   b44a4:	b108      	cbz	r0, b44aa <loop+0x1ba>
+   b44a6:	2300      	movs	r3, #0
+   b44a8:	7023      	strb	r3, [r4, #0]
 	if (outOfMemory >= 0) {                         // In this function we are going to reset the system if there is an out of memory error
-   b44a4:	4b4a      	ldr	r3, [pc, #296]	; (b45d0 <loop+0x2d8>)
-   b44a6:	681b      	ldr	r3, [r3, #0]
-   b44a8:	2b00      	cmp	r3, #0
-   b44aa:	f2c0 8177 	blt.w	b479c <loop+0x4a4>
+   b44aa:	4b4a      	ldr	r3, [pc, #296]	; (b45d4 <loop+0x2e4>)
+   b44ac:	681b      	ldr	r3, [r3, #0]
+   b44ae:	2b00      	cmp	r3, #0
+   b44b0:	f2c0 8176 	blt.w	b47a0 <loop+0x4b0>
 }
-   b44ae:	b00c      	add	sp, #48	; 0x30
-   b44b0:	e8bd 47f0 	ldmia.w	sp!, {r4, r5, r6, r7, r8, r9, sl, lr}
+   b44b4:	b00c      	add	sp, #48	; 0x30
+   b44b6:	e8bd 47f0 	ldmia.w	sp!, {r4, r5, r6, r7, r8, r9, sl, lr}
 		System.reset();
-   b44b4:	f006 bb9d 	b.w	babf2 <_ZN11SystemClass5resetEv>
+   b44ba:	f006 bb9a 	b.w	babf2 <_ZN11SystemClass5resetEv>
             return std::numeric_limits<pin_t>::max();
-   b44b8:	f64f 73ff 	movw	r3, #65535	; 0xffff
-   b44bc:	e7d3      	b.n	b4466 <loop+0x16e>
+   b44be:	f64f 73ff 	movw	r3, #65535	; 0xffff
+   b44c2:	e7d3      	b.n	b446c <loop+0x17c>
 			else if (result.wakeupPin() == INT_PIN) {
-   b44be:	459a      	cmp	sl, r3
-   b44c0:	d10b      	bne.n	b44da <loop+0x1e2>
+   b44c4:	459a      	cmp	sl, r3
+   b44c6:	d10b      	bne.n	b44e0 <loop+0x1f0>
 				Log.info("Woke with sensor interrupt - Record count then sleep");
-   b44c2:	4944      	ldr	r1, [pc, #272]	; (b45d4 <loop+0x2dc>)
-   b44c4:	4839      	ldr	r0, [pc, #228]	; (b45ac <loop+0x2b4>)
-   b44c6:	f7ff fea3 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
+   b44c8:	4943      	ldr	r1, [pc, #268]	; (b45d8 <loop+0x2e8>)
+   b44ca:	4839      	ldr	r0, [pc, #228]	; (b45b0 <loop+0x2c0>)
+   b44cc:	f7ff fea0 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
 				if (recordCount()) sensorDetect = false;					// Record count and reset flag
-   b44ca:	f001 fb83 	bl	b5bd4 <_Z11recordCountv>
-   b44ce:	b110      	cbz	r0, b44d6 <loop+0x1de>
-   b44d0:	4b3e      	ldr	r3, [pc, #248]	; (b45cc <loop+0x2d4>)
-   b44d2:	2200      	movs	r2, #0
-   b44d4:	701a      	strb	r2, [r3, #0]
+   b44d0:	f001 fb80 	bl	b5bd4 <_Z11recordCountv>
+   b44d4:	b110      	cbz	r0, b44dc <loop+0x1ec>
+   b44d6:	4b3e      	ldr	r3, [pc, #248]	; (b45d0 <loop+0x2e0>)
+   b44d8:	2200      	movs	r2, #0
+   b44da:	701a      	strb	r2, [r3, #0]
 				state = SLEEPING_STATE;
-   b44d6:	2303      	movs	r3, #3
-   b44d8:	e7cc      	b.n	b4474 <loop+0x17c>
+   b44dc:	2303      	movs	r3, #3
+   b44de:	e7cc      	b.n	b447a <loop+0x18a>
 				Log.info("Awoke at %s with %li free memory", Time.timeStr(Time.now()+wakeInSeconds).c_str(), System.freeMemory());
-   b44da:	f006 fd76 	bl	bafca <_ZN9TimeClass3nowEv>
-   b44de:	19c2      	adds	r2, r0, r7
-   b44e0:	17d3      	asrs	r3, r2, #31
-   b44e2:	a808      	add	r0, sp, #32
-   b44e4:	f006 fc6c 	bl	badc0 <_ZN9TimeClass7timeStrEx>
-   b44e8:	9a08      	ldr	r2, [sp, #32]
-   b44ea:	9203      	str	r2, [sp, #12]
-   b44ec:	f006 fbe4 	bl	bacb8 <_ZN11SystemClass10freeMemoryEv>
-   b44f0:	9a03      	ldr	r2, [sp, #12]
-   b44f2:	4939      	ldr	r1, [pc, #228]	; (b45d8 <loop+0x2e0>)
-   b44f4:	4603      	mov	r3, r0
-   b44f6:	482d      	ldr	r0, [pc, #180]	; (b45ac <loop+0x2b4>)
-   b44f8:	f7ff fe8a 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
-   b44fc:	a808      	add	r0, sp, #32
-   b44fe:	f006 fa57 	bl	ba9b0 <_ZN6StringD1Ev>
+   b44e0:	f006 fd73 	bl	bafca <_ZN9TimeClass3nowEv>
+   b44e4:	19c2      	adds	r2, r0, r7
+   b44e6:	17d3      	asrs	r3, r2, #31
+   b44e8:	a808      	add	r0, sp, #32
+   b44ea:	f006 fc69 	bl	badc0 <_ZN9TimeClass7timeStrEx>
+   b44ee:	9a08      	ldr	r2, [sp, #32]
+   b44f0:	9203      	str	r2, [sp, #12]
+   b44f2:	f006 fbe1 	bl	bacb8 <_ZN11SystemClass10freeMemoryEv>
+   b44f6:	9a03      	ldr	r2, [sp, #12]
+   b44f8:	4938      	ldr	r1, [pc, #224]	; (b45dc <loop+0x2ec>)
+   b44fa:	4603      	mov	r3, r0
+   b44fc:	482c      	ldr	r0, [pc, #176]	; (b45b0 <loop+0x2c0>)
+   b44fe:	f7ff fe87 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
+   b4502:	a808      	add	r0, sp, #32
+   b4504:	f006 fa54 	bl	ba9b0 <_ZN6StringD1Ev>
 				state = IDLE_STATE;
-   b4502:	2302      	movs	r3, #2
-   b4504:	e7b6      	b.n	b4474 <loop+0x17c>
+   b4508:	2302      	movs	r3, #2
+   b450a:	e7b6      	b.n	b447a <loop+0x18a>
 			if (state != oldState) {
-   b4506:	4b26      	ldr	r3, [pc, #152]	; (b45a0 <loop+0x2a8>)
-   b4508:	781b      	ldrb	r3, [r3, #0]
-   b450a:	2b04      	cmp	r3, #4
-   b450c:	d017      	beq.n	b453e <loop+0x246>
+   b450c:	4b25      	ldr	r3, [pc, #148]	; (b45a4 <loop+0x2b4>)
+   b450e:	781b      	ldrb	r3, [r3, #0]
+   b4510:	2b04      	cmp	r3, #4
+   b4512:	d017      	beq.n	b4544 <loop+0x254>
 				publishStateTransition();                   				// We will apply the back-offs before sending to ERROR state - so if we are here we will take action
-   b450e:	f7ff fe97 	bl	b4240 <_Z22publishStateTransitionv>
+   b4514:	f7ff fe94 	bl	b4240 <_Z22publishStateTransitionv>
 				LoRA_Functions::instance().clearBuffer();
-   b4512:	f000 fb3d 	bl	b4b90 <_ZN14LoRA_Functions8instanceEv>
-   b4516:	f000 fb9f 	bl	b4c58 <_ZN14LoRA_Functions11clearBufferEv>
+   b4518:	f000 fb1a 	bl	b4b50 <_ZN14LoRA_Functions8instanceEv>
+   b451c:	f000 fba0 	bl	b4c60 <_ZN14LoRA_Functions11clearBufferEv>
 				takeMeasurements();
-   b451a:	f001 fc6f 	bl	b5dfc <_Z16takeMeasurementsv>
+   b4520:	f001 fc6c 	bl	b5dfc <_Z16takeMeasurementsv>
 				lastPublish = Time.now();
-   b451e:	f006 fd54 	bl	bafca <_ZN9TimeClass3nowEv>
-   b4522:	4b2e      	ldr	r3, [pc, #184]	; (b45dc <loop+0x2e4>)
-   b4524:	17c2      	asrs	r2, r0, #31
-   b4526:	e9c3 0200 	strd	r0, r2, [r3]
+   b4524:	f006 fd51 	bl	bafca <_ZN9TimeClass3nowEv>
+   b4528:	4b2d      	ldr	r3, [pc, #180]	; (b45e0 <loop+0x2f0>)
+   b452a:	17c2      	asrs	r2, r0, #31
+   b452c:	e9c3 0200 	strd	r0, r2, [r3]
 				if (!LoRA_Functions::instance().composeDataReportNode()) {
-   b452a:	f000 fb31 	bl	b4b90 <_ZN14LoRA_Functions8instanceEv>
-   b452e:	f000 fba9 	bl	b4c84 <_ZN14LoRA_Functions21composeDataReportNodeEv>
-   b4532:	b920      	cbnz	r0, b453e <loop+0x246>
+   b4530:	f000 fb0e 	bl	b4b50 <_ZN14LoRA_Functions8instanceEv>
+   b4534:	f000 fbaa 	bl	b4c8c <_ZN14LoRA_Functions21composeDataReportNodeEv>
+   b4538:	b920      	cbnz	r0, b4544 <loop+0x254>
 					Log.info("Failed in data send");
-   b4534:	492a      	ldr	r1, [pc, #168]	; (b45e0 <loop+0x2e8>)
-   b4536:	481d      	ldr	r0, [pc, #116]	; (b45ac <loop+0x2b4>)
-   b4538:	f7ff fe6a 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
+   b453a:	492a      	ldr	r1, [pc, #168]	; (b45e4 <loop+0x2f4>)
+   b453c:	481c      	ldr	r0, [pc, #112]	; (b45b0 <loop+0x2c0>)
+   b453e:	f7ff fe67 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
 					break;
-   b453c:	e79f      	b.n	b447e <loop+0x186>
+   b4542:	e79f      	b.n	b4484 <loop+0x194>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 inline system_tick_t millis(void) { return HAL_Timer_Get_Milli_Seconds(); }
-   b453e:	f003 feab 	bl	b8298 <HAL_Timer_Get_Milli_Seconds>
+   b4544:	f003 fea8 	bl	b8298 <HAL_Timer_Get_Milli_Seconds>
 			while (millis() - startListening < 5000) {
-   b4542:	f241 3687 	movw	r6, #4999	; 0x1387
-   b4546:	4605      	mov	r5, r0
-   b4548:	f003 fea6 	bl	b8298 <HAL_Timer_Get_Milli_Seconds>
-   b454c:	1b40      	subs	r0, r0, r5
-   b454e:	42b0      	cmp	r0, r6
-   b4550:	d81d      	bhi.n	b458e <loop+0x296>
+   b4548:	f241 3687 	movw	r6, #4999	; 0x1387
+   b454c:	4605      	mov	r5, r0
+   b454e:	f003 fea3 	bl	b8298 <HAL_Timer_Get_Milli_Seconds>
+   b4552:	1b40      	subs	r0, r0, r5
+   b4554:	42b0      	cmp	r0, r6
+   b4556:	d81d      	bhi.n	b4594 <loop+0x2a4>
 				if (LoRA_Functions::instance().listenForLoRAMessageNode()) {// Listen for acknowledgement
-   b4552:	f000 fb1d 	bl	b4b90 <_ZN14LoRA_Functions8instanceEv>
-   b4556:	f000 fda5 	bl	b50a4 <_ZN14LoRA_Functions24listenForLoRAMessageNodeEv>
-   b455a:	2800      	cmp	r0, #0
-   b455c:	d0f4      	beq.n	b4548 <loop+0x250>
+   b4558:	f000 fafa 	bl	b4b50 <_ZN14LoRA_Functions8instanceEv>
+   b455c:	f000 fda6 	bl	b50ac <_ZN14LoRA_Functions24listenForLoRAMessageNodeEv>
+   b4560:	2800      	cmp	r0, #0
+   b4562:	d0f4      	beq.n	b454e <loop+0x25e>
 					current.set_hourlyCount(0);								// Zero the hourly count
-   b455e:	f000 ff2f 	bl	b53c0 <_ZN17currentStatusData8instanceEv>
-   b4562:	2100      	movs	r1, #0
-   b4564:	f001 f844 	bl	b55f0 <_ZN17currentStatusData15set_hourlyCountEt>
+   b4564:	f000 ff2c 	bl	b53c0 <_ZN17currentStatusData8instanceEv>
+   b4568:	2100      	movs	r1, #0
+   b456a:	f001 f841 	bl	b55f0 <_ZN17currentStatusData15set_hourlyCountEt>
 					sysStatus.set_lastConnection(Time.now());
-   b4568:	f000 fee8 	bl	b533c <_ZN13sysStatusData8instanceEv>
-   b456c:	4605      	mov	r5, r0
-   b456e:	f006 fd2c 	bl	bafca <_ZN9TimeClass3nowEv>
-   b4572:	4602      	mov	r2, r0
-   b4574:	17c3      	asrs	r3, r0, #31
-   b4576:	4628      	mov	r0, r5
-   b4578:	f001 f8c6 	bl	b5708 <_ZN13sysStatusData18set_lastConnectionEx>
+   b456e:	f000 fee5 	bl	b533c <_ZN13sysStatusData8instanceEv>
+   b4572:	4605      	mov	r5, r0
+   b4574:	f006 fd29 	bl	bafca <_ZN9TimeClass3nowEv>
+   b4578:	4602      	mov	r2, r0
+   b457a:	17c3      	asrs	r3, r0, #31
+   b457c:	4628      	mov	r0, r5
+   b457e:	f001 f8c3 	bl	b5708 <_ZN13sysStatusData18set_lastConnectionEx>
 					ab1805.setRtcFromTime(Time.now());
-   b457c:	f006 fd25 	bl	bafca <_ZN9TimeClass3nowEv>
-   b4580:	2301      	movs	r3, #1
-   b4582:	4602      	mov	r2, r0
-   b4584:	9300      	str	r3, [sp, #0]
-   b4586:	17c3      	asrs	r3, r0, #31
-   b4588:	4806      	ldr	r0, [pc, #24]	; (b45a4 <loop+0x2ac>)
-   b458a:	f002 f939 	bl	b6800 <_ZN6AB180514setRtcFromTimeExb>
+   b4582:	f006 fd22 	bl	bafca <_ZN9TimeClass3nowEv>
+   b4586:	2301      	movs	r3, #1
+   b4588:	4602      	mov	r2, r0
+   b458a:	9300      	str	r3, [sp, #0]
+   b458c:	17c3      	asrs	r3, r0, #31
+   b458e:	4806      	ldr	r0, [pc, #24]	; (b45a8 <loop+0x2b8>)
+   b4590:	f002 f936 	bl	b6800 <_ZN6AB180514setRtcFromTimeExb>
 			LoRA_Functions::instance().sleepLoRaRadio();					// Done with LoRA - put radio to sleep
-   b458e:	f000 faff 	bl	b4b90 <_ZN14LoRA_Functions8instanceEv>
-   b4592:	f000 fb71 	bl	b4c78 <_ZN14LoRA_Functions14sleepLoRaRadioEv>
+   b4594:	f000 fadc 	bl	b4b50 <_ZN14LoRA_Functions8instanceEv>
+   b4598:	f000 fb72 	bl	b4c80 <_ZN14LoRA_Functions14sleepLoRaRadioEv>
 			state = SLEEPING_STATE;
-   b4596:	2303      	movs	r3, #3
-   b4598:	e6d9      	b.n	b434e <loop+0x56>
-   b459a:	bf00      	nop
-   b459c:	2003df8a 	.word	0x2003df8a
-   b45a0:	2003df88 	.word	0x2003df88
-   b45a4:	2003df44 	.word	0x2003df44
-   b45a8:	000bc477 	.word	0x000bc477
-   b45ac:	2003e658 	.word	0x2003e658
-   b45b0:	2003df64 	.word	0x2003df64
-   b45b4:	000bcb22 	.word	0x000bcb22
-   b45b8:	000bcb24 	.word	0x000bcb24
-   b45bc:	000bcc2c 	.word	0x000bcc2c
-   b45c0:	000bd514 	.word	0x000bd514
-   b45c4:	00030010 	.word	0x00030010
-   b45c8:	000bc4a0 	.word	0x000bc4a0
-   b45cc:	2003df89 	.word	0x2003df89
-   b45d0:	2003dd70 	.word	0x2003dd70
-   b45d4:	000bc4c3 	.word	0x000bc4c3
-   b45d8:	000bc4f8 	.word	0x000bc4f8
-   b45dc:	2003df80 	.word	0x2003df80
-   b45e0:	000bc519 	.word	0x000bc519
+   b459c:	2303      	movs	r3, #3
+   b459e:	e6d2      	b.n	b4346 <loop+0x56>
+   b45a0:	2003df8a 	.word	0x2003df8a
+   b45a4:	2003df88 	.word	0x2003df88
+   b45a8:	2003df44 	.word	0x2003df44
+   b45ac:	000bc443 	.word	0x000bc443
+   b45b0:	2003e658 	.word	0x2003e658
+   b45b4:	2003df64 	.word	0x2003df64
+   b45b8:	000bcb22 	.word	0x000bcb22
+   b45bc:	000bcb24 	.word	0x000bcb24
+   b45c0:	000bcc2c 	.word	0x000bcc2c
+   b45c4:	000bd514 	.word	0x000bd514
+   b45c8:	00030010 	.word	0x00030010
+   b45cc:	000bc490 	.word	0x000bc490
+   b45d0:	2003df89 	.word	0x2003df89
+   b45d4:	2003dd70 	.word	0x2003dd70
+   b45d8:	000bc4b3 	.word	0x000bc4b3
+   b45dc:	000bc4e8 	.word	0x000bc4e8
+   b45e0:	2003df80 	.word	0x2003df80
+   b45e4:	000bc509 	.word	0x000bc509
 			if (state != oldState) publishStateTransition();                // We will apply the back-offs before sending to ERROR state - so if we are here we will take action
-   b45e4:	4b6f      	ldr	r3, [pc, #444]	; (b47a4 <loop+0x4ac>)
-   b45e6:	781b      	ldrb	r3, [r3, #0]
-   b45e8:	2b01      	cmp	r3, #1
-   b45ea:	d001      	beq.n	b45f0 <loop+0x2f8>
-   b45ec:	f7ff fe28 	bl	b4240 <_Z22publishStateTransitionv>
+   b45e8:	4b6f      	ldr	r3, [pc, #444]	; (b47a8 <loop+0x4b8>)
+   b45ea:	781b      	ldrb	r3, [r3, #0]
+   b45ec:	2b01      	cmp	r3, #1
+   b45ee:	d001      	beq.n	b45f4 <loop+0x304>
+   b45f0:	f7ff fe26 	bl	b4240 <_Z22publishStateTransitionv>
 			switch (current.get_alertCodeNode())
-   b45f0:	f000 fee6 	bl	b53c0 <_ZN17currentStatusData8instanceEv>
-   b45f4:	f000 ff71 	bl	b54da <_ZNK17currentStatusData17get_alertCodeNodeEv>
-   b45f8:	2802      	cmp	r0, #2
-   b45fa:	d04c      	beq.n	b4696 <loop+0x39e>
-   b45fc:	2803      	cmp	r0, #3
-   b45fe:	f000 8096 	beq.w	b472e <loop+0x436>
-   b4602:	2801      	cmp	r0, #1
-   b4604:	f040 80bb 	bne.w	b477e <loop+0x486>
+   b45f4:	f000 fee4 	bl	b53c0 <_ZN17currentStatusData8instanceEv>
+   b45f8:	f000 ff6f 	bl	b54da <_ZNK17currentStatusData17get_alertCodeNodeEv>
+   b45fc:	2802      	cmp	r0, #2
+   b45fe:	d04c      	beq.n	b469a <loop+0x3aa>
+   b4600:	2803      	cmp	r0, #3
+   b4602:	f000 8096 	beq.w	b4732 <loop+0x442>
+   b4606:	2801      	cmp	r0, #1
+   b4608:	f040 80bb 	bne.w	b4782 <loop+0x492>
 				if(LoRA_Functions::instance().composeJoinRequesttNode()) {
-   b4608:	f000 fac2 	bl	b4b90 <_ZN14LoRA_Functions8instanceEv>
-   b460c:	f000 fc52 	bl	b4eb4 <_ZN14LoRA_Functions23composeJoinRequesttNodeEv>
-   b4610:	2800      	cmp	r0, #0
-   b4612:	f000 8086 	beq.w	b4722 <loop+0x42a>
-   b4616:	f003 fe3f 	bl	b8298 <HAL_Timer_Get_Milli_Seconds>
+   b460c:	f000 faa0 	bl	b4b50 <_ZN14LoRA_Functions8instanceEv>
+   b4610:	f000 fc54 	bl	b4ebc <_ZN14LoRA_Functions23composeJoinRequesttNodeEv>
+   b4614:	2800      	cmp	r0, #0
+   b4616:	f000 8086 	beq.w	b4726 <loop+0x436>
+   b461a:	f003 fe3d 	bl	b8298 <HAL_Timer_Get_Milli_Seconds>
 							Log.info("Ack received - updating");
-   b461a:	f8df 81a8 	ldr.w	r8, [pc, #424]	; b47c4 <loop+0x4cc>
-   b461e:	4f62      	ldr	r7, [pc, #392]	; (b47a8 <loop+0x4b0>)
+   b461e:	f8df 81a8 	ldr.w	r8, [pc, #424]	; b47c8 <loop+0x4d8>
+   b4622:	4f62      	ldr	r7, [pc, #392]	; (b47ac <loop+0x4bc>)
 							lastPublish = Time.now();
-   b4620:	4e62      	ldr	r6, [pc, #392]	; (b47ac <loop+0x4b4>)
-   b4622:	4605      	mov	r5, r0
+   b4624:	4e62      	ldr	r6, [pc, #392]	; (b47b0 <loop+0x4c0>)
+   b4626:	4605      	mov	r5, r0
 					while (millis() - startListening < 3000) {
-   b4624:	f640 39b7 	movw	r9, #2999	; 0xbb7
-   b4628:	f003 fe36 	bl	b8298 <HAL_Timer_Get_Milli_Seconds>
-   b462c:	1b40      	subs	r0, r0, r5
-   b462e:	4548      	cmp	r0, r9
-   b4630:	d877      	bhi.n	b4722 <loop+0x42a>
+   b4628:	f640 39b7 	movw	r9, #2999	; 0xbb7
+   b462c:	f003 fe34 	bl	b8298 <HAL_Timer_Get_Milli_Seconds>
+   b4630:	1b40      	subs	r0, r0, r5
+   b4632:	4548      	cmp	r0, r9
+   b4634:	d877      	bhi.n	b4726 <loop+0x436>
 						if (LoRA_Functions::instance().listenForLoRAMessageNode()) {
-   b4632:	f000 faad 	bl	b4b90 <_ZN14LoRA_Functions8instanceEv>
-   b4636:	f000 fd35 	bl	b50a4 <_ZN14LoRA_Functions24listenForLoRAMessageNodeEv>
-   b463a:	2800      	cmp	r0, #0
-   b463c:	d0f4      	beq.n	b4628 <loop+0x330>
+   b4636:	f000 fa8b 	bl	b4b50 <_ZN14LoRA_Functions8instanceEv>
+   b463a:	f000 fd37 	bl	b50ac <_ZN14LoRA_Functions24listenForLoRAMessageNodeEv>
+   b463e:	2800      	cmp	r0, #0
+   b4640:	d0f4      	beq.n	b462c <loop+0x33c>
 							Log.info("Ack received - updating");
-   b463e:	4641      	mov	r1, r8
-   b4640:	4638      	mov	r0, r7
-   b4642:	f7ff fde5 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
+   b4642:	4641      	mov	r1, r8
+   b4644:	4638      	mov	r0, r7
+   b4646:	f7ff fde3 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
 							lastPublish = Time.now();
-   b4646:	f006 fcc0 	bl	bafca <_ZN9TimeClass3nowEv>
-   b464a:	17c3      	asrs	r3, r0, #31
-   b464c:	e9c6 0300 	strd	r0, r3, [r6]
+   b464a:	f006 fcbe 	bl	bafca <_ZN9TimeClass3nowEv>
+   b464e:	17c3      	asrs	r3, r0, #31
+   b4650:	e9c6 0300 	strd	r0, r3, [r6]
 							sysStatus.set_lastConnection(Time.now());
-   b4650:	f000 fe74 	bl	b533c <_ZN13sysStatusData8instanceEv>
-   b4654:	4681      	mov	r9, r0
-   b4656:	f006 fcb8 	bl	bafca <_ZN9TimeClass3nowEv>
-   b465a:	4602      	mov	r2, r0
-   b465c:	17c3      	asrs	r3, r0, #31
-   b465e:	4648      	mov	r0, r9
-   b4660:	f001 f852 	bl	b5708 <_ZN13sysStatusData18set_lastConnectionEx>
+   b4654:	f000 fe72 	bl	b533c <_ZN13sysStatusData8instanceEv>
+   b4658:	4681      	mov	r9, r0
+   b465a:	f006 fcb6 	bl	bafca <_ZN9TimeClass3nowEv>
+   b465e:	4602      	mov	r2, r0
+   b4660:	17c3      	asrs	r3, r0, #31
+   b4662:	4648      	mov	r0, r9
+   b4664:	f001 f850 	bl	b5708 <_ZN13sysStatusData18set_lastConnectionEx>
 							current.set_alertTimestampNode(Time.now());
-   b4664:	f000 feac 	bl	b53c0 <_ZN17currentStatusData8instanceEv>
-   b4668:	4681      	mov	r9, r0
-   b466a:	f006 fcae 	bl	bafca <_ZN9TimeClass3nowEv>
-   b466e:	4602      	mov	r2, r0
-   b4670:	17c3      	asrs	r3, r0, #31
-   b4672:	4648      	mov	r0, r9
-   b4674:	f001 f876 	bl	b5764 <_ZN17currentStatusData22set_alertTimestampNodeEx>
+   b4668:	f000 feaa 	bl	b53c0 <_ZN17currentStatusData8instanceEv>
+   b466c:	4681      	mov	r9, r0
+   b466e:	f006 fcac 	bl	bafca <_ZN9TimeClass3nowEv>
+   b4672:	4602      	mov	r2, r0
+   b4674:	17c3      	asrs	r3, r0, #31
+   b4676:	4648      	mov	r0, r9
+   b4678:	f001 f874 	bl	b5764 <_ZN17currentStatusData22set_alertTimestampNodeEx>
 							current.set_alertCodeNode(0);
-   b4678:	f000 fea2 	bl	b53c0 <_ZN17currentStatusData8instanceEv>
-   b467c:	2100      	movs	r1, #0
-   b467e:	f000 ff67 	bl	b5550 <_ZN17currentStatusData17set_alertCodeNodeEh>
+   b467c:	f000 fea0 	bl	b53c0 <_ZN17currentStatusData8instanceEv>
+   b4680:	2100      	movs	r1, #0
+   b4682:	f000 ff65 	bl	b5550 <_ZN17currentStatusData17set_alertCodeNodeEh>
 							ab1805.setRtcFromTime(Time.now());
-   b4682:	f006 fca2 	bl	bafca <_ZN9TimeClass3nowEv>
-   b4686:	2301      	movs	r3, #1
-   b4688:	4602      	mov	r2, r0
-   b468a:	9300      	str	r3, [sp, #0]
-   b468c:	17c3      	asrs	r3, r0, #31
-   b468e:	4848      	ldr	r0, [pc, #288]	; (b47b0 <loop+0x4b8>)
-   b4690:	f002 f8b6 	bl	b6800 <_ZN6AB180514setRtcFromTimeExb>
-   b4694:	e7c6      	b.n	b4624 <loop+0x32c>
+   b4686:	f006 fca0 	bl	bafca <_ZN9TimeClass3nowEv>
+   b468a:	2301      	movs	r3, #1
+   b468c:	4602      	mov	r2, r0
+   b468e:	9300      	str	r3, [sp, #0]
+   b4690:	17c3      	asrs	r3, r0, #31
+   b4692:	4848      	ldr	r0, [pc, #288]	; (b47b4 <loop+0x4c4>)
+   b4694:	f002 f8b4 	bl	b6800 <_ZN6AB180514setRtcFromTimeExb>
+   b4698:	e7c6      	b.n	b4628 <loop+0x338>
 				if(LoRA_Functions::instance().composeAlertReportNode()) {
-   b4696:	f000 fa7b 	bl	b4b90 <_ZN14LoRA_Functions8instanceEv>
-   b469a:	f000 fca5 	bl	b4fe8 <_ZN14LoRA_Functions22composeAlertReportNodeEv>
-   b469e:	2800      	cmp	r0, #0
-   b46a0:	d03f      	beq.n	b4722 <loop+0x42a>
-   b46a2:	f003 fdf9 	bl	b8298 <HAL_Timer_Get_Milli_Seconds>
+   b469a:	f000 fa59 	bl	b4b50 <_ZN14LoRA_Functions8instanceEv>
+   b469e:	f000 fca7 	bl	b4ff0 <_ZN14LoRA_Functions22composeAlertReportNodeEv>
+   b46a2:	2800      	cmp	r0, #0
+   b46a4:	d03f      	beq.n	b4726 <loop+0x436>
+   b46a6:	f003 fdf7 	bl	b8298 <HAL_Timer_Get_Milli_Seconds>
 						else Log.info("No join ack received");
-   b46a6:	f8df 8120 	ldr.w	r8, [pc, #288]	; b47c8 <loop+0x4d0>
-   b46aa:	4f3f      	ldr	r7, [pc, #252]	; (b47a8 <loop+0x4b0>)
+   b46aa:	f8df 8120 	ldr.w	r8, [pc, #288]	; b47cc <loop+0x4dc>
+   b46ae:	4f3f      	ldr	r7, [pc, #252]	; (b47ac <loop+0x4bc>)
 							lastPublish = Time.now();
-   b46ac:	4e3f      	ldr	r6, [pc, #252]	; (b47ac <loop+0x4b4>)
-   b46ae:	4605      	mov	r5, r0
-   b46b0:	f003 fdf2 	bl	b8298 <HAL_Timer_Get_Milli_Seconds>
+   b46b0:	4e3f      	ldr	r6, [pc, #252]	; (b47b0 <loop+0x4c0>)
+   b46b2:	4605      	mov	r5, r0
+   b46b4:	f003 fdf0 	bl	b8298 <HAL_Timer_Get_Milli_Seconds>
 					while (millis() - startListening < 3000) {
-   b46b4:	f640 33b7 	movw	r3, #2999	; 0xbb7
-   b46b8:	1b40      	subs	r0, r0, r5
-   b46ba:	4298      	cmp	r0, r3
-   b46bc:	d831      	bhi.n	b4722 <loop+0x42a>
+   b46b8:	f640 33b7 	movw	r3, #2999	; 0xbb7
+   b46bc:	1b40      	subs	r0, r0, r5
+   b46be:	4298      	cmp	r0, r3
+   b46c0:	d831      	bhi.n	b4726 <loop+0x436>
 						if (LoRA_Functions::instance().listenForLoRAMessageNode()) {
-   b46be:	f000 fa67 	bl	b4b90 <_ZN14LoRA_Functions8instanceEv>
-   b46c2:	f000 fcef 	bl	b50a4 <_ZN14LoRA_Functions24listenForLoRAMessageNodeEv>
-   b46c6:	b338      	cbz	r0, b4718 <loop+0x420>
+   b46c2:	f000 fa45 	bl	b4b50 <_ZN14LoRA_Functions8instanceEv>
+   b46c6:	f000 fcf1 	bl	b50ac <_ZN14LoRA_Functions24listenForLoRAMessageNodeEv>
+   b46ca:	b338      	cbz	r0, b471c <loop+0x42c>
 							lastPublish = Time.now();
-   b46c8:	f006 fc7f 	bl	bafca <_ZN9TimeClass3nowEv>
-   b46cc:	17c3      	asrs	r3, r0, #31
-   b46ce:	e9c6 0300 	strd	r0, r3, [r6]
+   b46cc:	f006 fc7d 	bl	bafca <_ZN9TimeClass3nowEv>
+   b46d0:	17c3      	asrs	r3, r0, #31
+   b46d2:	e9c6 0300 	strd	r0, r3, [r6]
 							sysStatus.set_lastConnection(Time.now());
-   b46d2:	f000 fe33 	bl	b533c <_ZN13sysStatusData8instanceEv>
-   b46d6:	4681      	mov	r9, r0
-   b46d8:	f006 fc77 	bl	bafca <_ZN9TimeClass3nowEv>
-   b46dc:	4602      	mov	r2, r0
-   b46de:	17c3      	asrs	r3, r0, #31
-   b46e0:	4648      	mov	r0, r9
-   b46e2:	f001 f811 	bl	b5708 <_ZN13sysStatusData18set_lastConnectionEx>
+   b46d6:	f000 fe31 	bl	b533c <_ZN13sysStatusData8instanceEv>
+   b46da:	4681      	mov	r9, r0
+   b46dc:	f006 fc75 	bl	bafca <_ZN9TimeClass3nowEv>
+   b46e0:	4602      	mov	r2, r0
+   b46e2:	17c3      	asrs	r3, r0, #31
+   b46e4:	4648      	mov	r0, r9
+   b46e6:	f001 f80f 	bl	b5708 <_ZN13sysStatusData18set_lastConnectionEx>
 							current.set_alertTimestampNode(Time.now());
-   b46e6:	f000 fe6b 	bl	b53c0 <_ZN17currentStatusData8instanceEv>
-   b46ea:	4681      	mov	r9, r0
-   b46ec:	f006 fc6d 	bl	bafca <_ZN9TimeClass3nowEv>
-   b46f0:	4602      	mov	r2, r0
-   b46f2:	17c3      	asrs	r3, r0, #31
-   b46f4:	4648      	mov	r0, r9
-   b46f6:	f001 f835 	bl	b5764 <_ZN17currentStatusData22set_alertTimestampNodeEx>
+   b46ea:	f000 fe69 	bl	b53c0 <_ZN17currentStatusData8instanceEv>
+   b46ee:	4681      	mov	r9, r0
+   b46f0:	f006 fc6b 	bl	bafca <_ZN9TimeClass3nowEv>
+   b46f4:	4602      	mov	r2, r0
+   b46f6:	17c3      	asrs	r3, r0, #31
+   b46f8:	4648      	mov	r0, r9
+   b46fa:	f001 f833 	bl	b5764 <_ZN17currentStatusData22set_alertTimestampNodeEx>
 							current.set_alertCodeNode(0);
-   b46fa:	f000 fe61 	bl	b53c0 <_ZN17currentStatusData8instanceEv>
-   b46fe:	2100      	movs	r1, #0
-   b4700:	f000 ff26 	bl	b5550 <_ZN17currentStatusData17set_alertCodeNodeEh>
+   b46fe:	f000 fe5f 	bl	b53c0 <_ZN17currentStatusData8instanceEv>
+   b4702:	2100      	movs	r1, #0
+   b4704:	f000 ff24 	bl	b5550 <_ZN17currentStatusData17set_alertCodeNodeEh>
 							ab1805.setRtcFromTime(Time.now());
-   b4704:	f006 fc61 	bl	bafca <_ZN9TimeClass3nowEv>
-   b4708:	2301      	movs	r3, #1
-   b470a:	4602      	mov	r2, r0
-   b470c:	9300      	str	r3, [sp, #0]
-   b470e:	17c3      	asrs	r3, r0, #31
-   b4710:	4827      	ldr	r0, [pc, #156]	; (b47b0 <loop+0x4b8>)
-   b4712:	f002 f875 	bl	b6800 <_ZN6AB180514setRtcFromTimeExb>
-   b4716:	e7cb      	b.n	b46b0 <loop+0x3b8>
+   b4708:	f006 fc5f 	bl	bafca <_ZN9TimeClass3nowEv>
+   b470c:	2301      	movs	r3, #1
+   b470e:	4602      	mov	r2, r0
+   b4710:	9300      	str	r3, [sp, #0]
+   b4712:	17c3      	asrs	r3, r0, #31
+   b4714:	4827      	ldr	r0, [pc, #156]	; (b47b4 <loop+0x4c4>)
+   b4716:	f002 f873 	bl	b6800 <_ZN6AB180514setRtcFromTimeExb>
+   b471a:	e7cb      	b.n	b46b4 <loop+0x3c4>
 						else Log.info("No join ack received");
-   b4718:	4641      	mov	r1, r8
-   b471a:	4638      	mov	r0, r7
-   b471c:	f7ff fd78 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
-   b4720:	e7c6      	b.n	b46b0 <loop+0x3b8>
+   b471c:	4641      	mov	r1, r8
+   b471e:	4638      	mov	r0, r7
+   b4720:	f7ff fd76 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
+   b4724:	e7c6      	b.n	b46b4 <loop+0x3c4>
 				LoRA_Functions::instance().sleepLoRaRadio();				// Done for now, put radio to sleep
-   b4722:	f000 fa35 	bl	b4b90 <_ZN14LoRA_Functions8instanceEv>
-   b4726:	f000 faa7 	bl	b4c78 <_ZN14LoRA_Functions14sleepLoRaRadioEv>
+   b4726:	f000 fa13 	bl	b4b50 <_ZN14LoRA_Functions8instanceEv>
+   b472a:	f000 faa9 	bl	b4c80 <_ZN14LoRA_Functions14sleepLoRaRadioEv>
 				state = IDLE_STATE;
-   b472a:	2302      	movs	r3, #2
-   b472c:	e60f      	b.n	b434e <loop+0x56>
+   b472e:	2302      	movs	r3, #2
+   b4730:	e609      	b.n	b4346 <loop+0x56>
 				static system_tick_t enteredState = millis();
-   b472e:	4c21      	ldr	r4, [pc, #132]	; (b47b4 <loop+0x4bc>)
-   b4730:	4d21      	ldr	r5, [pc, #132]	; (b47b8 <loop+0x4c0>)
-   b4732:	7823      	ldrb	r3, [r4, #0]
-   b4734:	f3bf 8f5b 	dmb	ish
-   b4738:	f013 0f01 	tst.w	r3, #1
-   b473c:	d109      	bne.n	b4752 <loop+0x45a>
-   b473e:	4620      	mov	r0, r4
-   b4740:	f7ff fcbc 	bl	b40bc <__cxa_guard_acquire>
-   b4744:	b128      	cbz	r0, b4752 <loop+0x45a>
-   b4746:	f003 fda7 	bl	b8298 <HAL_Timer_Get_Milli_Seconds>
-   b474a:	6028      	str	r0, [r5, #0]
-   b474c:	4620      	mov	r0, r4
-   b474e:	f7ff fcba 	bl	b40c6 <__cxa_guard_release>
-   b4752:	f003 fda1 	bl	b8298 <HAL_Timer_Get_Milli_Seconds>
+   b4732:	4c21      	ldr	r4, [pc, #132]	; (b47b8 <loop+0x4c8>)
+   b4734:	4d21      	ldr	r5, [pc, #132]	; (b47bc <loop+0x4cc>)
+   b4736:	7823      	ldrb	r3, [r4, #0]
+   b4738:	f3bf 8f5b 	dmb	ish
+   b473c:	f013 0f01 	tst.w	r3, #1
+   b4740:	d109      	bne.n	b4756 <loop+0x466>
+   b4742:	4620      	mov	r0, r4
+   b4744:	f7ff fcba 	bl	b40bc <__cxa_guard_acquire>
+   b4748:	b128      	cbz	r0, b4756 <loop+0x466>
+   b474a:	f003 fda5 	bl	b8298 <HAL_Timer_Get_Milli_Seconds>
+   b474e:	6028      	str	r0, [r5, #0]
+   b4750:	4620      	mov	r0, r4
+   b4752:	f7ff fcb8 	bl	b40c6 <__cxa_guard_release>
+   b4756:	f003 fd9f 	bl	b8298 <HAL_Timer_Get_Milli_Seconds>
 				if (millis() - enteredState > 30000L) {
-   b4756:	682b      	ldr	r3, [r5, #0]
-   b4758:	1ac0      	subs	r0, r0, r3
-   b475a:	f247 5330 	movw	r3, #30000	; 0x7530
-   b475e:	4298      	cmp	r0, r3
-   b4760:	f67f ae8d 	bls.w	b447e <loop+0x186>
+   b475a:	682b      	ldr	r3, [r5, #0]
+   b475c:	1ac0      	subs	r0, r0, r3
+   b475e:	f247 5330 	movw	r3, #30000	; 0x7530
+   b4762:	4298      	cmp	r0, r3
+   b4764:	f67f ae8e 	bls.w	b4484 <loop+0x194>
 					Log.info("Resetting device");
-   b4764:	4915      	ldr	r1, [pc, #84]	; (b47bc <loop+0x4c4>)
-   b4766:	4810      	ldr	r0, [pc, #64]	; (b47a8 <loop+0x4b0>)
-   b4768:	f7ff fd52 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
+   b4768:	4915      	ldr	r1, [pc, #84]	; (b47c0 <loop+0x4d0>)
+   b476a:	4810      	ldr	r0, [pc, #64]	; (b47ac <loop+0x4bc>)
+   b476c:	f7ff fd50 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
 					delay(2000);
-   b476c:	f44f 60fa 	mov.w	r0, #2000	; 0x7d0
-   b4770:	f004 f8fe 	bl	b8970 <delay>
+   b4770:	f44f 60fa 	mov.w	r0, #2000	; 0x7d0
+   b4774:	f004 f8fc 	bl	b8970 <delay>
 					ab1805.deepPowerDown();
-   b4774:	211e      	movs	r1, #30
-   b4776:	480e      	ldr	r0, [pc, #56]	; (b47b0 <loop+0x4b8>)
-   b4778:	f001 fe00 	bl	b637c <_ZN6AB180513deepPowerDownEi>
-   b477c:	e67f      	b.n	b447e <loop+0x186>
+   b4778:	211e      	movs	r1, #30
+   b477a:	480e      	ldr	r0, [pc, #56]	; (b47b4 <loop+0x4c4>)
+   b477c:	f001 fdfe 	bl	b637c <_ZN6AB180513deepPowerDownEi>
+   b4780:	e680      	b.n	b4484 <loop+0x194>
 				Log.info("Undefined Error State");
-   b477e:	4910      	ldr	r1, [pc, #64]	; (b47c0 <loop+0x4c8>)
-   b4780:	4809      	ldr	r0, [pc, #36]	; (b47a8 <loop+0x4b0>)
-   b4782:	f7ff fd45 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
+   b4782:	4910      	ldr	r1, [pc, #64]	; (b47c4 <loop+0x4d4>)
+   b4784:	4809      	ldr	r0, [pc, #36]	; (b47ac <loop+0x4bc>)
+   b4786:	f7ff fd43 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
 				current.set_alertCodeNode(0);
-   b4786:	f000 fe1b 	bl	b53c0 <_ZN17currentStatusData8instanceEv>
-   b478a:	2100      	movs	r1, #0
-   b478c:	f000 fee0 	bl	b5550 <_ZN17currentStatusData17set_alertCodeNodeEh>
-   b4790:	e7cb      	b.n	b472a <loop+0x432>
+   b478a:	f000 fe19 	bl	b53c0 <_ZN17currentStatusData8instanceEv>
+   b478e:	2100      	movs	r1, #0
+   b4790:	f000 fede 	bl	b5550 <_ZN17currentStatusData17set_alertCodeNodeEh>
+   b4794:	e7cb      	b.n	b472e <loop+0x43e>
                 valid_ = false;
-   b4792:	7530      	strb	r0, [r6, #20]
+   b4796:	7530      	strb	r0, [r6, #20]
                 return *this;
-   b4794:	e63c      	b.n	b4410 <loop+0x118>
+   b4798:	e63d      	b.n	b4416 <loop+0x126>
                 reinterpret_cast<hal_wakeup_source_rtc_t*>(wakeup)->ms = ms;
-   b4796:	f8c3 800c 	str.w	r8, [r3, #12]
+   b479a:	f8c1 800c 	str.w	r8, [r1, #12]
                 return *this;
-   b479a:	e639      	b.n	b4410 <loop+0x118>
+   b479e:	e63a      	b.n	b4416 <loop+0x126>
 }
-   b479c:	b00c      	add	sp, #48	; 0x30
-   b479e:	e8bd 87f0 	ldmia.w	sp!, {r4, r5, r6, r7, r8, r9, sl, pc}
-   b47a2:	bf00      	nop
-   b47a4:	2003df88 	.word	0x2003df88
-   b47a8:	2003e658 	.word	0x2003e658
-   b47ac:	2003df80 	.word	0x2003df80
-   b47b0:	2003df44 	.word	0x2003df44
-   b47b4:	2003df38 	.word	0x2003df38
-   b47b8:	2003df3c 	.word	0x2003df3c
-   b47bc:	000bc55a 	.word	0x000bc55a
-   b47c0:	000bc56b 	.word	0x000bc56b
-   b47c4:	000bc52d 	.word	0x000bc52d
-   b47c8:	000bc545 	.word	0x000bc545
+   b47a0:	b00c      	add	sp, #48	; 0x30
+   b47a2:	e8bd 87f0 	ldmia.w	sp!, {r4, r5, r6, r7, r8, r9, sl, pc}
+   b47a6:	bf00      	nop
+   b47a8:	2003df88 	.word	0x2003df88
+   b47ac:	2003e658 	.word	0x2003e658
+   b47b0:	2003df80 	.word	0x2003df80
+   b47b4:	2003df44 	.word	0x2003df44
+   b47b8:	2003df38 	.word	0x2003df38
+   b47bc:	2003df3c 	.word	0x2003df3c
+   b47c0:	000bc54a 	.word	0x000bc54a
+   b47c4:	000bc55b 	.word	0x000bc55b
+   b47c8:	000bc51d 	.word	0x000bc51d
+   b47cc:	000bc535 	.word	0x000bc535
 
-000b47cc <_ZNSt8functionIFvyiEEC1ERKS1_>:
+000b47d0 <_ZNSt8functionIFvyiEEC1ERKS1_>:
     function<_Res(_ArgTypes...)>::
-   b47cc:	b538      	push	{r3, r4, r5, lr}
+   b47d0:	b538      	push	{r3, r4, r5, lr}
     _Function_base() : _M_manager(nullptr) { }
-   b47ce:	2300      	movs	r3, #0
-   b47d0:	6083      	str	r3, [r0, #8]
+   b47d2:	2300      	movs	r3, #0
+   b47d4:	6083      	str	r3, [r0, #8]
     bool _M_empty() const { return !_M_manager; }
-   b47d2:	688b      	ldr	r3, [r1, #8]
+   b47d6:	688b      	ldr	r3, [r1, #8]
     function<_Res(_ArgTypes...)>::
-   b47d4:	4604      	mov	r4, r0
-   b47d6:	460d      	mov	r5, r1
+   b47d8:	4604      	mov	r4, r0
+   b47da:	460d      	mov	r5, r1
       if (static_cast<bool>(__x))
-   b47d8:	b12b      	cbz	r3, b47e6 <_ZNSt8functionIFvyiEEC1ERKS1_+0x1a>
+   b47dc:	b12b      	cbz	r3, b47ea <_ZNSt8functionIFvyiEEC1ERKS1_+0x1a>
 	  __x._M_manager(_M_functor, __x._M_functor, __clone_functor);
-   b47da:	2202      	movs	r2, #2
-   b47dc:	4798      	blx	r3
+   b47de:	2202      	movs	r2, #2
+   b47e0:	4798      	blx	r3
 	  _M_invoker = __x._M_invoker;
-   b47de:	68eb      	ldr	r3, [r5, #12]
-   b47e0:	60e3      	str	r3, [r4, #12]
+   b47e2:	68eb      	ldr	r3, [r5, #12]
+   b47e4:	60e3      	str	r3, [r4, #12]
 	  _M_manager = __x._M_manager;
-   b47e2:	68ab      	ldr	r3, [r5, #8]
-   b47e4:	60a3      	str	r3, [r4, #8]
+   b47e6:	68ab      	ldr	r3, [r5, #8]
+   b47e8:	60a3      	str	r3, [r4, #8]
     }
-   b47e6:	4620      	mov	r0, r4
-   b47e8:	bd38      	pop	{r3, r4, r5, pc}
+   b47ea:	4620      	mov	r0, r4
+   b47ec:	bd38      	pop	{r3, r4, r5, pc}
 	...
 
-000b47ec <_ZN11SystemClass2onEySt8functionIFvyiEE>:
+000b47f0 <_ZN11SystemClass2onEySt8functionIFvyiEE>:
     static SystemEventSubscription on(system_event_t events, std::function<void(system_event_t, int)> handler) {
-   b47ec:	e92d 43f0 	stmdb	sp!, {r4, r5, r6, r7, r8, r9, lr}
-   b47f0:	b095      	sub	sp, #84	; 0x54
-   b47f2:	4605      	mov	r5, r0
+   b47f0:	e92d 43f0 	stmdb	sp!, {r4, r5, r6, r7, r8, r9, lr}
+   b47f4:	b095      	sub	sp, #84	; 0x54
+   b47f6:	4605      	mov	r5, r0
         };
-   b47f4:	991c      	ldr	r1, [sp, #112]	; 0x70
-   b47f6:	a804      	add	r0, sp, #16
+   b47f8:	991c      	ldr	r1, [sp, #112]	; 0x70
+   b47fa:	a804      	add	r0, sp, #16
     static SystemEventSubscription on(system_event_t events, std::function<void(system_event_t, int)> handler) {
-   b47f8:	4690      	mov	r8, r2
-   b47fa:	461f      	mov	r7, r3
+   b47fc:	4690      	mov	r8, r2
+   b47fe:	461f      	mov	r7, r3
         auto wrapper = [handler](system_event_t events, int data, void* pointer) {
-   b47fc:	ae0c      	add	r6, sp, #48	; 0x30
+   b4800:	ae0c      	add	r6, sp, #48	; 0x30
         };
-   b47fe:	f7ff ffe5 	bl	b47cc <_ZNSt8functionIFvyiEEC1ERKS1_>
+   b4802:	f7ff ffe5 	bl	b47d0 <_ZNSt8functionIFvyiEEC1ERKS1_>
         auto wrapper = [handler](system_event_t events, int data, void* pointer) {
-   b4802:	a904      	add	r1, sp, #16
-   b4804:	a808      	add	r0, sp, #32
-   b4806:	f7ff ffe1 	bl	b47cc <_ZNSt8functionIFvyiEEC1ERKS1_>
-   b480a:	a908      	add	r1, sp, #32
-   b480c:	4630      	mov	r0, r6
-   b480e:	f7ff ffdd 	bl	b47cc <_ZNSt8functionIFvyiEEC1ERKS1_>
+   b4806:	a904      	add	r1, sp, #16
+   b4808:	a808      	add	r0, sp, #32
+   b480a:	f7ff ffe1 	bl	b47d0 <_ZNSt8functionIFvyiEEC1ERKS1_>
+   b480e:	a908      	add	r1, sp, #32
+   b4810:	4630      	mov	r0, r6
+   b4812:	f7ff ffdd 	bl	b47d0 <_ZNSt8functionIFvyiEEC1ERKS1_>
     _Function_base() : _M_manager(nullptr) { }
-   b4812:	f04f 0900 	mov.w	r9, #0
+   b4816:	f04f 0900 	mov.w	r9, #0
 	{ __functor._M_access<_Functor*>() = new _Functor(std::move(__f)); }
-   b4816:	2010      	movs	r0, #16
+   b481a:	2010      	movs	r0, #16
     _Function_base() : _M_manager(nullptr) { }
-   b4818:	f8cd 9048 	str.w	r9, [sp, #72]	; 0x48
+   b481c:	f8cd 9048 	str.w	r9, [sp, #72]	; 0x48
 	{ __functor._M_access<_Functor*>() = new _Functor(std::move(__f)); }
-   b481c:	f7ff fc3b 	bl	b4096 <_Znwj>
-   b4820:	4604      	mov	r4, r0
-   b4822:	b1a0      	cbz	r0, b484e <_ZN11SystemClass2onEySt8functionIFvyiEE+0x62>
+   b4820:	f7ff fc39 	bl	b4096 <_Znwj>
+   b4824:	4604      	mov	r4, r0
+   b4826:	b1a0      	cbz	r0, b4852 <_ZN11SystemClass2onEySt8functionIFvyiEE+0x62>
     {
 #if __cplusplus < 201103L
       // concept requirements
       __glibcxx_function_requires(_SGIAssignableConcept<_Tp>)
 #endif
       _Tp __tmp = _GLIBCXX_MOVE(__a);
-   b4824:	e896 0003 	ldmia.w	r6, {r0, r1}
-   b4828:	ab01      	add	r3, sp, #4
-   b482a:	e883 0003 	stmia.w	r3, {r0, r1}
+   b4828:	e896 0003 	ldmia.w	r6, {r0, r1}
+   b482c:	ab01      	add	r3, sp, #4
+   b482e:	e883 0003 	stmia.w	r3, {r0, r1}
       __a = _GLIBCXX_MOVE(__b);
-   b482e:	e894 0003 	ldmia.w	r4, {r0, r1}
-   b4832:	e886 0003 	stmia.w	r6, {r0, r1}
+   b4832:	e894 0003 	ldmia.w	r4, {r0, r1}
+   b4836:	e886 0003 	stmia.w	r6, {r0, r1}
       __b = _GLIBCXX_MOVE(__tmp);
-   b4836:	e893 0003 	ldmia.w	r3, {r0, r1}
+   b483a:	e893 0003 	ldmia.w	r3, {r0, r1}
       _Tp __tmp = _GLIBCXX_MOVE(__a);
-   b483a:	9b0e      	ldr	r3, [sp, #56]	; 0x38
+   b483e:	9b0e      	ldr	r3, [sp, #56]	; 0x38
       __a = _GLIBCXX_MOVE(__b);
-   b483c:	68e2      	ldr	r2, [r4, #12]
+   b4840:	68e2      	ldr	r2, [r4, #12]
       __b = _GLIBCXX_MOVE(__tmp);
-   b483e:	60a3      	str	r3, [r4, #8]
-   b4840:	e884 0003 	stmia.w	r4, {r0, r1}
+   b4842:	60a3      	str	r3, [r4, #8]
+   b4844:	e884 0003 	stmia.w	r4, {r0, r1}
       _Tp __tmp = _GLIBCXX_MOVE(__a);
-   b4844:	9b0f      	ldr	r3, [sp, #60]	; 0x3c
+   b4848:	9b0f      	ldr	r3, [sp, #60]	; 0x3c
       __a = _GLIBCXX_MOVE(__b);
-   b4846:	f8cd 9038 	str.w	r9, [sp, #56]	; 0x38
-   b484a:	920f      	str	r2, [sp, #60]	; 0x3c
+   b484a:	f8cd 9038 	str.w	r9, [sp, #56]	; 0x38
+   b484e:	920f      	str	r2, [sp, #60]	; 0x3c
       __b = _GLIBCXX_MOVE(__tmp);
-   b484c:	60e3      	str	r3, [r4, #12]
+   b4850:	60e3      	str	r3, [r4, #12]
 	    _M_invoker = &_My_handler::_M_invoke;
-   b484e:	4b24      	ldr	r3, [pc, #144]	; (b48e0 <_ZN11SystemClass2onEySt8functionIFvyiEE+0xf4>)
-   b4850:	9313      	str	r3, [sp, #76]	; 0x4c
+   b4852:	4b24      	ldr	r3, [pc, #144]	; (b48e4 <_ZN11SystemClass2onEySt8functionIFvyiEE+0xf4>)
+   b4854:	9313      	str	r3, [sp, #76]	; 0x4c
 	    _M_manager = &_My_handler::_M_manager;
-   b4852:	4b24      	ldr	r3, [pc, #144]	; (b48e4 <_ZN11SystemClass2onEySt8functionIFvyiEE+0xf8>)
-   b4854:	9312      	str	r3, [sp, #72]	; 0x48
+   b4856:	4b24      	ldr	r3, [pc, #144]	; (b48e8 <_ZN11SystemClass2onEySt8functionIFvyiEE+0xf8>)
+   b4858:	9312      	str	r3, [sp, #72]	; 0x48
               callable_(callable) {
-   b4856:	2200      	movs	r2, #0
-   b4858:	2300      	movs	r3, #0
-   b485a:	f04f 0900 	mov.w	r9, #0
-   b485e:	e9c5 2300 	strd	r2, r3, [r5]
+   b485a:	2200      	movs	r2, #0
+   b485c:	2300      	movs	r3, #0
+   b485e:	f04f 0900 	mov.w	r9, #0
+   b4862:	e9c5 2300 	strd	r2, r3, [r5]
         context.version = SYSTEM_EVENT_CONTEXT_VERSION;
-   b4862:	4b21      	ldr	r3, [pc, #132]	; (b48e8 <_ZN11SystemClass2onEySt8functionIFvyiEE+0xfc>)
+   b4866:	4b21      	ldr	r3, [pc, #132]	; (b48ec <_ZN11SystemClass2onEySt8functionIFvyiEE+0xfc>)
               callable_(callable) {
-   b4864:	f8c5 9008 	str.w	r9, [r5, #8]
+   b4868:	f8c5 9008 	str.w	r9, [r5, #8]
         auto wrapper = new std::function<void(system_event_t, int, void*)>(handler);
-   b4868:	2010      	movs	r0, #16
+   b486c:	2010      	movs	r0, #16
 	{ __functor._M_access<_Functor*>() = new _Functor(std::move(__f)); }
-   b486a:	9410      	str	r4, [sp, #64]	; 0x40
+   b486e:	9410      	str	r4, [sp, #64]	; 0x40
         SystemEventContext context = {};
-   b486c:	e9cd 3901 	strd	r3, r9, [sp, #4]
-   b4870:	f8cd 900c 	str.w	r9, [sp, #12]
+   b4870:	e9cd 3901 	strd	r3, r9, [sp, #4]
+   b4874:	f8cd 900c 	str.w	r9, [sp, #12]
         auto wrapper = new std::function<void(system_event_t, int, void*)>(handler);
-   b4874:	f7ff fc0f 	bl	b4096 <_Znwj>
-   b4878:	4604      	mov	r4, r0
-   b487a:	b1d8      	cbz	r0, b48b4 <_ZN11SystemClass2onEySt8functionIFvyiEE+0xc8>
+   b4878:	f7ff fc0d 	bl	b4096 <_Znwj>
+   b487c:	4604      	mov	r4, r0
+   b487e:	b1d8      	cbz	r0, b48b8 <_ZN11SystemClass2onEySt8functionIFvyiEE+0xc8>
     bool _M_empty() const { return !_M_manager; }
-   b487c:	9b12      	ldr	r3, [sp, #72]	; 0x48
+   b4880:	9b12      	ldr	r3, [sp, #72]	; 0x48
     _Function_base() : _M_manager(nullptr) { }
-   b487e:	f8c0 9008 	str.w	r9, [r0, #8]
+   b4882:	f8c0 9008 	str.w	r9, [r0, #8]
       if (static_cast<bool>(__x))
-   b4882:	b133      	cbz	r3, b4892 <_ZN11SystemClass2onEySt8functionIFvyiEE+0xa6>
+   b4886:	b133      	cbz	r3, b4896 <_ZN11SystemClass2onEySt8functionIFvyiEE+0xa6>
 	  __x._M_manager(_M_functor, __x._M_functor, __clone_functor);
-   b4884:	2202      	movs	r2, #2
-   b4886:	a910      	add	r1, sp, #64	; 0x40
-   b4888:	4798      	blx	r3
+   b4888:	2202      	movs	r2, #2
+   b488a:	a910      	add	r1, sp, #64	; 0x40
+   b488c:	4798      	blx	r3
 	  _M_invoker = __x._M_invoker;
-   b488a:	9b13      	ldr	r3, [sp, #76]	; 0x4c
-   b488c:	60e3      	str	r3, [r4, #12]
+   b488e:	9b13      	ldr	r3, [sp, #76]	; 0x4c
+   b4890:	60e3      	str	r3, [r4, #12]
 	  _M_manager = __x._M_manager;
-   b488e:	9b12      	ldr	r3, [sp, #72]	; 0x48
-   b4890:	60a3      	str	r3, [r4, #8]
+   b4892:	9b12      	ldr	r3, [sp, #72]	; 0x48
+   b4894:	60a3      	str	r3, [r4, #8]
         context.destructor = [](void* callable) -> void {
-   b4892:	4b16      	ldr	r3, [pc, #88]	; (b48ec <_ZN11SystemClass2onEySt8functionIFvyiEE+0x100>)
-   b4894:	9303      	str	r3, [sp, #12]
+   b4896:	4b16      	ldr	r3, [pc, #88]	; (b48f0 <_ZN11SystemClass2onEySt8functionIFvyiEE+0x100>)
+   b4898:	9303      	str	r3, [sp, #12]
         auto r = system_subscribe_event(events, subscribedEventHandler, &context);
-   b4896:	4a16      	ldr	r2, [pc, #88]	; (b48f0 <_ZN11SystemClass2onEySt8functionIFvyiEE+0x104>)
+   b489a:	4a16      	ldr	r2, [pc, #88]	; (b48f4 <_ZN11SystemClass2onEySt8functionIFvyiEE+0x104>)
         context.callable = wrapper;
-   b4898:	9402      	str	r4, [sp, #8]
+   b489c:	9402      	str	r4, [sp, #8]
         auto r = system_subscribe_event(events, subscribedEventHandler, &context);
-   b489a:	ab01      	add	r3, sp, #4
-   b489c:	4640      	mov	r0, r8
-   b489e:	4639      	mov	r1, r7
-   b48a0:	f003 ff14 	bl	b86cc <system_subscribe_event>
+   b489e:	ab01      	add	r3, sp, #4
+   b48a0:	4640      	mov	r0, r8
+   b48a2:	4639      	mov	r1, r7
+   b48a4:	f003 ff12 	bl	b86cc <system_subscribe_event>
         if (r) {
-   b48a4:	b1b0      	cbz	r0, b48d4 <_ZN11SystemClass2onEySt8functionIFvyiEE+0xe8>
+   b48a8:	b1b0      	cbz	r0, b48d8 <_ZN11SystemClass2onEySt8functionIFvyiEE+0xe8>
     class function<_Res(_ArgTypes...)>
-   b48a6:	4620      	mov	r0, r4
-   b48a8:	f7ff fc68 	bl	b417c <_ZNSt14_Function_baseD1Ev>
+   b48aa:	4620      	mov	r0, r4
+   b48ac:	f7ff fc66 	bl	b417c <_ZNSt14_Function_baseD1Ev>
             delete wrapper;
-   b48ac:	2110      	movs	r1, #16
-   b48ae:	4620      	mov	r0, r4
-   b48b0:	f7ff fbf5 	bl	b409e <_ZdlPvj>
-   b48b4:	a810      	add	r0, sp, #64	; 0x40
-   b48b6:	f7ff fc61 	bl	b417c <_ZNSt14_Function_baseD1Ev>
-   b48ba:	4630      	mov	r0, r6
-   b48bc:	f7ff fc5e 	bl	b417c <_ZNSt14_Function_baseD1Ev>
-   b48c0:	a808      	add	r0, sp, #32
-   b48c2:	f7ff fc5b 	bl	b417c <_ZNSt14_Function_baseD1Ev>
-   b48c6:	a804      	add	r0, sp, #16
-   b48c8:	f7ff fc58 	bl	b417c <_ZNSt14_Function_baseD1Ev>
+   b48b0:	2110      	movs	r1, #16
+   b48b2:	4620      	mov	r0, r4
+   b48b4:	f7ff fbf3 	bl	b409e <_ZdlPvj>
+   b48b8:	a810      	add	r0, sp, #64	; 0x40
+   b48ba:	f7ff fc5f 	bl	b417c <_ZNSt14_Function_baseD1Ev>
+   b48be:	4630      	mov	r0, r6
+   b48c0:	f7ff fc5c 	bl	b417c <_ZNSt14_Function_baseD1Ev>
+   b48c4:	a808      	add	r0, sp, #32
+   b48c6:	f7ff fc59 	bl	b417c <_ZNSt14_Function_baseD1Ev>
+   b48ca:	a804      	add	r0, sp, #16
+   b48cc:	f7ff fc56 	bl	b417c <_ZNSt14_Function_baseD1Ev>
     }
-   b48cc:	4628      	mov	r0, r5
-   b48ce:	b015      	add	sp, #84	; 0x54
-   b48d0:	e8bd 83f0 	ldmia.w	sp!, {r4, r5, r6, r7, r8, r9, pc}
+   b48d0:	4628      	mov	r0, r5
+   b48d2:	b015      	add	sp, #84	; 0x54
+   b48d4:	e8bd 83f0 	ldmia.w	sp!, {r4, r5, r6, r7, r8, r9, pc}
             sub = SystemEventSubscription(events, context.callable);
-   b48d4:	9b02      	ldr	r3, [sp, #8]
-   b48d6:	60ab      	str	r3, [r5, #8]
-   b48d8:	e9c5 8700 	strd	r8, r7, [r5]
-   b48dc:	e7ea      	b.n	b48b4 <_ZN11SystemClass2onEySt8functionIFvyiEE+0xc8>
-   b48de:	bf00      	nop
-   b48e0:	000b4139 	.word	0x000b4139
-   b48e4:	000b4ad9 	.word	0x000b4ad9
-   b48e8:	000c0002 	.word	0x000c0002
-   b48ec:	000b418f 	.word	0x000b418f
-   b48f0:	000b40e5 	.word	0x000b40e5
+   b48d8:	9b02      	ldr	r3, [sp, #8]
+   b48da:	60ab      	str	r3, [r5, #8]
+   b48dc:	e9c5 8700 	strd	r8, r7, [r5]
+   b48e0:	e7ea      	b.n	b48b8 <_ZN11SystemClass2onEySt8functionIFvyiEE+0xc8>
+   b48e2:	bf00      	nop
+   b48e4:	000b4139 	.word	0x000b4139
+   b48e8:	000b4a99 	.word	0x000b4a99
+   b48ec:	000c0002 	.word	0x000c0002
+   b48f0:	000b418f 	.word	0x000b418f
+   b48f4:	000b40e5 	.word	0x000b40e5
 
-000b48f4 <setup>:
+000b48f8 <setup>:
 void setup() {
-   b48f4:	b570      	push	{r4, r5, r6, lr}
+   b48f8:	b530      	push	{r4, r5, lr}
         return hal_timer_millis(nullptr);
-   b48f6:	2000      	movs	r0, #0
-   b48f8:	b08c      	sub	sp, #48	; 0x30
-   b48fa:	f003 fcdd 	bl	b82b8 <hal_timer_millis>
+   b48fa:	2000      	movs	r0, #0
+   b48fc:	b08d      	sub	sp, #52	; 0x34
+   b48fe:	f003 fcdb 	bl	b82b8 <hal_timer_millis>
         while (_while() && !_condition()) {
-   b48fe:	f242 7510 	movw	r5, #10000	; 0x2710
+   b4902:	f242 7510 	movw	r5, #10000	; 0x2710
         return hal_timer_millis(nullptr);
-   b4902:	4604      	mov	r4, r0
-   b4904:	2000      	movs	r0, #0
-   b4906:	f003 fcd7 	bl	b82b8 <hal_timer_millis>
+   b4906:	4604      	mov	r4, r0
+   b4908:	2000      	movs	r0, #0
+   b490a:	f003 fcd5 	bl	b82b8 <hal_timer_millis>
         return waitConditionWhile(_condition, [=]{ return (millis()-start)<timeout; });
-   b490a:	1b00      	subs	r0, r0, r4
-   b490c:	f161 0100 	sbc.w	r1, r1, #0
+   b490e:	1b00      	subs	r0, r0, r4
+   b4910:	f161 0100 	sbc.w	r1, r1, #0
         while (_while() && !_condition()) {
-   b4910:	42a8      	cmp	r0, r5
-   b4912:	f171 0300 	sbcs.w	r3, r1, #0
-   b4916:	d207      	bcs.n	b4928 <setup+0x34>
+   b4914:	42a8      	cmp	r0, r5
+   b4916:	f171 0300 	sbcs.w	r3, r1, #0
+   b491a:	d207      	bcs.n	b492c <setup+0x34>
 	waitFor(Serial.isConnected, 10000);				// Wait for serial connection
-   b4918:	f006 fc3e 	bl	bb198 <_Z16_fetch_usbserialv>
-   b491c:	f006 fc31 	bl	bb182 <_ZN9USBSerial11isConnectedEv>
-   b4920:	b910      	cbnz	r0, b4928 <setup+0x34>
+   b491c:	f006 fc3c 	bl	bb198 <_Z16_fetch_usbserialv>
+   b4920:	f006 fc2f 	bl	bb182 <_ZN9USBSerial11isConnectedEv>
+   b4924:	b910      	cbnz	r0, b492c <setup+0x34>
             spark_process();
-   b4922:	f003 ff25 	bl	b8770 <spark_process>
+   b4926:	f003 ff23 	bl	b8770 <spark_process>
         while (_while() && !_condition()) {
-   b4926:	e7ed      	b.n	b4904 <setup+0x10>
-   b4928:	f006 fc36 	bl	bb198 <_Z16_fetch_usbserialv>
-   b492c:	f006 fc29 	bl	bb182 <_ZN9USBSerial11isConnectedEv>
+   b492a:	e7ed      	b.n	b4908 <setup+0x10>
+   b492c:	f006 fc34 	bl	bb198 <_Z16_fetch_usbserialv>
+   b4930:	f006 fc27 	bl	bb182 <_ZN9USBSerial11isConnectedEv>
     initializePinModes();                           // Sets the pinModes
-   b4930:	f000 ff36 	bl	b57a0 <_Z18initializePinModesv>
+   b4934:	f000 ff34 	bl	b57a0 <_Z18initializePinModesv>
     initializePowerCfg();                           // Sets the power configuration for solar
-   b4934:	f000 ff60 	bl	b57f8 <_Z18initializePowerCfgv>
+   b4938:	f000 ff5e 	bl	b57f8 <_Z18initializePowerCfgv>
 		current.setup();
-   b4938:	f000 fd42 	bl	b53c0 <_ZN17currentStatusData8instanceEv>
-   b493c:	6803      	ldr	r3, [r0, #0]
-    AB1805 &withFOUT(pin_t pin) { foutPin = pin; return *this; };
-   b493e:	4d55      	ldr	r5, [pc, #340]	; (b4a94 <setup+0x1a0>)
-   b4940:	681b      	ldr	r3, [r3, #0]
-   b4942:	4798      	blx	r3
+   b493c:	f000 fd40 	bl	b53c0 <_ZN17currentStatusData8instanceEv>
+   b4940:	6803      	ldr	r3, [r0, #0]
+   b4942:	681b      	ldr	r3, [r3, #0]
+   b4944:	4798      	blx	r3
 		sysStatus.setup();							// Initialize persistent storage
-   b4944:	f000 fcfa 	bl	b533c <_ZN13sysStatusData8instanceEv>
-   b4948:	6803      	ldr	r3, [r0, #0]
-   b494a:	681b      	ldr	r3, [r3, #0]
-   b494c:	4798      	blx	r3
+   b4946:	f000 fcf9 	bl	b533c <_ZN13sysStatusData8instanceEv>
+   b494a:	6803      	ldr	r3, [r0, #0]
+   b494c:	681b      	ldr	r3, [r3, #0]
+   b494e:	4798      	blx	r3
 	setNodeConfiguration();                         // This is a function for development - allows us to over-ride stored system values
-   b494e:	f000 ff8b 	bl	b5868 <_Z20setNodeConfigurationv>
-   b4952:	2308      	movs	r3, #8
+   b4950:	f000 ff8a 	bl	b5868 <_Z20setNodeConfigurationv>
+    AB1805 &withFOUT(pin_t pin) { foutPin = pin; return *this; };
+   b4954:	4842      	ldr	r0, [pc, #264]	; (b4a60 <setup+0x168>)
+   b4956:	2308      	movs	r3, #8
         ab1805.withFOUT(D8).setup();                // The carrier board has D8 connected to FOUT for wake interrupts
-   b4954:	2101      	movs	r1, #1
-   b4956:	4628      	mov	r0, r5
-   b4958:	816b      	strh	r3, [r5, #10]
-   b495a:	f001 ffb3 	bl	b68c4 <_ZN6AB18055setupEb>
+   b4958:	2101      	movs	r1, #1
+   b495a:	8143      	strh	r3, [r0, #10]
+   b495c:	f001 ffb2 	bl	b68c4 <_ZN6AB18055setupEb>
         ab1805.setWDT(AB1805::WATCHDOG_MAX_SECONDS);// Enable watchdog
-   b495e:	217c      	movs	r1, #124	; 0x7c
-   b4960:	4628      	mov	r0, r5
-   b4962:	f001 fbb1 	bl	b60c8 <_ZN6AB18056setWDTEi>
-	Log.info("RTC initialized, time is %s and RTC %s set", Time.timeStr(Time.now()).c_str(), (ab1805.isRTCSet()) ? "is" : "is not");
-   b4966:	f006 fb30 	bl	bafca <_ZN9TimeClass3nowEv>
-   b496a:	ac08      	add	r4, sp, #32
-   b496c:	4602      	mov	r2, r0
-   b496e:	17c3      	asrs	r3, r0, #31
-   b4970:	4620      	mov	r0, r4
-   b4972:	f006 fa25 	bl	badc0 <_ZN9TimeClass7timeStrEx>
-    bool isRTCSet() { return isBitClear(REG_CTRL_1, REG_CTRL_1_WRTC); };
-   b4976:	2301      	movs	r3, #1
-   b4978:	461a      	mov	r2, r3
-   b497a:	2110      	movs	r1, #16
-   b497c:	4628      	mov	r0, r5
-   b497e:	9e08      	ldr	r6, [sp, #32]
-   b4980:	f001 fc23 	bl	b61ca <_ZN6AB180510isBitClearEhhb>
-   b4984:	4944      	ldr	r1, [pc, #272]	; (b4a98 <setup+0x1a4>)
-   b4986:	4b45      	ldr	r3, [pc, #276]	; (b4a9c <setup+0x1a8>)
-   b4988:	4632      	mov	r2, r6
-   b498a:	2800      	cmp	r0, #0
-   b498c:	bf18      	it	ne
-   b498e:	460b      	movne	r3, r1
-   b4990:	4943      	ldr	r1, [pc, #268]	; (b4aa0 <setup+0x1ac>)
-   b4992:	4844      	ldr	r0, [pc, #272]	; (b4aa4 <setup+0x1b0>)
-   b4994:	f7ff fc3c 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
-   b4998:	4620      	mov	r0, r4
-   b499a:	f006 f809 	bl	ba9b0 <_ZN6StringD1Ev>
+   b4960:	217c      	movs	r1, #124	; 0x7c
+   b4962:	483f      	ldr	r0, [pc, #252]	; (b4a60 <setup+0x168>)
+   b4964:	f001 fbb0 	bl	b60c8 <_ZN6AB18056setWDTEi>
 	{ ::new (__functor._M_access()) _Functor(std::move(__f)); }
-   b499e:	4b42      	ldr	r3, [pc, #264]	; (b4aa8 <setup+0x1b4>)
-   b49a0:	9308      	str	r3, [sp, #32]
+   b4968:	4b3e      	ldr	r3, [pc, #248]	; (b4a64 <setup+0x16c>)
+   b496a:	9308      	str	r3, [sp, #32]
 	    _M_invoker = &_My_handler::_M_invoke;
-   b49a2:	4b42      	ldr	r3, [pc, #264]	; (b4aac <setup+0x1b8>)
-   b49a4:	930b      	str	r3, [sp, #44]	; 0x2c
-	    _M_manager = &_My_handler::_M_manager;
-   b49a6:	4b42      	ldr	r3, [pc, #264]	; (b4ab0 <setup+0x1bc>)
-   b49a8:	930a      	str	r3, [sp, #40]	; 0x28
+   b496c:	4b3e      	ldr	r3, [pc, #248]	; (b4a68 <setup+0x170>)
+   b496e:	930b      	str	r3, [sp, #44]	; 0x2c
 	System.on(out_of_memory, outOfMemoryHandler);     // Enabling an out of memory handler is a good safety tip. If we run out of memory a System.reset() is done.
-   b49aa:	f44f 2280 	mov.w	r2, #262144	; 0x40000
-   b49ae:	2300      	movs	r3, #0
-   b49b0:	a804      	add	r0, sp, #16
-   b49b2:	9400      	str	r4, [sp, #0]
-   b49b4:	f7ff ff1a 	bl	b47ec <_ZN11SystemClass2onEySt8functionIFvyiEE>
+   b4970:	ac08      	add	r4, sp, #32
+	    _M_manager = &_My_handler::_M_manager;
+   b4972:	4b3e      	ldr	r3, [pc, #248]	; (b4a6c <setup+0x174>)
+   b4974:	930a      	str	r3, [sp, #40]	; 0x28
+   b4976:	f44f 2280 	mov.w	r2, #262144	; 0x40000
+   b497a:	2300      	movs	r3, #0
+   b497c:	a804      	add	r0, sp, #16
+   b497e:	9400      	str	r4, [sp, #0]
+   b4980:	f7ff ff36 	bl	b47f0 <_ZN11SystemClass2onEySt8functionIFvyiEE>
     class function<_Res(_ArgTypes...)>
-   b49b8:	4620      	mov	r0, r4
-   b49ba:	f7ff fbdf 	bl	b417c <_ZNSt14_Function_baseD1Ev>
+   b4984:	4620      	mov	r0, r4
+   b4986:	f7ff fbf9 	bl	b417c <_ZNSt14_Function_baseD1Ev>
 	if (! LoRA_Functions::instance().setup(false)) 	{						// Start the LoRA radio - Node
-   b49be:	f000 f8e7 	bl	b4b90 <_ZN14LoRA_Functions8instanceEv>
-   b49c2:	2100      	movs	r1, #0
-   b49c4:	f000 f8f6 	bl	b4bb4 <_ZN14LoRA_Functions5setupEb>
-   b49c8:	2800      	cmp	r0, #0
-   b49ca:	d142      	bne.n	b4a52 <setup+0x15e>
+   b498a:	f000 f8e1 	bl	b4b50 <_ZN14LoRA_Functions8instanceEv>
+   b498e:	2100      	movs	r1, #0
+   b4990:	f000 f8f0 	bl	b4b74 <_ZN14LoRA_Functions5setupEb>
+   b4994:	2800      	cmp	r0, #0
+   b4996:	d142      	bne.n	b4a1e <setup+0x126>
 		current.set_alertCodeNode(3);										// Initialization failure
-   b49cc:	f000 fcf8 	bl	b53c0 <_ZN17currentStatusData8instanceEv>
-   b49d0:	2103      	movs	r1, #3
-   b49d2:	f000 fdbd 	bl	b5550 <_ZN17currentStatusData17set_alertCodeNodeEh>
+   b4998:	f000 fd12 	bl	b53c0 <_ZN17currentStatusData8instanceEv>
+   b499c:	2103      	movs	r1, #3
+   b499e:	f000 fdd7 	bl	b5550 <_ZN17currentStatusData17set_alertCodeNodeEh>
 		current.set_alertTimestampNode(Time.now());
-   b49d6:	f000 fcf3 	bl	b53c0 <_ZN17currentStatusData8instanceEv>
-   b49da:	4604      	mov	r4, r0
-   b49dc:	f006 faf5 	bl	bafca <_ZN9TimeClass3nowEv>
-   b49e0:	4602      	mov	r2, r0
-   b49e2:	17c3      	asrs	r3, r0, #31
-   b49e4:	4620      	mov	r0, r4
-   b49e6:	f000 febd 	bl	b5764 <_ZN17currentStatusData22set_alertTimestampNodeEx>
+   b49a2:	f000 fd0d 	bl	b53c0 <_ZN17currentStatusData8instanceEv>
+   b49a6:	4604      	mov	r4, r0
+   b49a8:	f006 fb0f 	bl	bafca <_ZN9TimeClass3nowEv>
+   b49ac:	4602      	mov	r2, r0
+   b49ae:	17c3      	asrs	r3, r0, #31
+   b49b0:	4620      	mov	r0, r4
+   b49b2:	f000 fed7 	bl	b5764 <_ZN17currentStatusData22set_alertTimestampNodeEx>
 		Log.info("LoRA Initialization failure alert code %d - power cycle in 30", current.get_alertCodeNode());
-   b49ea:	f000 fce9 	bl	b53c0 <_ZN17currentStatusData8instanceEv>
-   b49ee:	f000 fd74 	bl	b54da <_ZNK17currentStatusData17get_alertCodeNodeEv>
-   b49f2:	4930      	ldr	r1, [pc, #192]	; (b4ab4 <setup+0x1c0>)
-   b49f4:	4602      	mov	r2, r0
-   b49f6:	482b      	ldr	r0, [pc, #172]	; (b4aa4 <setup+0x1b0>)
-   b49f8:	f7ff fc0a 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
+   b49b6:	f000 fd03 	bl	b53c0 <_ZN17currentStatusData8instanceEv>
+   b49ba:	f000 fd8e 	bl	b54da <_ZNK17currentStatusData17get_alertCodeNodeEv>
+   b49be:	492c      	ldr	r1, [pc, #176]	; (b4a70 <setup+0x178>)
+   b49c0:	4602      	mov	r2, r0
+   b49c2:	482c      	ldr	r0, [pc, #176]	; (b4a74 <setup+0x17c>)
+   b49c4:	f7ff fc24 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
   	takeMeasurements();                                                  	// Populates values so you can read them before the hour
-   b49fc:	f001 f9fe 	bl	b5dfc <_Z16takeMeasurementsv>
+   b49c8:	f001 fa18 	bl	b5dfc <_Z16takeMeasurementsv>
     attachInterrupt(INT_PIN, sensorISR, RISING);                     		// PIR or Pressure Sensor interrupt from low to high
-   b4a00:	482d      	ldr	r0, [pc, #180]	; (b4ab8 <setup+0x1c4>)
-   b4a02:	492e      	ldr	r1, [pc, #184]	; (b4abc <setup+0x1c8>)
-   b4a04:	8800      	ldrh	r0, [r0, #0]
-   b4a06:	2400      	movs	r4, #0
-   b4a08:	f04f 33ff 	mov.w	r3, #4294967295	; 0xffffffff
-   b4a0c:	2201      	movs	r2, #1
-   b4a0e:	9400      	str	r4, [sp, #0]
-   b4a10:	f004 fa38 	bl	b8e84 <_Z15attachInterrupttPFvvE13InterruptModeah>
+   b49cc:	482a      	ldr	r0, [pc, #168]	; (b4a78 <setup+0x180>)
+   b49ce:	492b      	ldr	r1, [pc, #172]	; (b4a7c <setup+0x184>)
+   b49d0:	8800      	ldrh	r0, [r0, #0]
+   b49d2:	2400      	movs	r4, #0
+   b49d4:	f04f 33ff 	mov.w	r3, #4294967295	; 0xffffffff
+   b49d8:	2201      	movs	r2, #1
+   b49da:	9400      	str	r4, [sp, #0]
+   b49dc:	f004 fa52 	bl	b8e84 <_Z15attachInterrupttPFvvE13InterruptModeah>
 	attachInterrupt(BUTTON_PIN,userSwitchISR,CHANGE); 						// We may need to monitor the user switch to change behaviours / modes
-   b4a14:	482a      	ldr	r0, [pc, #168]	; (b4ac0 <setup+0x1cc>)
-   b4a16:	492b      	ldr	r1, [pc, #172]	; (b4ac4 <setup+0x1d0>)
-   b4a18:	8800      	ldrh	r0, [r0, #0]
-   b4a1a:	9400      	str	r4, [sp, #0]
-   b4a1c:	f04f 33ff 	mov.w	r3, #4294967295	; 0xffffffff
-   b4a20:	4622      	mov	r2, r4
-   b4a22:	f004 fa2f 	bl	b8e84 <_Z15attachInterrupttPFvvE13InterruptModeah>
+   b49e0:	4827      	ldr	r0, [pc, #156]	; (b4a80 <setup+0x188>)
+   b49e2:	4928      	ldr	r1, [pc, #160]	; (b4a84 <setup+0x18c>)
+   b49e4:	8800      	ldrh	r0, [r0, #0]
+   b49e6:	9400      	str	r4, [sp, #0]
+   b49e8:	f04f 33ff 	mov.w	r3, #4294967295	; 0xffffffff
+   b49ec:	4622      	mov	r2, r4
+   b49ee:	f004 fa49 	bl	b8e84 <_Z15attachInterrupttPFvvE13InterruptModeah>
 	if (state == INITIALIZATION_STATE) state = SLEEPING_STATE;               	// Sleep unless otherwise from above code
-   b4a26:	4b28      	ldr	r3, [pc, #160]	; (b4ac8 <setup+0x1d4>)
-   b4a28:	781a      	ldrb	r2, [r3, #0]
-   b4a2a:	b90a      	cbnz	r2, b4a30 <setup+0x13c>
-   b4a2c:	2203      	movs	r2, #3
-   b4a2e:	701a      	strb	r2, [r3, #0]
+   b49f2:	4b25      	ldr	r3, [pc, #148]	; (b4a88 <setup+0x190>)
+   b49f4:	781a      	ldrb	r2, [r3, #0]
+   b49f6:	b90a      	cbnz	r2, b49fc <setup+0x104>
+   b49f8:	2203      	movs	r2, #3
+   b49fa:	701a      	strb	r2, [r3, #0]
   	Log.info("Startup complete for the Node with alert code %d", current.get_alertCodeNode());
-   b4a30:	f000 fcc6 	bl	b53c0 <_ZN17currentStatusData8instanceEv>
-   b4a34:	f000 fd51 	bl	b54da <_ZNK17currentStatusData17get_alertCodeNodeEv>
-   b4a38:	4924      	ldr	r1, [pc, #144]	; (b4acc <setup+0x1d8>)
-   b4a3a:	4602      	mov	r2, r0
-   b4a3c:	4819      	ldr	r0, [pc, #100]	; (b4aa4 <setup+0x1b0>)
-   b4a3e:	f7ff fbe7 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
+   b49fc:	f000 fce0 	bl	b53c0 <_ZN17currentStatusData8instanceEv>
+   b4a00:	f000 fd6b 	bl	b54da <_ZNK17currentStatusData17get_alertCodeNodeEv>
+   b4a04:	4921      	ldr	r1, [pc, #132]	; (b4a8c <setup+0x194>)
+   b4a06:	4602      	mov	r2, r0
+   b4a08:	481a      	ldr	r0, [pc, #104]	; (b4a74 <setup+0x17c>)
+   b4a0a:	f7ff fc01 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
   	digitalWrite(BLUE_LED,LOW);                                          	// Signal the end of startup
-   b4a42:	4b23      	ldr	r3, [pc, #140]	; (b4ad0 <setup+0x1dc>)
-   b4a44:	8818      	ldrh	r0, [r3, #0]
-   b4a46:	2100      	movs	r1, #0
+   b4a0e:	4b20      	ldr	r3, [pc, #128]	; (b4a90 <setup+0x198>)
+   b4a10:	8818      	ldrh	r0, [r3, #0]
+   b4a12:	2100      	movs	r1, #0
 }
-   b4a48:	b00c      	add	sp, #48	; 0x30
-   b4a4a:	e8bd 4070 	ldmia.w	sp!, {r4, r5, r6, lr}
+   b4a14:	b00d      	add	sp, #52	; 0x34
+   b4a16:	e8bd 4030 	ldmia.w	sp!, {r4, r5, lr}
   	digitalWrite(BLUE_LED,LOW);                                          	// Signal the end of startup
-   b4a4e:	f006 bccc 	b.w	bb3ea <digitalWrite>
+   b4a1a:	f006 bce6 	b.w	bb3ea <digitalWrite>
 	else if (sysStatus.get_nodeNumber() > 10 || !Time.isValid()) {			// If the node number indicates this node is uninitialized or the clock needs to be set, initiate a join request
-   b4a52:	f000 fc73 	bl	b533c <_ZN13sysStatusData8instanceEv>
-   b4a56:	f000 fd2c 	bl	b54b2 <_ZNK13sysStatusData14get_nodeNumberEv>
-   b4a5a:	280a      	cmp	r0, #10
-   b4a5c:	d914      	bls.n	b4a88 <setup+0x194>
+   b4a1e:	f000 fc8d 	bl	b533c <_ZN13sysStatusData8instanceEv>
+   b4a22:	f000 fd46 	bl	b54b2 <_ZNK13sysStatusData14get_nodeNumberEv>
+   b4a26:	280a      	cmp	r0, #10
+   b4a28:	d914      	bls.n	b4a54 <setup+0x15c>
 		current.set_alertCodeNode(1); 					// Will initiate a join request
-   b4a5e:	f000 fcaf 	bl	b53c0 <_ZN17currentStatusData8instanceEv>
-   b4a62:	2101      	movs	r1, #1
-   b4a64:	f000 fd74 	bl	b5550 <_ZN17currentStatusData17set_alertCodeNodeEh>
+   b4a2a:	f000 fcc9 	bl	b53c0 <_ZN17currentStatusData8instanceEv>
+   b4a2e:	2101      	movs	r1, #1
+   b4a30:	f000 fd8e 	bl	b5550 <_ZN17currentStatusData17set_alertCodeNodeEh>
 		Log.info("Node number indicated unconfigured node of %d setting alert code to %d", sysStatus.get_nodeNumber(), current.get_alertCodeNode());
-   b4a68:	f000 fc68 	bl	b533c <_ZN13sysStatusData8instanceEv>
-   b4a6c:	f000 fd21 	bl	b54b2 <_ZNK13sysStatusData14get_nodeNumberEv>
-   b4a70:	9003      	str	r0, [sp, #12]
-   b4a72:	f000 fca5 	bl	b53c0 <_ZN17currentStatusData8instanceEv>
-   b4a76:	f000 fd30 	bl	b54da <_ZNK17currentStatusData17get_alertCodeNodeEv>
-   b4a7a:	9a03      	ldr	r2, [sp, #12]
-   b4a7c:	4915      	ldr	r1, [pc, #84]	; (b4ad4 <setup+0x1e0>)
-   b4a7e:	4603      	mov	r3, r0
-   b4a80:	4808      	ldr	r0, [pc, #32]	; (b4aa4 <setup+0x1b0>)
-   b4a82:	f7ff fbc5 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
-   b4a86:	e7b9      	b.n	b49fc <setup+0x108>
+   b4a34:	f000 fc82 	bl	b533c <_ZN13sysStatusData8instanceEv>
+   b4a38:	f000 fd3b 	bl	b54b2 <_ZNK13sysStatusData14get_nodeNumberEv>
+   b4a3c:	9003      	str	r0, [sp, #12]
+   b4a3e:	f000 fcbf 	bl	b53c0 <_ZN17currentStatusData8instanceEv>
+   b4a42:	f000 fd4a 	bl	b54da <_ZNK17currentStatusData17get_alertCodeNodeEv>
+   b4a46:	9a03      	ldr	r2, [sp, #12]
+   b4a48:	4912      	ldr	r1, [pc, #72]	; (b4a94 <setup+0x19c>)
+   b4a4a:	4603      	mov	r3, r0
+   b4a4c:	4809      	ldr	r0, [pc, #36]	; (b4a74 <setup+0x17c>)
+   b4a4e:	f7ff fbdf 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
+   b4a52:	e7b9      	b.n	b49c8 <setup+0xd0>
 	else if (sysStatus.get_nodeNumber() > 10 || !Time.isValid()) {			// If the node number indicates this node is uninitialized or the clock needs to be set, initiate a join request
-   b4a88:	f006 fa82 	bl	baf90 <_ZN9TimeClass7isValidEv>
-   b4a8c:	2800      	cmp	r0, #0
-   b4a8e:	d0e6      	beq.n	b4a5e <setup+0x16a>
-   b4a90:	e7b4      	b.n	b49fc <setup+0x108>
-   b4a92:	bf00      	nop
-   b4a94:	2003df44 	.word	0x2003df44
-   b4a98:	000bc581 	.word	0x000bc581
-   b4a9c:	000bc584 	.word	0x000bc584
-   b4aa0:	000bc58b 	.word	0x000bc58b
-   b4aa4:	2003e658 	.word	0x2003e658
-   b4aa8:	000b40cd 	.word	0x000b40cd
-   b4aac:	000b4173 	.word	0x000b4173
-   b4ab0:	000b415f 	.word	0x000b415f
-   b4ab4:	000bc5b6 	.word	0x000bc5b6
-   b4ab8:	000bcb24 	.word	0x000bcb24
-   b4abc:	000b410d 	.word	0x000b410d
-   b4ac0:	000bcb22 	.word	0x000bcb22
-   b4ac4:	000b40d9 	.word	0x000b40d9
-   b4ac8:	2003df8a 	.word	0x2003df8a
-   b4acc:	000bc63b 	.word	0x000bc63b
-   b4ad0:	000bcb20 	.word	0x000bcb20
-   b4ad4:	000bc5f4 	.word	0x000bc5f4
+   b4a54:	f006 fa9c 	bl	baf90 <_ZN9TimeClass7isValidEv>
+   b4a58:	2800      	cmp	r0, #0
+   b4a5a:	d0e6      	beq.n	b4a2a <setup+0x132>
+   b4a5c:	e7b4      	b.n	b49c8 <setup+0xd0>
+   b4a5e:	bf00      	nop
+   b4a60:	2003df44 	.word	0x2003df44
+   b4a64:	000b40cd 	.word	0x000b40cd
+   b4a68:	000b4173 	.word	0x000b4173
+   b4a6c:	000b415f 	.word	0x000b415f
+   b4a70:	000bc571 	.word	0x000bc571
+   b4a74:	2003e658 	.word	0x2003e658
+   b4a78:	000bcb24 	.word	0x000bcb24
+   b4a7c:	000b410d 	.word	0x000b410d
+   b4a80:	000bcb22 	.word	0x000bcb22
+   b4a84:	000b40d9 	.word	0x000b40d9
+   b4a88:	2003df8a 	.word	0x2003df8a
+   b4a8c:	000bc5f6 	.word	0x000bc5f6
+   b4a90:	000bcb20 	.word	0x000bcb20
+   b4a94:	000bc5af 	.word	0x000bc5af
 
-000b4ad8 <_ZNSt17_Function_handlerIFvyiPvEZN11SystemClass2onEySt8functionIFvyiEEEUlyiS0_E_E10_M_managerERSt9_Any_dataRKS8_St18_Manager_operation>:
+000b4a98 <_ZNSt17_Function_handlerIFvyiPvEZN11SystemClass2onEySt8functionIFvyiEEEUlyiS0_E_E10_M_managerERSt9_Any_dataRKS8_St18_Manager_operation>:
 	switch (__op)
-   b4ad8:	2a01      	cmp	r2, #1
+   b4a98:	2a01      	cmp	r2, #1
       _M_manager(_Any_data& __dest, const _Any_data& __source,
-   b4ada:	b537      	push	{r0, r1, r2, r4, r5, lr}
-   b4adc:	4604      	mov	r4, r0
+   b4a9a:	b537      	push	{r0, r1, r2, r4, r5, lr}
+   b4a9c:	4604      	mov	r4, r0
 	switch (__op)
-   b4ade:	d104      	bne.n	b4aea <_ZNSt17_Function_handlerIFvyiPvEZN11SystemClass2onEySt8functionIFvyiEEEUlyiS0_E_E10_M_managerERSt9_Any_dataRKS8_St18_Manager_operation+0x12>
+   b4a9e:	d104      	bne.n	b4aaa <_ZNSt17_Function_handlerIFvyiPvEZN11SystemClass2onEySt8functionIFvyiEEEUlyiS0_E_E10_M_managerERSt9_Any_dataRKS8_St18_Manager_operation+0x12>
 	    return __source._M_access<_Functor*>();
-   b4ae0:	680b      	ldr	r3, [r1, #0]
+   b4aa0:	680b      	ldr	r3, [r1, #0]
 	    __dest._M_access<_Functor*>() = _Base::_M_get_pointer(__source);
-   b4ae2:	6003      	str	r3, [r0, #0]
+   b4aa2:	6003      	str	r3, [r0, #0]
       }
-   b4ae4:	2000      	movs	r0, #0
-   b4ae6:	b003      	add	sp, #12
-   b4ae8:	bd30      	pop	{r4, r5, pc}
+   b4aa4:	2000      	movs	r0, #0
+   b4aa6:	b003      	add	sp, #12
+   b4aa8:	bd30      	pop	{r4, r5, pc}
 	  switch (__op)
-   b4aea:	2a02      	cmp	r2, #2
-   b4aec:	d00c      	beq.n	b4b08 <_ZNSt17_Function_handlerIFvyiPvEZN11SystemClass2onEySt8functionIFvyiEEEUlyiS0_E_E10_M_managerERSt9_Any_dataRKS8_St18_Manager_operation+0x30>
-   b4aee:	2a03      	cmp	r2, #3
-   b4af0:	d1f8      	bne.n	b4ae4 <_ZNSt17_Function_handlerIFvyiPvEZN11SystemClass2onEySt8functionIFvyiEEEUlyiS0_E_E10_M_managerERSt9_Any_dataRKS8_St18_Manager_operation+0xc>
+   b4aaa:	2a02      	cmp	r2, #2
+   b4aac:	d00c      	beq.n	b4ac8 <_ZNSt17_Function_handlerIFvyiPvEZN11SystemClass2onEySt8functionIFvyiEEEUlyiS0_E_E10_M_managerERSt9_Any_dataRKS8_St18_Manager_operation+0x30>
+   b4aae:	2a03      	cmp	r2, #3
+   b4ab0:	d1f8      	bne.n	b4aa4 <_ZNSt17_Function_handlerIFvyiPvEZN11SystemClass2onEySt8functionIFvyiEEEUlyiS0_E_E10_M_managerERSt9_Any_dataRKS8_St18_Manager_operation+0xc>
 	  delete __victim._M_access<_Functor*>();
-   b4af2:	6804      	ldr	r4, [r0, #0]
-   b4af4:	2c00      	cmp	r4, #0
-   b4af6:	d0f5      	beq.n	b4ae4 <_ZNSt17_Function_handlerIFvyiPvEZN11SystemClass2onEySt8functionIFvyiEEEUlyiS0_E_E10_M_managerERSt9_Any_dataRKS8_St18_Manager_operation+0xc>
+   b4ab2:	6804      	ldr	r4, [r0, #0]
+   b4ab4:	2c00      	cmp	r4, #0
+   b4ab6:	d0f5      	beq.n	b4aa4 <_ZNSt17_Function_handlerIFvyiPvEZN11SystemClass2onEySt8functionIFvyiEEEUlyiS0_E_E10_M_managerERSt9_Any_dataRKS8_St18_Manager_operation+0xc>
     class function<_Res(_ArgTypes...)>
-   b4af8:	4620      	mov	r0, r4
-   b4afa:	f7ff fb3f 	bl	b417c <_ZNSt14_Function_baseD1Ev>
+   b4ab8:	4620      	mov	r0, r4
+   b4aba:	f7ff fb5f 	bl	b417c <_ZNSt14_Function_baseD1Ev>
 	  delete __victim._M_access<_Functor*>();
-   b4afe:	2110      	movs	r1, #16
-   b4b00:	4620      	mov	r0, r4
-   b4b02:	f7ff facc 	bl	b409e <_ZdlPvj>
-   b4b06:	e7ed      	b.n	b4ae4 <_ZNSt17_Function_handlerIFvyiPvEZN11SystemClass2onEySt8functionIFvyiEEEUlyiS0_E_E10_M_managerERSt9_Any_dataRKS8_St18_Manager_operation+0xc>
+   b4abe:	2110      	movs	r1, #16
+   b4ac0:	4620      	mov	r0, r4
+   b4ac2:	f7ff faec 	bl	b409e <_ZdlPvj>
+   b4ac6:	e7ed      	b.n	b4aa4 <_ZNSt17_Function_handlerIFvyiPvEZN11SystemClass2onEySt8functionIFvyiEEEUlyiS0_E_E10_M_managerERSt9_Any_dataRKS8_St18_Manager_operation+0xc>
 	  __dest._M_access<_Functor*>() =
-   b4b08:	6809      	ldr	r1, [r1, #0]
-   b4b0a:	9101      	str	r1, [sp, #4]
+   b4ac8:	6809      	ldr	r1, [r1, #0]
+   b4aca:	9101      	str	r1, [sp, #4]
 	    new _Functor(*__source._M_access<const _Functor*>());
-   b4b0c:	2010      	movs	r0, #16
-   b4b0e:	f7ff fac2 	bl	b4096 <_Znwj>
-   b4b12:	4605      	mov	r5, r0
-   b4b14:	b110      	cbz	r0, b4b1c <_ZNSt17_Function_handlerIFvyiPvEZN11SystemClass2onEySt8functionIFvyiEEEUlyiS0_E_E10_M_managerERSt9_Any_dataRKS8_St18_Manager_operation+0x44>
+   b4acc:	2010      	movs	r0, #16
+   b4ace:	f7ff fae2 	bl	b4096 <_Znwj>
+   b4ad2:	4605      	mov	r5, r0
+   b4ad4:	b110      	cbz	r0, b4adc <_ZNSt17_Function_handlerIFvyiPvEZN11SystemClass2onEySt8functionIFvyiEEEUlyiS0_E_E10_M_managerERSt9_Any_dataRKS8_St18_Manager_operation+0x44>
         auto wrapper = [handler](system_event_t events, int data, void* pointer) {
-   b4b16:	9901      	ldr	r1, [sp, #4]
-   b4b18:	f7ff fe58 	bl	b47cc <_ZNSt8functionIFvyiEEC1ERKS1_>
+   b4ad6:	9901      	ldr	r1, [sp, #4]
+   b4ad8:	f7ff fe7a 	bl	b47d0 <_ZNSt8functionIFvyiEEC1ERKS1_>
 	  __dest._M_access<_Functor*>() =
-   b4b1c:	6025      	str	r5, [r4, #0]
+   b4adc:	6025      	str	r5, [r4, #0]
 	}
-   b4b1e:	e7e1      	b.n	b4ae4 <_ZNSt17_Function_handlerIFvyiPvEZN11SystemClass2onEySt8functionIFvyiEEEUlyiS0_E_E10_M_managerERSt9_Any_dataRKS8_St18_Manager_operation+0xc>
+   b4ade:	e7e1      	b.n	b4aa4 <_ZNSt17_Function_handlerIFvyiPvEZN11SystemClass2onEySt8functionIFvyiEEEUlyiS0_E_E10_M_managerERSt9_Any_dataRKS8_St18_Manager_operation+0xc>
 
-000b4b20 <_GLOBAL__sub_I___appProductVersion>:
-   b4b20:	b508      	push	{r3, lr}
+000b4ae0 <_GLOBAL__sub_I___appProductVersion>:
+   b4ae0:	b508      	push	{r3, lr}
     }
 };
 
 struct __ApplicationProductVersion {
     __ApplicationProductVersion(product_firmware_version_t version) {
         spark_protocol_set_product_firmware_version(spark_protocol_instance(), version);
-   b4b22:	f006 fbfb 	bl	bb31c <spark_protocol_instance>
-   b4b26:	2300      	movs	r3, #0
-   b4b28:	461a      	mov	r2, r3
-   b4b2a:	4619      	mov	r1, r3
-   b4b2c:	f006 fc06 	bl	bb33c <spark_protocol_set_product_firmware_version>
+   b4ae2:	f006 fc1b 	bl	bb31c <spark_protocol_instance>
+   b4ae6:	2300      	movs	r3, #0
+   b4ae8:	461a      	mov	r2, r3
+   b4aea:	4619      	mov	r1, r3
+   b4aec:	f006 fc26 	bl	bb33c <spark_protocol_set_product_firmware_version>
         spark_protocol_set_product_id(spark_protocol_instance(), id);
-   b4b30:	f006 fbf4 	bl	bb31c <spark_protocol_instance>
-   b4b34:	2300      	movs	r3, #0
-   b4b36:	461a      	mov	r2, r3
-   b4b38:	210d      	movs	r1, #13
-   b4b3a:	f006 fbf7 	bl	bb32c <spark_protocol_set_product_id>
+   b4af0:	f006 fc14 	bl	bb31c <spark_protocol_instance>
+   b4af4:	2300      	movs	r3, #0
+   b4af6:	461a      	mov	r2, r3
+   b4af8:	210d      	movs	r1, #13
+   b4afa:	f006 fc17 	bl	bb32c <spark_protocol_set_product_id>
         : config_(config) {
-   b4b3e:	4b0c      	ldr	r3, [pc, #48]	; (b4b70 <_GLOBAL__sub_I___appProductVersion+0x50>)
-   b4b40:	1d1a      	adds	r2, r3, #4
-   b4b42:	601a      	str	r2, [r3, #0]
+   b4afe:	4b0c      	ldr	r3, [pc, #48]	; (b4b30 <_GLOBAL__sub_I___appProductVersion+0x50>)
+   b4b00:	1d1a      	adds	r2, r3, #4
+   b4b02:	601a      	str	r2, [r3, #0]
         config_.size = sizeof(hal_sleep_config_t);
-   b4b44:	4a0b      	ldr	r2, [pc, #44]	; (b4b74 <_GLOBAL__sub_I___appProductVersion+0x54>)
-   b4b46:	605a      	str	r2, [r3, #4]
+   b4b04:	4a0b      	ldr	r2, [pc, #44]	; (b4b34 <_GLOBAL__sub_I___appProductVersion+0x54>)
+   b4b06:	605a      	str	r2, [r3, #4]
               valid_(true) {
-   b4b48:	2200      	movs	r2, #0
-   b4b4a:	e9c3 2202 	strd	r2, r2, [r3, #8]
-   b4b4e:	611a      	str	r2, [r3, #16]
-   b4b50:	2201      	movs	r2, #1
-   b4b52:	751a      	strb	r2, [r3, #20]
+   b4b08:	2200      	movs	r2, #0
+   b4b0a:	e9c3 2202 	strd	r2, r2, [r3, #8]
+   b4b0e:	611a      	str	r2, [r3, #16]
+   b4b10:	2201      	movs	r2, #1
+   b4b12:	751a      	strb	r2, [r3, #20]
 AB1805 ab1805(Wire);                                // Rickkas' RTC / Watchdog library
-   b4b54:	f006 fcba 	bl	bb4cc <_Z19__fetch_global_Wirev>
-   b4b58:	2269      	movs	r2, #105	; 0x69
-   b4b5a:	4601      	mov	r1, r0
-   b4b5c:	4806      	ldr	r0, [pc, #24]	; (b4b78 <_GLOBAL__sub_I___appProductVersion+0x58>)
-   b4b5e:	f001 f9b5 	bl	b5ecc <_ZN6AB1805C1ER7TwoWireh>
+   b4b14:	f006 fcda 	bl	bb4cc <_Z19__fetch_global_Wirev>
+   b4b18:	2269      	movs	r2, #105	; 0x69
+   b4b1a:	4601      	mov	r1, r0
+   b4b1c:	4806      	ldr	r0, [pc, #24]	; (b4b38 <_GLOBAL__sub_I___appProductVersion+0x58>)
+   b4b1e:	f001 f9d5 	bl	b5ecc <_ZN6AB1805C1ER7TwoWireh>
 time_t lastPublish = Time.now();
-   b4b62:	f006 fa32 	bl	bafca <_ZN9TimeClass3nowEv>
-   b4b66:	4b05      	ldr	r3, [pc, #20]	; (b4b7c <_GLOBAL__sub_I___appProductVersion+0x5c>)
-   b4b68:	17c2      	asrs	r2, r0, #31
-   b4b6a:	e9c3 0200 	strd	r0, r2, [r3]
-   b4b6e:	bd08      	pop	{r3, pc}
-   b4b70:	2003df64 	.word	0x2003df64
-   b4b74:	00030010 	.word	0x00030010
-   b4b78:	2003df44 	.word	0x2003df44
-   b4b7c:	2003df80 	.word	0x2003df80
+   b4b22:	f006 fa52 	bl	bafca <_ZN9TimeClass3nowEv>
+   b4b26:	4b05      	ldr	r3, [pc, #20]	; (b4b3c <_GLOBAL__sub_I___appProductVersion+0x5c>)
+   b4b28:	17c2      	asrs	r2, r0, #31
+   b4b2a:	e9c3 0200 	strd	r0, r2, [r3]
+   b4b2e:	bd08      	pop	{r3, pc}
+   b4b30:	2003df64 	.word	0x2003df64
+   b4b34:	00030010 	.word	0x00030010
+   b4b38:	2003df44 	.word	0x2003df44
+   b4b3c:	2003df80 	.word	0x2003df80
 
-000b4b80 <_ZN14LoRA_FunctionsD1Ev>:
+000b4b40 <_ZN14LoRA_FunctionsD1Ev>:
 
 LoRA_Functions::LoRA_Functions() {
 }
 
 LoRA_Functions::~LoRA_Functions() {
 }
-   b4b80:	4770      	bx	lr
+   b4b40:	4770      	bx	lr
 
-000b4b82 <_ZN14LoRA_FunctionsD0Ev>:
+000b4b42 <_ZN14LoRA_FunctionsD0Ev>:
 LoRA_Functions::~LoRA_Functions() {
-   b4b82:	b510      	push	{r4, lr}
+   b4b42:	b510      	push	{r4, lr}
 }
-   b4b84:	2104      	movs	r1, #4
+   b4b44:	2104      	movs	r1, #4
 LoRA_Functions::~LoRA_Functions() {
-   b4b86:	4604      	mov	r4, r0
+   b4b46:	4604      	mov	r4, r0
 }
-   b4b88:	f7ff fa89 	bl	b409e <_ZdlPvj>
-   b4b8c:	4620      	mov	r0, r4
-   b4b8e:	bd10      	pop	{r4, pc}
+   b4b48:	f7ff faa9 	bl	b409e <_ZdlPvj>
+   b4b4c:	4620      	mov	r0, r4
+   b4b4e:	bd10      	pop	{r4, pc}
 
-000b4b90 <_ZN14LoRA_Functions8instanceEv>:
+000b4b50 <_ZN14LoRA_Functions8instanceEv>:
 LoRA_Functions &LoRA_Functions::instance() {
-   b4b90:	b510      	push	{r4, lr}
+   b4b50:	b510      	push	{r4, lr}
     if (!_instance) {
-   b4b92:	4c06      	ldr	r4, [pc, #24]	; (b4bac <_ZN14LoRA_Functions8instanceEv+0x1c>)
-   b4b94:	6823      	ldr	r3, [r4, #0]
-   b4b96:	b933      	cbnz	r3, b4ba6 <_ZN14LoRA_Functions8instanceEv+0x16>
+   b4b52:	4c06      	ldr	r4, [pc, #24]	; (b4b6c <_ZN14LoRA_Functions8instanceEv+0x1c>)
+   b4b54:	6823      	ldr	r3, [r4, #0]
+   b4b56:	b933      	cbnz	r3, b4b66 <_ZN14LoRA_Functions8instanceEv+0x16>
         _instance = new LoRA_Functions();
-   b4b98:	2004      	movs	r0, #4
-   b4b9a:	f7ff fa7c 	bl	b4096 <_Znwj>
-   b4b9e:	b108      	cbz	r0, b4ba4 <_ZN14LoRA_Functions8instanceEv+0x14>
+   b4b58:	2004      	movs	r0, #4
+   b4b5a:	f7ff fa9c 	bl	b4096 <_Znwj>
+   b4b5e:	b108      	cbz	r0, b4b64 <_ZN14LoRA_Functions8instanceEv+0x14>
 LoRA_Functions::LoRA_Functions() {
-   b4ba0:	4b03      	ldr	r3, [pc, #12]	; (b4bb0 <_ZN14LoRA_Functions8instanceEv+0x20>)
-   b4ba2:	6003      	str	r3, [r0, #0]
+   b4b60:	4b03      	ldr	r3, [pc, #12]	; (b4b70 <_ZN14LoRA_Functions8instanceEv+0x20>)
+   b4b62:	6003      	str	r3, [r0, #0]
         _instance = new LoRA_Functions();
-   b4ba4:	6020      	str	r0, [r4, #0]
+   b4b64:	6020      	str	r0, [r4, #0]
 }
-   b4ba6:	6820      	ldr	r0, [r4, #0]
-   b4ba8:	bd10      	pop	{r4, pc}
-   b4baa:	bf00      	nop
-   b4bac:	2003df90 	.word	0x2003df90
-   b4bb0:	000bca4c 	.word	0x000bca4c
+   b4b66:	6820      	ldr	r0, [r4, #0]
+   b4b68:	bd10      	pop	{r4, pc}
+   b4b6a:	bf00      	nop
+   b4b6c:	2003df90 	.word	0x2003df90
+   b4b70:	000bca4c 	.word	0x000bca4c
 
-000b4bb4 <_ZN14LoRA_Functions5setupEb>:
+000b4b74 <_ZN14LoRA_Functions5setupEb>:
 // max message length to prevent wierd crashes
 // #define RH_MESH_MAX_MESSAGE_LEN 50
 uint8_t buf[RH_MESH_MAX_MESSAGE_LEN];               // Related to max message size - RadioHead example note: dont put this on the stack:
 
 
 bool LoRA_Functions::setup(bool gatewayID) {
-   b4bb4:	b510      	push	{r4, lr}
+   b4b74:	b530      	push	{r4, r5, lr}
     // Set up the Radio Module
 	if (!manager.init()) {
-   b4bb6:	4820      	ldr	r0, [pc, #128]	; (b4c38 <_ZN14LoRA_Functions5setupEb+0x84>)
+   b4b76:	4831      	ldr	r0, [pc, #196]	; (b4c3c <_ZN14LoRA_Functions5setupEb+0xc8>)
 bool LoRA_Functions::setup(bool gatewayID) {
-   b4bb8:	b086      	sub	sp, #24
+   b4b78:	b087      	sub	sp, #28
+   b4b7a:	460d      	mov	r5, r1
 	if (!manager.init()) {
-   b4bba:	f002 fce6 	bl	b758a <_ZN8RHRouter4initEv>
-   b4bbe:	4604      	mov	r4, r0
-   b4bc0:	b930      	cbnz	r0, b4bd0 <_ZN14LoRA_Functions5setupEb+0x1c>
+   b4b7c:	f002 fd05 	bl	b758a <_ZN8RHRouter4initEv>
+   b4b80:	4604      	mov	r4, r0
+   b4b82:	b930      	cbnz	r0, b4b92 <_ZN14LoRA_Functions5setupEb+0x1e>
 		Log.info("init failed");					// Defaults after init are 434.0MHz, 0.05MHz AFC pull-in, modulation FSK_Rb2_4Fd36
-   b4bc2:	491e      	ldr	r1, [pc, #120]	; (b4c3c <_ZN14LoRA_Functions5setupEb+0x88>)
-   b4bc4:	481e      	ldr	r0, [pc, #120]	; (b4c40 <_ZN14LoRA_Functions5setupEb+0x8c>)
-   b4bc6:	f7ff fb23 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
-	if (sysStatus.get_nodeNumber() > 10)  current.set_alertCodeNode(1);
-	
-	if (manager.thisAddress() > 0) Log.info("LoRA Radio initialized as node %i and a deviceID of %s", manager.thisAddress(), System.deviceID().c_str());
-	else Log.info("LoRA Radio initialized as a gateway with a deviceID of %s", System.deviceID().c_str());
+   b4b84:	492e      	ldr	r1, [pc, #184]	; (b4c40 <_ZN14LoRA_Functions5setupEb+0xcc>)
+   b4b86:	482f      	ldr	r0, [pc, #188]	; (b4c44 <_ZN14LoRA_Functions5setupEb+0xd0>)
+   b4b88:	f7ff fb42 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
+		manager.setThisAddress(11);
+		Log.info("LoRA Radio initialized as an unconfigured node %i and a deviceID of %s", manager.thisAddress(), System.deviceID().c_str());
+	}
+
 	return true;
 }
-   b4bca:	4620      	mov	r0, r4
-   b4bcc:	b006      	add	sp, #24
-   b4bce:	bd10      	pop	{r4, pc}
+   b4b8c:	4620      	mov	r0, r4
+   b4b8e:	b007      	add	sp, #28
+   b4b90:	bd30      	pop	{r4, r5, pc}
 	driver.setFrequency(RF95_FREQ);					// Frequency is typically 868.0 or 915.0 in the Americas, or 433.0 in the EU - Are there more settings possible here?
-   b4bd0:	ed9f 0a1c 	vldr	s0, [pc, #112]	; b4c44 <_ZN14LoRA_Functions5setupEb+0x90>
-   b4bd4:	481c      	ldr	r0, [pc, #112]	; (b4c48 <_ZN14LoRA_Functions5setupEb+0x94>)
-   b4bd6:	f002 ffd3 	bl	b7b80 <_ZN7RH_RF9512setFrequencyEf>
+   b4b92:	ed9f 0a2d 	vldr	s0, [pc, #180]	; b4c48 <_ZN14LoRA_Functions5setupEb+0xd4>
+   b4b96:	482d      	ldr	r0, [pc, #180]	; (b4c4c <_ZN14LoRA_Functions5setupEb+0xd8>)
+   b4b98:	f002 fff2 	bl	b7b80 <_ZN7RH_RF9512setFrequencyEf>
 	driver.setTxPower(23, false);                   // If you are using RFM95/96/97/98 modules which uses the PA_BOOST transmitter pin, then you can set transmitter powers from 5 to 23 dBm (13dBm default).  PA_BOOST?
-   b4bda:	2200      	movs	r2, #0
-   b4bdc:	2117      	movs	r1, #23
-   b4bde:	481a      	ldr	r0, [pc, #104]	; (b4c48 <_ZN14LoRA_Functions5setupEb+0x94>)
-   b4be0:	f003 f948 	bl	b7e74 <_ZN7RH_RF9510setTxPowerEab>
-	if (sysStatus.get_nodeNumber() > 10)  current.set_alertCodeNode(1);
-   b4be4:	f000 fbaa 	bl	b533c <_ZN13sysStatusData8instanceEv>
-   b4be8:	f000 fc63 	bl	b54b2 <_ZNK13sysStatusData14get_nodeNumberEv>
-   b4bec:	280a      	cmp	r0, #10
-   b4bee:	d904      	bls.n	b4bfa <_ZN14LoRA_Functions5setupEb+0x46>
-   b4bf0:	f000 fbe6 	bl	b53c0 <_ZN17currentStatusData8instanceEv>
-   b4bf4:	2101      	movs	r1, #1
-   b4bf6:	f000 fcab 	bl	b5550 <_ZN17currentStatusData17set_alertCodeNodeEh>
-	if (manager.thisAddress() > 0) Log.info("LoRA Radio initialized as node %i and a deviceID of %s", manager.thisAddress(), System.deviceID().c_str());
-   b4bfa:	4814      	ldr	r0, [pc, #80]	; (b4c4c <_ZN14LoRA_Functions5setupEb+0x98>)
-   b4bfc:	f001 ffd7 	bl	b6bae <_ZN10RHDatagram11thisAddressEv>
-   b4c00:	b180      	cbz	r0, b4c24 <_ZN14LoRA_Functions5setupEb+0x70>
-   b4c02:	4812      	ldr	r0, [pc, #72]	; (b4c4c <_ZN14LoRA_Functions5setupEb+0x98>)
-   b4c04:	f001 ffd3 	bl	b6bae <_ZN10RHDatagram11thisAddressEv>
-   b4c08:	9001      	str	r0, [sp, #4]
+   b4b9c:	482b      	ldr	r0, [pc, #172]	; (b4c4c <_ZN14LoRA_Functions5setupEb+0xd8>)
+   b4b9e:	2200      	movs	r2, #0
+   b4ba0:	2117      	movs	r1, #23
+   b4ba2:	f003 f967 	bl	b7e74 <_ZN7RH_RF9510setTxPowerEab>
+	if (gatewayID == true) {
+   b4ba6:	b18d      	cbz	r5, b4bcc <_ZN14LoRA_Functions5setupEb+0x58>
+		sysStatus.set_nodeNumber(GATEWAY_ADDRESS);							// Gateway - Manager is initialized by default with GATEWAY_ADDRESS - make sure it is stored in FRAM
+   b4ba8:	f000 fbc8 	bl	b533c <_ZN13sysStatusData8instanceEv>
+   b4bac:	2100      	movs	r1, #0
+   b4bae:	f000 fcb7 	bl	b5520 <_ZN13sysStatusData14set_nodeNumberEh>
         return spark_deviceID();
-   b4c0a:	a802      	add	r0, sp, #8
-   b4c0c:	f003 fdc0 	bl	b8790 <spark_deviceID>
-   b4c10:	e9dd 2301 	ldrd	r2, r3, [sp, #4]
-   b4c14:	490e      	ldr	r1, [pc, #56]	; (b4c50 <_ZN14LoRA_Functions5setupEb+0x9c>)
-   b4c16:	480a      	ldr	r0, [pc, #40]	; (b4c40 <_ZN14LoRA_Functions5setupEb+0x8c>)
-   b4c18:	f7ff fafa 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
-	else Log.info("LoRA Radio initialized as a gateway with a deviceID of %s", System.deviceID().c_str());
-   b4c1c:	a802      	add	r0, sp, #8
-   b4c1e:	f005 fec7 	bl	ba9b0 <_ZN6StringD1Ev>
-   b4c22:	e7d2      	b.n	b4bca <_ZN14LoRA_Functions5setupEb+0x16>
-   b4c24:	a802      	add	r0, sp, #8
-   b4c26:	f003 fdb3 	bl	b8790 <spark_deviceID>
-   b4c2a:	9a02      	ldr	r2, [sp, #8]
-   b4c2c:	4909      	ldr	r1, [pc, #36]	; (b4c54 <_ZN14LoRA_Functions5setupEb+0xa0>)
-   b4c2e:	4804      	ldr	r0, [pc, #16]	; (b4c40 <_ZN14LoRA_Functions5setupEb+0x8c>)
-   b4c30:	f7ff faee 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
-   b4c34:	e7f2      	b.n	b4c1c <_ZN14LoRA_Functions5setupEb+0x68>
-   b4c36:	bf00      	nop
-   b4c38:	2003e1cc 	.word	0x2003e1cc
-   b4c3c:	000bc66c 	.word	0x000bc66c
-   b4c40:	2003e658 	.word	0x2003e658
-   b4c44:	4464c000 	.word	0x4464c000
-   b4c48:	2003e09c 	.word	0x2003e09c
-   b4c4c:	2003e1d0 	.word	0x2003e1d0
-   b4c50:	000bc678 	.word	0x000bc678
-   b4c54:	000bc6af 	.word	0x000bc6af
+   b4bb2:	a802      	add	r0, sp, #8
+   b4bb4:	f003 fdec 	bl	b8790 <spark_deviceID>
+		Log.info("LoRA Radio initialized as a gateway with a deviceID of %s", System.deviceID().c_str());
+   b4bb8:	9a02      	ldr	r2, [sp, #8]
+   b4bba:	4925      	ldr	r1, [pc, #148]	; (b4c50 <_ZN14LoRA_Functions5setupEb+0xdc>)
+   b4bbc:	4821      	ldr	r0, [pc, #132]	; (b4c44 <_ZN14LoRA_Functions5setupEb+0xd0>)
+   b4bbe:	f7ff fb27 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
+   b4bc2:	a802      	add	r0, sp, #8
+   b4bc4:	f005 fef4 	bl	ba9b0 <_ZN6StringD1Ev>
+   b4bc8:	462c      	mov	r4, r5
+   b4bca:	e7df      	b.n	b4b8c <_ZN14LoRA_Functions5setupEb+0x18>
+	else if (sysStatus.get_nodeNumber() > 0 && sysStatus.get_nodeNumber() <= 10) {
+   b4bcc:	f000 fbb6 	bl	b533c <_ZN13sysStatusData8instanceEv>
+   b4bd0:	f000 fc6f 	bl	b54b2 <_ZNK13sysStatusData14get_nodeNumberEv>
+   b4bd4:	b1f0      	cbz	r0, b4c14 <_ZN14LoRA_Functions5setupEb+0xa0>
+   b4bd6:	f000 fbb1 	bl	b533c <_ZN13sysStatusData8instanceEv>
+   b4bda:	f000 fc6a 	bl	b54b2 <_ZNK13sysStatusData14get_nodeNumberEv>
+   b4bde:	280a      	cmp	r0, #10
+   b4be0:	d818      	bhi.n	b4c14 <_ZN14LoRA_Functions5setupEb+0xa0>
+		manager.setThisAddress(sysStatus.get_nodeNumber());// Node - use the Node address in valid range from memory
+   b4be2:	f000 fbab 	bl	b533c <_ZN13sysStatusData8instanceEv>
+   b4be6:	f000 fc64 	bl	b54b2 <_ZNK13sysStatusData14get_nodeNumberEv>
+   b4bea:	4601      	mov	r1, r0
+   b4bec:	4819      	ldr	r0, [pc, #100]	; (b4c54 <_ZN14LoRA_Functions5setupEb+0xe0>)
+   b4bee:	f001 fff8 	bl	b6be2 <_ZN10RHDatagram14setThisAddressEh>
+		Log.info("LoRA Radio initialized as node %i and a deviceID of %s", manager.thisAddress(), System.deviceID().c_str());
+   b4bf2:	4818      	ldr	r0, [pc, #96]	; (b4c54 <_ZN14LoRA_Functions5setupEb+0xe0>)
+   b4bf4:	f001 ffdb 	bl	b6bae <_ZN10RHDatagram11thisAddressEv>
+   b4bf8:	9001      	str	r0, [sp, #4]
+   b4bfa:	a802      	add	r0, sp, #8
+   b4bfc:	f003 fdc8 	bl	b8790 <spark_deviceID>
+   b4c00:	e9dd 2301 	ldrd	r2, r3, [sp, #4]
+   b4c04:	4914      	ldr	r1, [pc, #80]	; (b4c58 <_ZN14LoRA_Functions5setupEb+0xe4>)
+		Log.info("LoRA Radio initialized as an unconfigured node %i and a deviceID of %s", manager.thisAddress(), System.deviceID().c_str());
+   b4c06:	480f      	ldr	r0, [pc, #60]	; (b4c44 <_ZN14LoRA_Functions5setupEb+0xd0>)
+   b4c08:	f7ff fb02 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
+   b4c0c:	a802      	add	r0, sp, #8
+   b4c0e:	f005 fecf 	bl	ba9b0 <_ZN6StringD1Ev>
+   b4c12:	e7bb      	b.n	b4b8c <_ZN14LoRA_Functions5setupEb+0x18>
+		sysStatus.set_nodeNumber(11);
+   b4c14:	f000 fb92 	bl	b533c <_ZN13sysStatusData8instanceEv>
+   b4c18:	210b      	movs	r1, #11
+   b4c1a:	f000 fc81 	bl	b5520 <_ZN13sysStatusData14set_nodeNumberEh>
+		manager.setThisAddress(11);
+   b4c1e:	210b      	movs	r1, #11
+   b4c20:	480c      	ldr	r0, [pc, #48]	; (b4c54 <_ZN14LoRA_Functions5setupEb+0xe0>)
+   b4c22:	f001 ffde 	bl	b6be2 <_ZN10RHDatagram14setThisAddressEh>
+		Log.info("LoRA Radio initialized as an unconfigured node %i and a deviceID of %s", manager.thisAddress(), System.deviceID().c_str());
+   b4c26:	480b      	ldr	r0, [pc, #44]	; (b4c54 <_ZN14LoRA_Functions5setupEb+0xe0>)
+   b4c28:	f001 ffc1 	bl	b6bae <_ZN10RHDatagram11thisAddressEv>
+   b4c2c:	9001      	str	r0, [sp, #4]
+   b4c2e:	a802      	add	r0, sp, #8
+   b4c30:	f003 fdae 	bl	b8790 <spark_deviceID>
+   b4c34:	e9dd 2301 	ldrd	r2, r3, [sp, #4]
+   b4c38:	4908      	ldr	r1, [pc, #32]	; (b4c5c <_ZN14LoRA_Functions5setupEb+0xe8>)
+   b4c3a:	e7e4      	b.n	b4c06 <_ZN14LoRA_Functions5setupEb+0x92>
+   b4c3c:	2003e1cc 	.word	0x2003e1cc
+   b4c40:	000bc627 	.word	0x000bc627
+   b4c44:	2003e658 	.word	0x2003e658
+   b4c48:	4464c000 	.word	0x4464c000
+   b4c4c:	2003e09c 	.word	0x2003e09c
+   b4c50:	000bc633 	.word	0x000bc633
+   b4c54:	2003e1d0 	.word	0x2003e1d0
+   b4c58:	000bc66d 	.word	0x000bc66d
+   b4c5c:	000bc6a4 	.word	0x000bc6a4
 
-000b4c58 <_ZN14LoRA_Functions11clearBufferEv>:
+000b4c60 <_ZN14LoRA_Functions11clearBufferEv>:
 // ************************************************************************
 // *****					Common LoRA Functions					*******
 // ************************************************************************
 
 
 void LoRA_Functions::clearBuffer() {
-   b4c58:	b510      	push	{r4, lr}
+   b4c60:	b510      	push	{r4, lr}
 	uint8_t bufT[RH_RF95_MAX_MESSAGE_LEN];
 	uint8_t lenT;
 
 	while(driver.recv(bufT, &lenT)) {};
-   b4c5a:	4c06      	ldr	r4, [pc, #24]	; (b4c74 <_ZN14LoRA_Functions11clearBufferEv+0x1c>)
+   b4c62:	4c06      	ldr	r4, [pc, #24]	; (b4c7c <_ZN14LoRA_Functions11clearBufferEv+0x1c>)
 void LoRA_Functions::clearBuffer() {
-   b4c5c:	b0c0      	sub	sp, #256	; 0x100
+   b4c64:	b0c0      	sub	sp, #256	; 0x100
 	while(driver.recv(bufT, &lenT)) {};
-   b4c5e:	f10d 0203 	add.w	r2, sp, #3
-   b4c62:	a901      	add	r1, sp, #4
-   b4c64:	4620      	mov	r0, r4
-   b4c66:	f002 ff05 	bl	b7a74 <_ZN7RH_RF954recvEPhS0_>
-   b4c6a:	2800      	cmp	r0, #0
-   b4c6c:	d1f7      	bne.n	b4c5e <_ZN14LoRA_Functions11clearBufferEv+0x6>
+   b4c66:	f10d 0203 	add.w	r2, sp, #3
+   b4c6a:	a901      	add	r1, sp, #4
+   b4c6c:	4620      	mov	r0, r4
+   b4c6e:	f002 ff01 	bl	b7a74 <_ZN7RH_RF954recvEPhS0_>
+   b4c72:	2800      	cmp	r0, #0
+   b4c74:	d1f7      	bne.n	b4c66 <_ZN14LoRA_Functions11clearBufferEv+0x6>
 }
-   b4c6e:	b040      	add	sp, #256	; 0x100
-   b4c70:	bd10      	pop	{r4, pc}
-   b4c72:	bf00      	nop
-   b4c74:	2003e09c 	.word	0x2003e09c
+   b4c76:	b040      	add	sp, #256	; 0x100
+   b4c78:	bd10      	pop	{r4, pc}
+   b4c7a:	bf00      	nop
+   b4c7c:	2003e09c 	.word	0x2003e09c
 
-000b4c78 <_ZN14LoRA_Functions14sleepLoRaRadioEv>:
+000b4c80 <_ZN14LoRA_Functions14sleepLoRaRadioEv>:
 
 void LoRA_Functions::sleepLoRaRadio() {
 	driver.sleep();                             // Here is where we will power down the LoRA radio module
-   b4c78:	4801      	ldr	r0, [pc, #4]	; (b4c80 <_ZN14LoRA_Functions14sleepLoRaRadioEv+0x8>)
-   b4c7a:	f002 bee8 	b.w	b7a4e <_ZN7RH_RF955sleepEv>
-   b4c7e:	bf00      	nop
-   b4c80:	2003e09c 	.word	0x2003e09c
+   b4c80:	4801      	ldr	r0, [pc, #4]	; (b4c88 <_ZN14LoRA_Functions14sleepLoRaRadioEv+0x8>)
+   b4c82:	f002 bee4 	b.w	b7a4e <_ZN7RH_RF955sleepEv>
+   b4c86:	bf00      	nop
+   b4c88:	2003e09c 	.word	0x2003e09c
 
-000b4c84 <_ZN14LoRA_Functions21composeDataReportNodeEv>:
+000b4c8c <_ZN14LoRA_Functions21composeDataReportNodeEv>:
 	static int attempts = 0;
 	static int success = 0;
 	static uint8_t msgCnt = 0;
 
 
 	digitalWrite(BLUE_LED,HIGH);
-   b4c84:	4b76      	ldr	r3, [pc, #472]	; (b4e60 <_ZN14LoRA_Functions21composeDataReportNodeEv+0x1dc>)
+   b4c8c:	4b76      	ldr	r3, [pc, #472]	; (b4e68 <_ZN14LoRA_Functions21composeDataReportNodeEv+0x1dc>)
 bool LoRA_Functions::composeDataReportNode() {
-   b4c86:	e92d 43f7 	stmdb	sp!, {r0, r1, r2, r4, r5, r6, r7, r8, r9, lr}
+   b4c8e:	e92d 43f7 	stmdb	sp!, {r0, r1, r2, r4, r5, r6, r7, r8, r9, lr}
 	digitalWrite(BLUE_LED,HIGH);
-   b4c8a:	881e      	ldrh	r6, [r3, #0]
+   b4c92:	881e      	ldrh	r6, [r3, #0]
 	attempts++;
 	msgCnt++;
-   b4c8c:	f8df 81fc 	ldr.w	r8, [pc, #508]	; b4e8c <_ZN14LoRA_Functions21composeDataReportNodeEv+0x208>
+   b4c94:	f8df 81fc 	ldr.w	r8, [pc, #508]	; b4e94 <_ZN14LoRA_Functions21composeDataReportNodeEv+0x208>
 	attempts++;
-   b4c90:	4d74      	ldr	r5, [pc, #464]	; (b4e64 <_ZN14LoRA_Functions21composeDataReportNodeEv+0x1e0>)
+   b4c98:	4d74      	ldr	r5, [pc, #464]	; (b4e6c <_ZN14LoRA_Functions21composeDataReportNodeEv+0x1e0>)
 	Log.info("Sending data report number %d",msgCnt);
 
 	buf[0] = highByte(sysStatus.get_magicNumber());
-   b4c92:	4c75      	ldr	r4, [pc, #468]	; (b4e68 <_ZN14LoRA_Functions21composeDataReportNodeEv+0x1e4>)
+   b4c9a:	4c75      	ldr	r4, [pc, #468]	; (b4e70 <_ZN14LoRA_Functions21composeDataReportNodeEv+0x1e4>)
 	digitalWrite(BLUE_LED,HIGH);
-   b4c94:	2101      	movs	r1, #1
-   b4c96:	4630      	mov	r0, r6
-   b4c98:	f006 fba7 	bl	bb3ea <digitalWrite>
+   b4c9c:	2101      	movs	r1, #1
+   b4c9e:	4630      	mov	r0, r6
+   b4ca0:	f006 fba3 	bl	bb3ea <digitalWrite>
 	msgCnt++;
-   b4c9c:	f898 2000 	ldrb.w	r2, [r8]
+   b4ca4:	f898 2000 	ldrb.w	r2, [r8]
 	attempts++;
-   b4ca0:	682b      	ldr	r3, [r5, #0]
+   b4ca8:	682b      	ldr	r3, [r5, #0]
 	Log.info("Sending data report number %d",msgCnt);
-   b4ca2:	4972      	ldr	r1, [pc, #456]	; (b4e6c <_ZN14LoRA_Functions21composeDataReportNodeEv+0x1e8>)
-   b4ca4:	4872      	ldr	r0, [pc, #456]	; (b4e70 <_ZN14LoRA_Functions21composeDataReportNodeEv+0x1ec>)
+   b4caa:	4972      	ldr	r1, [pc, #456]	; (b4e74 <_ZN14LoRA_Functions21composeDataReportNodeEv+0x1e8>)
+   b4cac:	4872      	ldr	r0, [pc, #456]	; (b4e78 <_ZN14LoRA_Functions21composeDataReportNodeEv+0x1ec>)
 	msgCnt++;
-   b4ca6:	3201      	adds	r2, #1
+   b4cae:	3201      	adds	r2, #1
 	attempts++;
-   b4ca8:	3301      	adds	r3, #1
+   b4cb0:	3301      	adds	r3, #1
 	msgCnt++;
-   b4caa:	b2d2      	uxtb	r2, r2
-   b4cac:	f888 2000 	strb.w	r2, [r8]
+   b4cb2:	b2d2      	uxtb	r2, r2
+   b4cb4:	f888 2000 	strb.w	r2, [r8]
 	attempts++;
-   b4cb0:	602b      	str	r3, [r5, #0]
+   b4cb8:	602b      	str	r3, [r5, #0]
 	Log.info("Sending data report number %d",msgCnt);
-   b4cb2:	f7ff faad 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
+   b4cba:	f7ff faa9 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
 	buf[0] = highByte(sysStatus.get_magicNumber());
-   b4cb6:	f000 fb41 	bl	b533c <_ZN13sysStatusData8instanceEv>
-   b4cba:	f000 fc61 	bl	b5580 <_ZNK13sysStatusData15get_magicNumberEv>
-   b4cbe:	0a00      	lsrs	r0, r0, #8
-   b4cc0:	7020      	strb	r0, [r4, #0]
+   b4cbe:	f000 fb3d 	bl	b533c <_ZN13sysStatusData8instanceEv>
+   b4cc2:	f000 fc5d 	bl	b5580 <_ZNK13sysStatusData15get_magicNumberEv>
+   b4cc6:	0a00      	lsrs	r0, r0, #8
+   b4cc8:	7020      	strb	r0, [r4, #0]
 	buf[1] = lowByte(sysStatus.get_magicNumber());			
-   b4cc2:	f000 fb3b 	bl	b533c <_ZN13sysStatusData8instanceEv>
-   b4cc6:	f000 fc5b 	bl	b5580 <_ZNK13sysStatusData15get_magicNumberEv>
+   b4cca:	f000 fb37 	bl	b533c <_ZN13sysStatusData8instanceEv>
+   b4cce:	f000 fc57 	bl	b5580 <_ZNK13sysStatusData15get_magicNumberEv>
 	buf[2] = 1;						// Set for code release - fix later
-   b4cca:	2701      	movs	r7, #1
+   b4cd2:	2701      	movs	r7, #1
 	buf[1] = lowByte(sysStatus.get_magicNumber());			
-   b4ccc:	7060      	strb	r0, [r4, #1]
+   b4cd4:	7060      	strb	r0, [r4, #1]
 	buf[2] = 1;						// Set for code release - fix later
-   b4cce:	70a7      	strb	r7, [r4, #2]
+   b4cd6:	70a7      	strb	r7, [r4, #2]
 	buf[3] = highByte(current.get_hourlyCount());
-   b4cd0:	f000 fb76 	bl	b53c0 <_ZN17currentStatusData8instanceEv>
-   b4cd4:	f000 fc5e 	bl	b5594 <_ZNK17currentStatusData15get_hourlyCountEv>
-   b4cd8:	0a00      	lsrs	r0, r0, #8
-   b4cda:	70e0      	strb	r0, [r4, #3]
+   b4cd8:	f000 fb72 	bl	b53c0 <_ZN17currentStatusData8instanceEv>
+   b4cdc:	f000 fc5a 	bl	b5594 <_ZNK17currentStatusData15get_hourlyCountEv>
+   b4ce0:	0a00      	lsrs	r0, r0, #8
+   b4ce2:	70e0      	strb	r0, [r4, #3]
 	buf[4] = lowByte(current.get_hourlyCount()); 
-   b4cdc:	f000 fb70 	bl	b53c0 <_ZN17currentStatusData8instanceEv>
-   b4ce0:	f000 fc58 	bl	b5594 <_ZNK17currentStatusData15get_hourlyCountEv>
-   b4ce4:	7120      	strb	r0, [r4, #4]
+   b4ce4:	f000 fb6c 	bl	b53c0 <_ZN17currentStatusData8instanceEv>
+   b4ce8:	f000 fc54 	bl	b5594 <_ZNK17currentStatusData15get_hourlyCountEv>
+   b4cec:	7120      	strb	r0, [r4, #4]
 	buf[5] = highByte(current.get_dailyCount());
-   b4ce6:	f000 fb6b 	bl	b53c0 <_ZN17currentStatusData8instanceEv>
-   b4cea:	f000 fc58 	bl	b559e <_ZNK17currentStatusData14get_dailyCountEv>
-   b4cee:	0a00      	lsrs	r0, r0, #8
-   b4cf0:	7160      	strb	r0, [r4, #5]
+   b4cee:	f000 fb67 	bl	b53c0 <_ZN17currentStatusData8instanceEv>
+   b4cf2:	f000 fc54 	bl	b559e <_ZNK17currentStatusData14get_dailyCountEv>
+   b4cf6:	0a00      	lsrs	r0, r0, #8
+   b4cf8:	7160      	strb	r0, [r4, #5]
 	buf[6] = lowByte(current.get_dailyCount()); 
-   b4cf2:	f000 fb65 	bl	b53c0 <_ZN17currentStatusData8instanceEv>
-   b4cf6:	f000 fc52 	bl	b559e <_ZNK17currentStatusData14get_dailyCountEv>
-   b4cfa:	71a0      	strb	r0, [r4, #6]
+   b4cfa:	f000 fb61 	bl	b53c0 <_ZN17currentStatusData8instanceEv>
+   b4cfe:	f000 fc4e 	bl	b559e <_ZNK17currentStatusData14get_dailyCountEv>
+   b4d02:	71a0      	strb	r0, [r4, #6]
 	buf[7] = current.get_internalTempC();
-   b4cfc:	f000 fb60 	bl	b53c0 <_ZN17currentStatusData8instanceEv>
-   b4d00:	f000 fbe1 	bl	b54c6 <_ZNK17currentStatusData17get_internalTempCEv>
-   b4d04:	71e0      	strb	r0, [r4, #7]
+   b4d04:	f000 fb5c 	bl	b53c0 <_ZN17currentStatusData8instanceEv>
+   b4d08:	f000 fbdd 	bl	b54c6 <_ZNK17currentStatusData17get_internalTempCEv>
+   b4d0c:	71e0      	strb	r0, [r4, #7]
 	buf[8] = current.get_stateOfCharge();
-   b4d06:	f000 fb5b 	bl	b53c0 <_ZN17currentStatusData8instanceEv>
-   b4d0a:	f000 fb7d 	bl	b5408 <_ZNK17currentStatusData17get_stateOfChargeEv>
-   b4d0e:	ec51 0b10 	vmov	r0, r1, d0
-   b4d12:	f007 f8ff 	bl	bbf14 <__aeabi_d2uiz>
-   b4d16:	7220      	strb	r0, [r4, #8]
+   b4d0e:	f000 fb57 	bl	b53c0 <_ZN17currentStatusData8instanceEv>
+   b4d12:	f000 fb79 	bl	b5408 <_ZNK17currentStatusData17get_stateOfChargeEv>
+   b4d16:	ec51 0b10 	vmov	r0, r1, d0
+   b4d1a:	f007 f8fb 	bl	bbf14 <__aeabi_d2uiz>
+   b4d1e:	7220      	strb	r0, [r4, #8]
 	buf[9] = current.get_batteryState();	
-   b4d18:	f000 fb52 	bl	b53c0 <_ZN17currentStatusData8instanceEv>
-   b4d1c:	f000 fbd8 	bl	b54d0 <_ZNK17currentStatusData16get_batteryStateEv>
-   b4d20:	7260      	strb	r0, [r4, #9]
+   b4d20:	f000 fb4e 	bl	b53c0 <_ZN17currentStatusData8instanceEv>
+   b4d24:	f000 fbd4 	bl	b54d0 <_ZNK17currentStatusData16get_batteryStateEv>
+   b4d28:	7260      	strb	r0, [r4, #9]
 	buf[10] = sysStatus.get_resetCount();
-   b4d22:	f000 fb0b 	bl	b533c <_ZN13sysStatusData8instanceEv>
-   b4d26:	f000 fbc9 	bl	b54bc <_ZNK13sysStatusData14get_resetCountEv>
+   b4d2a:	f000 fb07 	bl	b533c <_ZN13sysStatusData8instanceEv>
+   b4d2e:	f000 fbc5 	bl	b54bc <_ZNK13sysStatusData14get_resetCountEv>
 	buf[11] = msgCnt;
-   b4d2a:	f898 3000 	ldrb.w	r3, [r8]
-   b4d2e:	72e3      	strb	r3, [r4, #11]
+   b4d32:	f898 3000 	ldrb.w	r3, [r8]
+   b4d36:	72e3      	strb	r3, [r4, #11]
 
 	// Send a message to manager_server
   	// A route to the destination will be automatically discovered.
 	unsigned char result = manager.sendtoWait(buf, 17, GATEWAY_ADDRESS, DATA_RPT);
-   b4d30:	2303      	movs	r3, #3
+   b4d38:	2303      	movs	r3, #3
 	buf[10] = sysStatus.get_resetCount();
-   b4d32:	72a0      	strb	r0, [r4, #10]
+   b4d3a:	72a0      	strb	r0, [r4, #10]
 	unsigned char result = manager.sendtoWait(buf, 17, GATEWAY_ADDRESS, DATA_RPT);
-   b4d34:	4621      	mov	r1, r4
-   b4d36:	9300      	str	r3, [sp, #0]
-   b4d38:	484e      	ldr	r0, [pc, #312]	; (b4e74 <_ZN14LoRA_Functions21composeDataReportNodeEv+0x1f0>)
-   b4d3a:	f8df 8154 	ldr.w	r8, [pc, #340]	; b4e90 <_ZN14LoRA_Functions21composeDataReportNodeEv+0x20c>
-   b4d3e:	2300      	movs	r3, #0
-   b4d40:	2211      	movs	r2, #17
-   b4d42:	f002 f9e7 	bl	b7114 <_ZN6RHMesh10sendtoWaitEPhhhh>
+   b4d3c:	4621      	mov	r1, r4
+   b4d3e:	9300      	str	r3, [sp, #0]
+   b4d40:	484e      	ldr	r0, [pc, #312]	; (b4e7c <_ZN14LoRA_Functions21composeDataReportNodeEv+0x1f0>)
+   b4d42:	f8df 8154 	ldr.w	r8, [pc, #340]	; b4e98 <_ZN14LoRA_Functions21composeDataReportNodeEv+0x20c>
+   b4d46:	2300      	movs	r3, #0
+   b4d48:	2211      	movs	r2, #17
+   b4d4a:	f002 f9e3 	bl	b7114 <_ZN6RHMesh10sendtoWaitEPhhhh>
 	
 	if ( result == RH_ROUTER_ERROR_NONE) {
-   b4d46:	4604      	mov	r4, r0
-   b4d48:	bb18      	cbnz	r0, b4d92 <_ZN14LoRA_Functions21composeDataReportNodeEv+0x10e>
+   b4d4e:	4604      	mov	r4, r0
+   b4d50:	bb18      	cbnz	r0, b4d9a <_ZN14LoRA_Functions21composeDataReportNodeEv+0x10e>
 		// It has been reliably delivered to the next node.
 		// Now wait for a reply from the ultimate server 
 		success++;
-   b4d4a:	f8d8 0000 	ldr.w	r0, [r8]
-   b4d4e:	4438      	add	r0, r7
-   b4d50:	f8c8 0000 	str.w	r0, [r8]
+   b4d52:	f8d8 0000 	ldr.w	r0, [r8]
+   b4d56:	4438      	add	r0, r7
+   b4d58:	f8c8 0000 	str.w	r0, [r8]
 		Log.info("Data report delivered - success rate %4.2f",((success * 1.0)/ attempts)*100.0);
-   b4d54:	f006 fd9c 	bl	bb890 <__aeabi_i2d>
-   b4d58:	4680      	mov	r8, r0
-   b4d5a:	6828      	ldr	r0, [r5, #0]
-   b4d5c:	4689      	mov	r9, r1
-   b4d5e:	f006 fd97 	bl	bb890 <__aeabi_i2d>
-   b4d62:	4602      	mov	r2, r0
-   b4d64:	460b      	mov	r3, r1
-   b4d66:	4640      	mov	r0, r8
-   b4d68:	4649      	mov	r1, r9
-   b4d6a:	f006 ff25 	bl	bbbb8 <__aeabi_ddiv>
-   b4d6e:	4b42      	ldr	r3, [pc, #264]	; (b4e78 <_ZN14LoRA_Functions21composeDataReportNodeEv+0x1f4>)
-   b4d70:	2200      	movs	r2, #0
-   b4d72:	f006 fdf7 	bl	bb964 <__aeabi_dmul>
-   b4d76:	4602      	mov	r2, r0
-   b4d78:	460b      	mov	r3, r1
-   b4d7a:	483d      	ldr	r0, [pc, #244]	; (b4e70 <_ZN14LoRA_Functions21composeDataReportNodeEv+0x1ec>)
-   b4d7c:	493f      	ldr	r1, [pc, #252]	; (b4e7c <_ZN14LoRA_Functions21composeDataReportNodeEv+0x1f8>)
-   b4d7e:	f7ff fa47 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
+   b4d5c:	f006 fd98 	bl	bb890 <__aeabi_i2d>
+   b4d60:	4680      	mov	r8, r0
+   b4d62:	6828      	ldr	r0, [r5, #0]
+   b4d64:	4689      	mov	r9, r1
+   b4d66:	f006 fd93 	bl	bb890 <__aeabi_i2d>
+   b4d6a:	4602      	mov	r2, r0
+   b4d6c:	460b      	mov	r3, r1
+   b4d6e:	4640      	mov	r0, r8
+   b4d70:	4649      	mov	r1, r9
+   b4d72:	f006 ff21 	bl	bbbb8 <__aeabi_ddiv>
+   b4d76:	4b42      	ldr	r3, [pc, #264]	; (b4e80 <_ZN14LoRA_Functions21composeDataReportNodeEv+0x1f4>)
+   b4d78:	2200      	movs	r2, #0
+   b4d7a:	f006 fdf3 	bl	bb964 <__aeabi_dmul>
+   b4d7e:	4602      	mov	r2, r0
+   b4d80:	460b      	mov	r3, r1
+   b4d82:	483d      	ldr	r0, [pc, #244]	; (b4e78 <_ZN14LoRA_Functions21composeDataReportNodeEv+0x1ec>)
+   b4d84:	493f      	ldr	r1, [pc, #252]	; (b4e84 <_ZN14LoRA_Functions21composeDataReportNodeEv+0x1f8>)
+   b4d86:	f7ff fa43 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
 		digitalWrite(BLUE_LED, LOW);
-   b4d82:	4630      	mov	r0, r6
-   b4d84:	4621      	mov	r1, r4
-   b4d86:	f006 fb30 	bl	bb3ea <digitalWrite>
+   b4d8a:	4630      	mov	r0, r6
+   b4d8c:	4621      	mov	r1, r4
+   b4d8e:	f006 fb2c 	bl	bb3ea <digitalWrite>
 		return true;
-   b4d8a:	4638      	mov	r0, r7
+   b4d92:	4638      	mov	r0, r7
 	else  {
 		Log.info("Node %d - Data report send to gateway %d failed  - Unknown - success rate %4.2f", sysStatus.get_nodeNumber(), GATEWAY_ADDRESS, ((success * 1.0)/ attempts)*100.0);
 	}
 	digitalWrite(BLUE_LED, LOW);
 	return false;
 }
-   b4d8c:	b003      	add	sp, #12
-   b4d8e:	e8bd 83f0 	ldmia.w	sp!, {r4, r5, r6, r7, r8, r9, pc}
+   b4d94:	b003      	add	sp, #12
+   b4d96:	e8bd 83f0 	ldmia.w	sp!, {r4, r5, r6, r7, r8, r9, pc}
 	else if (result == RH_ROUTER_ERROR_NO_ROUTE) {
-   b4d92:	2802      	cmp	r0, #2
-   b4d94:	d125      	bne.n	b4de2 <_ZN14LoRA_Functions21composeDataReportNodeEv+0x15e>
+   b4d9a:	2802      	cmp	r0, #2
+   b4d9c:	d125      	bne.n	b4dea <_ZN14LoRA_Functions21composeDataReportNodeEv+0x15e>
         Log.info("Node %d - Data report send to gateway %d failed - No Route - success rate %4.2f", sysStatus.get_nodeNumber(), GATEWAY_ADDRESS, ((success * 1.0)/ attempts)*100.0);
-   b4d96:	f000 fad1 	bl	b533c <_ZN13sysStatusData8instanceEv>
-   b4d9a:	f000 fb8a 	bl	b54b2 <_ZNK13sysStatusData14get_nodeNumberEv>
-   b4d9e:	4604      	mov	r4, r0
-   b4da0:	f8d8 0000 	ldr.w	r0, [r8]
-   b4da4:	f006 fd74 	bl	bb890 <__aeabi_i2d>
-   b4da8:	4680      	mov	r8, r0
-   b4daa:	6828      	ldr	r0, [r5, #0]
-   b4dac:	4689      	mov	r9, r1
-   b4dae:	f006 fd6f 	bl	bb890 <__aeabi_i2d>
-   b4db2:	4602      	mov	r2, r0
-   b4db4:	460b      	mov	r3, r1
-   b4db6:	4640      	mov	r0, r8
-   b4db8:	4649      	mov	r1, r9
-   b4dba:	f006 fefd 	bl	bbbb8 <__aeabi_ddiv>
-   b4dbe:	4b2e      	ldr	r3, [pc, #184]	; (b4e78 <_ZN14LoRA_Functions21composeDataReportNodeEv+0x1f4>)
-   b4dc0:	2200      	movs	r2, #0
-   b4dc2:	f006 fdcf 	bl	bb964 <__aeabi_dmul>
-   b4dc6:	e9cd 0100 	strd	r0, r1, [sp]
-   b4dca:	492d      	ldr	r1, [pc, #180]	; (b4e80 <_ZN14LoRA_Functions21composeDataReportNodeEv+0x1fc>)
-   b4dcc:	2300      	movs	r3, #0
-   b4dce:	4622      	mov	r2, r4
+   b4d9e:	f000 facd 	bl	b533c <_ZN13sysStatusData8instanceEv>
+   b4da2:	f000 fb86 	bl	b54b2 <_ZNK13sysStatusData14get_nodeNumberEv>
+   b4da6:	4604      	mov	r4, r0
+   b4da8:	f8d8 0000 	ldr.w	r0, [r8]
+   b4dac:	f006 fd70 	bl	bb890 <__aeabi_i2d>
+   b4db0:	4680      	mov	r8, r0
+   b4db2:	6828      	ldr	r0, [r5, #0]
+   b4db4:	4689      	mov	r9, r1
+   b4db6:	f006 fd6b 	bl	bb890 <__aeabi_i2d>
+   b4dba:	4602      	mov	r2, r0
+   b4dbc:	460b      	mov	r3, r1
+   b4dbe:	4640      	mov	r0, r8
+   b4dc0:	4649      	mov	r1, r9
+   b4dc2:	f006 fef9 	bl	bbbb8 <__aeabi_ddiv>
+   b4dc6:	4b2e      	ldr	r3, [pc, #184]	; (b4e80 <_ZN14LoRA_Functions21composeDataReportNodeEv+0x1f4>)
+   b4dc8:	2200      	movs	r2, #0
+   b4dca:	f006 fdcb 	bl	bb964 <__aeabi_dmul>
+   b4dce:	e9cd 0100 	strd	r0, r1, [sp]
+   b4dd2:	492d      	ldr	r1, [pc, #180]	; (b4e88 <_ZN14LoRA_Functions21composeDataReportNodeEv+0x1fc>)
+   b4dd4:	2300      	movs	r3, #0
+   b4dd6:	4622      	mov	r2, r4
 		Log.info("Node %d - Data report send to gateway %d failed  - Unknown - success rate %4.2f", sysStatus.get_nodeNumber(), GATEWAY_ADDRESS, ((success * 1.0)/ attempts)*100.0);
-   b4dd0:	4827      	ldr	r0, [pc, #156]	; (b4e70 <_ZN14LoRA_Functions21composeDataReportNodeEv+0x1ec>)
-   b4dd2:	f7ff fa1d 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
+   b4dd8:	4827      	ldr	r0, [pc, #156]	; (b4e78 <_ZN14LoRA_Functions21composeDataReportNodeEv+0x1ec>)
+   b4dda:	f7ff fa19 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
 	digitalWrite(BLUE_LED, LOW);
-   b4dd6:	4630      	mov	r0, r6
-   b4dd8:	2100      	movs	r1, #0
-   b4dda:	f006 fb06 	bl	bb3ea <digitalWrite>
+   b4dde:	4630      	mov	r0, r6
+   b4de0:	2100      	movs	r1, #0
+   b4de2:	f006 fb02 	bl	bb3ea <digitalWrite>
 	return false;
-   b4dde:	2000      	movs	r0, #0
-   b4de0:	e7d4      	b.n	b4d8c <_ZN14LoRA_Functions21composeDataReportNodeEv+0x108>
+   b4de6:	2000      	movs	r0, #0
+   b4de8:	e7d4      	b.n	b4d94 <_ZN14LoRA_Functions21composeDataReportNodeEv+0x108>
     else if (result == RH_ROUTER_ERROR_UNABLE_TO_DELIVER) {
-   b4de2:	2805      	cmp	r0, #5
-   b4de4:	d11d      	bne.n	b4e22 <_ZN14LoRA_Functions21composeDataReportNodeEv+0x19e>
+   b4dea:	2805      	cmp	r0, #5
+   b4dec:	d11d      	bne.n	b4e2a <_ZN14LoRA_Functions21composeDataReportNodeEv+0x19e>
         Log.info("Node %d - Data report send to gateway %d failed - Unable to Deliver - success rate %4.2f", sysStatus.get_nodeNumber(), GATEWAY_ADDRESS, ((success * 1.0)/ attempts)*100.0);
-   b4de6:	f000 faa9 	bl	b533c <_ZN13sysStatusData8instanceEv>
-   b4dea:	f000 fb62 	bl	b54b2 <_ZNK13sysStatusData14get_nodeNumberEv>
-   b4dee:	4604      	mov	r4, r0
-   b4df0:	f8d8 0000 	ldr.w	r0, [r8]
-   b4df4:	f006 fd4c 	bl	bb890 <__aeabi_i2d>
-   b4df8:	4680      	mov	r8, r0
-   b4dfa:	6828      	ldr	r0, [r5, #0]
-   b4dfc:	4689      	mov	r9, r1
-   b4dfe:	f006 fd47 	bl	bb890 <__aeabi_i2d>
-   b4e02:	4602      	mov	r2, r0
-   b4e04:	460b      	mov	r3, r1
-   b4e06:	4640      	mov	r0, r8
-   b4e08:	4649      	mov	r1, r9
-   b4e0a:	f006 fed5 	bl	bbbb8 <__aeabi_ddiv>
-   b4e0e:	4b1a      	ldr	r3, [pc, #104]	; (b4e78 <_ZN14LoRA_Functions21composeDataReportNodeEv+0x1f4>)
-   b4e10:	2200      	movs	r2, #0
-   b4e12:	f006 fda7 	bl	bb964 <__aeabi_dmul>
-   b4e16:	2300      	movs	r3, #0
-   b4e18:	e9cd 0100 	strd	r0, r1, [sp]
-   b4e1c:	4622      	mov	r2, r4
-   b4e1e:	4919      	ldr	r1, [pc, #100]	; (b4e84 <_ZN14LoRA_Functions21composeDataReportNodeEv+0x200>)
-   b4e20:	e7d6      	b.n	b4dd0 <_ZN14LoRA_Functions21composeDataReportNodeEv+0x14c>
+   b4dee:	f000 faa5 	bl	b533c <_ZN13sysStatusData8instanceEv>
+   b4df2:	f000 fb5e 	bl	b54b2 <_ZNK13sysStatusData14get_nodeNumberEv>
+   b4df6:	4604      	mov	r4, r0
+   b4df8:	f8d8 0000 	ldr.w	r0, [r8]
+   b4dfc:	f006 fd48 	bl	bb890 <__aeabi_i2d>
+   b4e00:	4680      	mov	r8, r0
+   b4e02:	6828      	ldr	r0, [r5, #0]
+   b4e04:	4689      	mov	r9, r1
+   b4e06:	f006 fd43 	bl	bb890 <__aeabi_i2d>
+   b4e0a:	4602      	mov	r2, r0
+   b4e0c:	460b      	mov	r3, r1
+   b4e0e:	4640      	mov	r0, r8
+   b4e10:	4649      	mov	r1, r9
+   b4e12:	f006 fed1 	bl	bbbb8 <__aeabi_ddiv>
+   b4e16:	4b1a      	ldr	r3, [pc, #104]	; (b4e80 <_ZN14LoRA_Functions21composeDataReportNodeEv+0x1f4>)
+   b4e18:	2200      	movs	r2, #0
+   b4e1a:	f006 fda3 	bl	bb964 <__aeabi_dmul>
+   b4e1e:	2300      	movs	r3, #0
+   b4e20:	e9cd 0100 	strd	r0, r1, [sp]
+   b4e24:	4622      	mov	r2, r4
+   b4e26:	4919      	ldr	r1, [pc, #100]	; (b4e8c <_ZN14LoRA_Functions21composeDataReportNodeEv+0x200>)
+   b4e28:	e7d6      	b.n	b4dd8 <_ZN14LoRA_Functions21composeDataReportNodeEv+0x14c>
 		Log.info("Node %d - Data report send to gateway %d failed  - Unknown - success rate %4.2f", sysStatus.get_nodeNumber(), GATEWAY_ADDRESS, ((success * 1.0)/ attempts)*100.0);
-   b4e22:	f000 fa8b 	bl	b533c <_ZN13sysStatusData8instanceEv>
-   b4e26:	f000 fb44 	bl	b54b2 <_ZNK13sysStatusData14get_nodeNumberEv>
-   b4e2a:	4604      	mov	r4, r0
-   b4e2c:	f8d8 0000 	ldr.w	r0, [r8]
-   b4e30:	f006 fd2e 	bl	bb890 <__aeabi_i2d>
-   b4e34:	4680      	mov	r8, r0
-   b4e36:	6828      	ldr	r0, [r5, #0]
-   b4e38:	4689      	mov	r9, r1
-   b4e3a:	f006 fd29 	bl	bb890 <__aeabi_i2d>
-   b4e3e:	4602      	mov	r2, r0
-   b4e40:	460b      	mov	r3, r1
-   b4e42:	4640      	mov	r0, r8
-   b4e44:	4649      	mov	r1, r9
-   b4e46:	f006 feb7 	bl	bbbb8 <__aeabi_ddiv>
-   b4e4a:	4b0b      	ldr	r3, [pc, #44]	; (b4e78 <_ZN14LoRA_Functions21composeDataReportNodeEv+0x1f4>)
-   b4e4c:	2200      	movs	r2, #0
-   b4e4e:	f006 fd89 	bl	bb964 <__aeabi_dmul>
-   b4e52:	2300      	movs	r3, #0
-   b4e54:	e9cd 0100 	strd	r0, r1, [sp]
-   b4e58:	4622      	mov	r2, r4
-   b4e5a:	490b      	ldr	r1, [pc, #44]	; (b4e88 <_ZN14LoRA_Functions21composeDataReportNodeEv+0x204>)
-   b4e5c:	e7b8      	b.n	b4dd0 <_ZN14LoRA_Functions21composeDataReportNodeEv+0x14c>
-   b4e5e:	bf00      	nop
-   b4e60:	000bcb20 	.word	0x000bcb20
-   b4e64:	2003df9c 	.word	0x2003df9c
-   b4e68:	2003dfa0 	.word	0x2003dfa0
-   b4e6c:	000bc6e9 	.word	0x000bc6e9
-   b4e70:	2003e658 	.word	0x2003e658
-   b4e74:	2003e1cc 	.word	0x2003e1cc
-   b4e78:	40590000 	.word	0x40590000
-   b4e7c:	000bc707 	.word	0x000bc707
-   b4e80:	000bc732 	.word	0x000bc732
-   b4e84:	000bc782 	.word	0x000bc782
-   b4e88:	000bc7db 	.word	0x000bc7db
-   b4e8c:	2003df94 	.word	0x2003df94
-   b4e90:	2003df98 	.word	0x2003df98
+   b4e2a:	f000 fa87 	bl	b533c <_ZN13sysStatusData8instanceEv>
+   b4e2e:	f000 fb40 	bl	b54b2 <_ZNK13sysStatusData14get_nodeNumberEv>
+   b4e32:	4604      	mov	r4, r0
+   b4e34:	f8d8 0000 	ldr.w	r0, [r8]
+   b4e38:	f006 fd2a 	bl	bb890 <__aeabi_i2d>
+   b4e3c:	4680      	mov	r8, r0
+   b4e3e:	6828      	ldr	r0, [r5, #0]
+   b4e40:	4689      	mov	r9, r1
+   b4e42:	f006 fd25 	bl	bb890 <__aeabi_i2d>
+   b4e46:	4602      	mov	r2, r0
+   b4e48:	460b      	mov	r3, r1
+   b4e4a:	4640      	mov	r0, r8
+   b4e4c:	4649      	mov	r1, r9
+   b4e4e:	f006 feb3 	bl	bbbb8 <__aeabi_ddiv>
+   b4e52:	4b0b      	ldr	r3, [pc, #44]	; (b4e80 <_ZN14LoRA_Functions21composeDataReportNodeEv+0x1f4>)
+   b4e54:	2200      	movs	r2, #0
+   b4e56:	f006 fd85 	bl	bb964 <__aeabi_dmul>
+   b4e5a:	2300      	movs	r3, #0
+   b4e5c:	e9cd 0100 	strd	r0, r1, [sp]
+   b4e60:	4622      	mov	r2, r4
+   b4e62:	490b      	ldr	r1, [pc, #44]	; (b4e90 <_ZN14LoRA_Functions21composeDataReportNodeEv+0x204>)
+   b4e64:	e7b8      	b.n	b4dd8 <_ZN14LoRA_Functions21composeDataReportNodeEv+0x14c>
+   b4e66:	bf00      	nop
+   b4e68:	000bcb20 	.word	0x000bcb20
+   b4e6c:	2003df9c 	.word	0x2003df9c
+   b4e70:	2003dfa0 	.word	0x2003dfa0
+   b4e74:	000bc6eb 	.word	0x000bc6eb
+   b4e78:	2003e658 	.word	0x2003e658
+   b4e7c:	2003e1cc 	.word	0x2003e1cc
+   b4e80:	40590000 	.word	0x40590000
+   b4e84:	000bc709 	.word	0x000bc709
+   b4e88:	000bc734 	.word	0x000bc734
+   b4e8c:	000bc784 	.word	0x000bc784
+   b4e90:	000bc7dd 	.word	0x000bc7dd
+   b4e94:	2003df94 	.word	0x2003df94
+   b4e98:	2003df98 	.word	0x2003df98
 
-000b4e94 <_ZN14LoRA_Functions34receiveAcknowledmentDataReportNodeEv>:
+000b4e9c <_ZN14LoRA_Functions34receiveAcknowledmentDataReportNodeEv>:
 
 bool LoRA_Functions::receiveAcknowledmentDataReportNode() {
-   b4e94:	b508      	push	{r3, lr}
+   b4e9c:	b508      	push	{r3, lr}
 		
 	Log.info("Data report acknowledged for message %d", buf[8]);
-   b4e96:	4b04      	ldr	r3, [pc, #16]	; (b4ea8 <_ZN14LoRA_Functions34receiveAcknowledmentDataReportNodeEv+0x14>)
-   b4e98:	4904      	ldr	r1, [pc, #16]	; (b4eac <_ZN14LoRA_Functions34receiveAcknowledmentDataReportNodeEv+0x18>)
-   b4e9a:	7a1a      	ldrb	r2, [r3, #8]
-   b4e9c:	4804      	ldr	r0, [pc, #16]	; (b4eb0 <_ZN14LoRA_Functions34receiveAcknowledmentDataReportNodeEv+0x1c>)
-   b4e9e:	f7ff f9b7 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
+   b4e9e:	4b04      	ldr	r3, [pc, #16]	; (b4eb0 <_ZN14LoRA_Functions34receiveAcknowledmentDataReportNodeEv+0x14>)
+   b4ea0:	4904      	ldr	r1, [pc, #16]	; (b4eb4 <_ZN14LoRA_Functions34receiveAcknowledmentDataReportNodeEv+0x18>)
+   b4ea2:	7a1a      	ldrb	r2, [r3, #8]
+   b4ea4:	4804      	ldr	r0, [pc, #16]	; (b4eb8 <_ZN14LoRA_Functions34receiveAcknowledmentDataReportNodeEv+0x1c>)
+   b4ea6:	f7ff f9b3 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
 	return true;
 }
-   b4ea2:	2001      	movs	r0, #1
-   b4ea4:	bd08      	pop	{r3, pc}
-   b4ea6:	bf00      	nop
-   b4ea8:	2003dfa0 	.word	0x2003dfa0
-   b4eac:	000bc82b 	.word	0x000bc82b
-   b4eb0:	2003e658 	.word	0x2003e658
+   b4eaa:	2001      	movs	r0, #1
+   b4eac:	bd08      	pop	{r3, pc}
+   b4eae:	bf00      	nop
+   b4eb0:	2003dfa0 	.word	0x2003dfa0
+   b4eb4:	000bc82d 	.word	0x000bc82d
+   b4eb8:	2003e658 	.word	0x2003e658
 
-000b4eb4 <_ZN14LoRA_Functions23composeJoinRequesttNodeEv>:
+000b4ebc <_ZN14LoRA_Functions23composeJoinRequesttNodeEv>:
 
 bool LoRA_Functions::composeJoinRequesttNode() {
-   b4eb4:	b570      	push	{r4, r5, r6, lr}
+   b4ebc:	b570      	push	{r4, r5, r6, lr}
 
 	digitalWrite(BLUE_LED,HIGH);
-   b4eb6:	4b2c      	ldr	r3, [pc, #176]	; (b4f68 <_ZN14LoRA_Functions23composeJoinRequesttNodeEv+0xb4>)
+   b4ebe:	4b2c      	ldr	r3, [pc, #176]	; (b4f70 <_ZN14LoRA_Functions23composeJoinRequesttNodeEv+0xb4>)
 
 	char deviceID[25];
 	System.deviceID().toCharArray(deviceID, 25);					// the deviceID is 24 charcters long
 
 	buf[0] = highByte(sysStatus.get_magicNumber());					// Needs to equal 128
-   b4eb8:	4c2c      	ldr	r4, [pc, #176]	; (b4f6c <_ZN14LoRA_Functions23composeJoinRequesttNodeEv+0xb8>)
+   b4ec0:	4c2c      	ldr	r4, [pc, #176]	; (b4f74 <_ZN14LoRA_Functions23composeJoinRequesttNodeEv+0xb8>)
 	digitalWrite(BLUE_LED,HIGH);
-   b4eba:	881e      	ldrh	r6, [r3, #0]
+   b4ec2:	881e      	ldrh	r6, [r3, #0]
 bool LoRA_Functions::composeJoinRequesttNode() {
-   b4ebc:	b08e      	sub	sp, #56	; 0x38
+   b4ec4:	b08e      	sub	sp, #56	; 0x38
 	digitalWrite(BLUE_LED,HIGH);
-   b4ebe:	2101      	movs	r1, #1
-   b4ec0:	4630      	mov	r0, r6
-   b4ec2:	f006 fa92 	bl	bb3ea <digitalWrite>
-   b4ec6:	a803      	add	r0, sp, #12
-   b4ec8:	f003 fc62 	bl	b8790 <spark_deviceID>
+   b4ec6:	2101      	movs	r1, #1
+   b4ec8:	4630      	mov	r0, r6
+   b4eca:	f006 fa8e 	bl	bb3ea <digitalWrite>
+   b4ece:	a803      	add	r0, sp, #12
+   b4ed0:	f003 fc5e 	bl	b8790 <spark_deviceID>
 		{getBytes((unsigned char *)buf, bufsize, index);}
-   b4ecc:	2300      	movs	r3, #0
-   b4ece:	2219      	movs	r2, #25
-   b4ed0:	a907      	add	r1, sp, #28
-   b4ed2:	a803      	add	r0, sp, #12
-   b4ed4:	f005 fe0d 	bl	baaf2 <_ZNK6String8getBytesEPhjj>
+   b4ed4:	2300      	movs	r3, #0
+   b4ed6:	2219      	movs	r2, #25
+   b4ed8:	a907      	add	r1, sp, #28
+   b4eda:	a803      	add	r0, sp, #12
+   b4edc:	f005 fe09 	bl	baaf2 <_ZNK6String8getBytesEPhjj>
 	System.deviceID().toCharArray(deviceID, 25);					// the deviceID is 24 charcters long
-   b4ed8:	a803      	add	r0, sp, #12
-   b4eda:	f005 fd69 	bl	ba9b0 <_ZN6StringD1Ev>
+   b4ee0:	a803      	add	r0, sp, #12
+   b4ee2:	f005 fd65 	bl	ba9b0 <_ZN6StringD1Ev>
 	buf[0] = highByte(sysStatus.get_magicNumber());					// Needs to equal 128
-   b4ede:	f000 fa2d 	bl	b533c <_ZN13sysStatusData8instanceEv>
-   b4ee2:	f000 fb4d 	bl	b5580 <_ZNK13sysStatusData15get_magicNumberEv>
-   b4ee6:	0a00      	lsrs	r0, r0, #8
-   b4ee8:	7020      	strb	r0, [r4, #0]
+   b4ee6:	f000 fa29 	bl	b533c <_ZN13sysStatusData8instanceEv>
+   b4eea:	f000 fb49 	bl	b5580 <_ZNK13sysStatusData15get_magicNumberEv>
+   b4eee:	0a00      	lsrs	r0, r0, #8
+   b4ef0:	7020      	strb	r0, [r4, #0]
 	buf[1] = lowByte(sysStatus.get_magicNumber());					// Needs to equal 128
-   b4eea:	f000 fa27 	bl	b533c <_ZN13sysStatusData8instanceEv>
-   b4eee:	f000 fb47 	bl	b5580 <_ZNK13sysStatusData15get_magicNumberEv>
+   b4ef2:	f000 fa23 	bl	b533c <_ZN13sysStatusData8instanceEv>
+   b4ef6:	f000 fb43 	bl	b5580 <_ZNK13sysStatusData15get_magicNumberEv>
 	for (uint8_t i=0; i < sizeof(deviceID); i++) {
 		buf[i+2] = deviceID[i];
-   b4ef2:	ad0d      	add	r5, sp, #52	; 0x34
+   b4efa:	ad0d      	add	r5, sp, #52	; 0x34
 	buf[1] = lowByte(sysStatus.get_magicNumber());					// Needs to equal 128
-   b4ef4:	7060      	strb	r0, [r4, #1]
+   b4efc:	7060      	strb	r0, [r4, #1]
 		buf[i+2] = deviceID[i];
-   b4ef6:	aa07      	add	r2, sp, #28
-   b4ef8:	1ca3      	adds	r3, r4, #2
-   b4efa:	4614      	mov	r4, r2
-   b4efc:	cc03      	ldmia	r4!, {r0, r1}
-   b4efe:	42ac      	cmp	r4, r5
-   b4f00:	6018      	str	r0, [r3, #0]
-   b4f02:	6059      	str	r1, [r3, #4]
-   b4f04:	4622      	mov	r2, r4
-   b4f06:	f103 0308 	add.w	r3, r3, #8
-   b4f0a:	d1f6      	bne.n	b4efa <_ZN14LoRA_Functions23composeJoinRequesttNodeEv+0x46>
-   b4f0c:	7822      	ldrb	r2, [r4, #0]
-   b4f0e:	701a      	strb	r2, [r3, #0]
+   b4efe:	aa07      	add	r2, sp, #28
+   b4f00:	1ca3      	adds	r3, r4, #2
+   b4f02:	4614      	mov	r4, r2
+   b4f04:	cc03      	ldmia	r4!, {r0, r1}
+   b4f06:	42ac      	cmp	r4, r5
+   b4f08:	6018      	str	r0, [r3, #0]
+   b4f0a:	6059      	str	r1, [r3, #4]
+   b4f0c:	4622      	mov	r2, r4
+   b4f0e:	f103 0308 	add.w	r3, r3, #8
+   b4f12:	d1f6      	bne.n	b4f02 <_ZN14LoRA_Functions23composeJoinRequesttNodeEv+0x46>
+   b4f14:	7822      	ldrb	r2, [r4, #0]
+   b4f16:	701a      	strb	r2, [r3, #0]
 	}
 
 	// Send a message to manager_server
   	// A route to the destination will be automatically discovered.
 	Log.info("Sending join request because %s",(sysStatus.get_nodeNumber() > 10) ? "a NodeNumber is needed" : "the clock is not set");
-   b4f10:	f000 fa14 	bl	b533c <_ZN13sysStatusData8instanceEv>
-   b4f14:	f000 facd 	bl	b54b2 <_ZNK13sysStatusData14get_nodeNumberEv>
-   b4f18:	4915      	ldr	r1, [pc, #84]	; (b4f70 <_ZN14LoRA_Functions23composeJoinRequesttNodeEv+0xbc>)
-   b4f1a:	4a16      	ldr	r2, [pc, #88]	; (b4f74 <_ZN14LoRA_Functions23composeJoinRequesttNodeEv+0xc0>)
+   b4f18:	f000 fa10 	bl	b533c <_ZN13sysStatusData8instanceEv>
+   b4f1c:	f000 fac9 	bl	b54b2 <_ZNK13sysStatusData14get_nodeNumberEv>
+   b4f20:	4915      	ldr	r1, [pc, #84]	; (b4f78 <_ZN14LoRA_Functions23composeJoinRequesttNodeEv+0xbc>)
+   b4f22:	4a16      	ldr	r2, [pc, #88]	; (b4f7c <_ZN14LoRA_Functions23composeJoinRequesttNodeEv+0xc0>)
 	if (manager.sendtoWait(buf, 27, GATEWAY_ADDRESS, JOIN_REQ) == RH_ROUTER_ERROR_NONE) {
-   b4f1c:	2401      	movs	r4, #1
+   b4f24:	2401      	movs	r4, #1
 	Log.info("Sending join request because %s",(sysStatus.get_nodeNumber() > 10) ? "a NodeNumber is needed" : "the clock is not set");
-   b4f1e:	280a      	cmp	r0, #10
-   b4f20:	bf88      	it	hi
-   b4f22:	460a      	movhi	r2, r1
-   b4f24:	4914      	ldr	r1, [pc, #80]	; (b4f78 <_ZN14LoRA_Functions23composeJoinRequesttNodeEv+0xc4>)
-   b4f26:	4815      	ldr	r0, [pc, #84]	; (b4f7c <_ZN14LoRA_Functions23composeJoinRequesttNodeEv+0xc8>)
-   b4f28:	f7ff f972 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
+   b4f26:	280a      	cmp	r0, #10
+   b4f28:	bf88      	it	hi
+   b4f2a:	460a      	movhi	r2, r1
+   b4f2c:	4914      	ldr	r1, [pc, #80]	; (b4f80 <_ZN14LoRA_Functions23composeJoinRequesttNodeEv+0xc4>)
+   b4f2e:	4815      	ldr	r0, [pc, #84]	; (b4f84 <_ZN14LoRA_Functions23composeJoinRequesttNodeEv+0xc8>)
+   b4f30:	f7ff f96e 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
 	if (manager.sendtoWait(buf, 27, GATEWAY_ADDRESS, JOIN_REQ) == RH_ROUTER_ERROR_NONE) {
-   b4f2c:	490f      	ldr	r1, [pc, #60]	; (b4f6c <_ZN14LoRA_Functions23composeJoinRequesttNodeEv+0xb8>)
-   b4f2e:	4814      	ldr	r0, [pc, #80]	; (b4f80 <_ZN14LoRA_Functions23composeJoinRequesttNodeEv+0xcc>)
-   b4f30:	9400      	str	r4, [sp, #0]
-   b4f32:	2300      	movs	r3, #0
-   b4f34:	221b      	movs	r2, #27
-   b4f36:	f002 f8ed 	bl	b7114 <_ZN6RHMesh10sendtoWaitEPhhhh>
-   b4f3a:	4605      	mov	r5, r0
-   b4f3c:	b950      	cbnz	r0, b4f54 <_ZN14LoRA_Functions23composeJoinRequesttNodeEv+0xa0>
+   b4f34:	490f      	ldr	r1, [pc, #60]	; (b4f74 <_ZN14LoRA_Functions23composeJoinRequesttNodeEv+0xb8>)
+   b4f36:	4814      	ldr	r0, [pc, #80]	; (b4f88 <_ZN14LoRA_Functions23composeJoinRequesttNodeEv+0xcc>)
+   b4f38:	9400      	str	r4, [sp, #0]
+   b4f3a:	2300      	movs	r3, #0
+   b4f3c:	221b      	movs	r2, #27
+   b4f3e:	f002 f8e9 	bl	b7114 <_ZN6RHMesh10sendtoWaitEPhhhh>
+   b4f42:	4605      	mov	r5, r0
+   b4f44:	b950      	cbnz	r0, b4f5c <_ZN14LoRA_Functions23composeJoinRequesttNodeEv+0xa0>
 		// It has been reliably delivered to the next node.
 		// Now wait for a reply from the ultimate server 
 		Log.info("Data report send to gateway successfully");
-   b4f3e:	4911      	ldr	r1, [pc, #68]	; (b4f84 <_ZN14LoRA_Functions23composeJoinRequesttNodeEv+0xd0>)
-   b4f40:	480e      	ldr	r0, [pc, #56]	; (b4f7c <_ZN14LoRA_Functions23composeJoinRequesttNodeEv+0xc8>)
-   b4f42:	f7ff f965 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
+   b4f46:	4911      	ldr	r1, [pc, #68]	; (b4f8c <_ZN14LoRA_Functions23composeJoinRequesttNodeEv+0xd0>)
+   b4f48:	480e      	ldr	r0, [pc, #56]	; (b4f84 <_ZN14LoRA_Functions23composeJoinRequesttNodeEv+0xc8>)
+   b4f4a:	f7ff f961 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
 		digitalWrite(BLUE_LED, LOW);
-   b4f46:	4630      	mov	r0, r6
-   b4f48:	4629      	mov	r1, r5
-   b4f4a:	f006 fa4e 	bl	bb3ea <digitalWrite>
+   b4f4e:	4630      	mov	r0, r6
+   b4f50:	4629      	mov	r1, r5
+   b4f52:	f006 fa4a 	bl	bb3ea <digitalWrite>
 		return true;
-   b4f4e:	4620      	mov	r0, r4
+   b4f56:	4620      	mov	r0, r4
 	else {
 		Log.info("Data report send to Gateway failed");
 		digitalWrite(BLUE_LED, LOW);
 		return false;
 	}
 }
-   b4f50:	b00e      	add	sp, #56	; 0x38
-   b4f52:	bd70      	pop	{r4, r5, r6, pc}
+   b4f58:	b00e      	add	sp, #56	; 0x38
+   b4f5a:	bd70      	pop	{r4, r5, r6, pc}
 		Log.info("Data report send to Gateway failed");
-   b4f54:	490c      	ldr	r1, [pc, #48]	; (b4f88 <_ZN14LoRA_Functions23composeJoinRequesttNodeEv+0xd4>)
-   b4f56:	4809      	ldr	r0, [pc, #36]	; (b4f7c <_ZN14LoRA_Functions23composeJoinRequesttNodeEv+0xc8>)
-   b4f58:	f7ff f95a 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
+   b4f5c:	490c      	ldr	r1, [pc, #48]	; (b4f90 <_ZN14LoRA_Functions23composeJoinRequesttNodeEv+0xd4>)
+   b4f5e:	4809      	ldr	r0, [pc, #36]	; (b4f84 <_ZN14LoRA_Functions23composeJoinRequesttNodeEv+0xc8>)
+   b4f60:	f7ff f956 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
 		digitalWrite(BLUE_LED, LOW);
-   b4f5c:	4630      	mov	r0, r6
-   b4f5e:	2100      	movs	r1, #0
-   b4f60:	f006 fa43 	bl	bb3ea <digitalWrite>
+   b4f64:	4630      	mov	r0, r6
+   b4f66:	2100      	movs	r1, #0
+   b4f68:	f006 fa3f 	bl	bb3ea <digitalWrite>
 		return false;
-   b4f64:	2000      	movs	r0, #0
-   b4f66:	e7f3      	b.n	b4f50 <_ZN14LoRA_Functions23composeJoinRequesttNodeEv+0x9c>
-   b4f68:	000bcb20 	.word	0x000bcb20
-   b4f6c:	2003dfa0 	.word	0x2003dfa0
-   b4f70:	000bc853 	.word	0x000bc853
-   b4f74:	000bc86a 	.word	0x000bc86a
-   b4f78:	000bc87f 	.word	0x000bc87f
-   b4f7c:	2003e658 	.word	0x2003e658
-   b4f80:	2003e1cc 	.word	0x2003e1cc
-   b4f84:	000bc89f 	.word	0x000bc89f
-   b4f88:	000bc8c8 	.word	0x000bc8c8
+   b4f6c:	2000      	movs	r0, #0
+   b4f6e:	e7f3      	b.n	b4f58 <_ZN14LoRA_Functions23composeJoinRequesttNodeEv+0x9c>
+   b4f70:	000bcb20 	.word	0x000bcb20
+   b4f74:	2003dfa0 	.word	0x2003dfa0
+   b4f78:	000bc855 	.word	0x000bc855
+   b4f7c:	000bc86c 	.word	0x000bc86c
+   b4f80:	000bc881 	.word	0x000bc881
+   b4f84:	2003e658 	.word	0x2003e658
+   b4f88:	2003e1cc 	.word	0x2003e1cc
+   b4f8c:	000bc8a1 	.word	0x000bc8a1
+   b4f90:	000bc8ca 	.word	0x000bc8ca
 
-000b4f8c <_ZN14LoRA_Functions35receiveAcknowledmentJoinRequestNodeEv>:
+000b4f94 <_ZN14LoRA_Functions35receiveAcknowledmentJoinRequestNodeEv>:
 
 bool LoRA_Functions::receiveAcknowledmentJoinRequestNode() {
-   b4f8c:	b508      	push	{r3, lr}
+   b4f94:	b508      	push	{r3, lr}
 
 	Log.info("In receive Join Acknowledge");
-   b4f8e:	4911      	ldr	r1, [pc, #68]	; (b4fd4 <_ZN14LoRA_Functions35receiveAcknowledmentJoinRequestNodeEv+0x48>)
-   b4f90:	4811      	ldr	r0, [pc, #68]	; (b4fd8 <_ZN14LoRA_Functions35receiveAcknowledmentJoinRequestNodeEv+0x4c>)
-   b4f92:	f7ff f93d 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
+   b4f96:	4911      	ldr	r1, [pc, #68]	; (b4fdc <_ZN14LoRA_Functions35receiveAcknowledmentJoinRequestNodeEv+0x48>)
+   b4f98:	4811      	ldr	r0, [pc, #68]	; (b4fe0 <_ZN14LoRA_Functions35receiveAcknowledmentJoinRequestNodeEv+0x4c>)
+   b4f9a:	f7ff f939 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
 
 	if (sysStatus.get_nodeNumber() > 10) sysStatus.set_nodeNumber(buf[8]);
-   b4f96:	f000 f9d1 	bl	b533c <_ZN13sysStatusData8instanceEv>
-   b4f9a:	f000 fa8a 	bl	b54b2 <_ZNK13sysStatusData14get_nodeNumberEv>
-   b4f9e:	280a      	cmp	r0, #10
-   b4fa0:	d905      	bls.n	b4fae <_ZN14LoRA_Functions35receiveAcknowledmentJoinRequestNodeEv+0x22>
-   b4fa2:	f000 f9cb 	bl	b533c <_ZN13sysStatusData8instanceEv>
-   b4fa6:	4b0d      	ldr	r3, [pc, #52]	; (b4fdc <_ZN14LoRA_Functions35receiveAcknowledmentJoinRequestNodeEv+0x50>)
-   b4fa8:	7a19      	ldrb	r1, [r3, #8]
-   b4faa:	f000 fab9 	bl	b5520 <_ZN13sysStatusData14set_nodeNumberEh>
+   b4f9e:	f000 f9cd 	bl	b533c <_ZN13sysStatusData8instanceEv>
+   b4fa2:	f000 fa86 	bl	b54b2 <_ZNK13sysStatusData14get_nodeNumberEv>
+   b4fa6:	280a      	cmp	r0, #10
+   b4fa8:	d905      	bls.n	b4fb6 <_ZN14LoRA_Functions35receiveAcknowledmentJoinRequestNodeEv+0x22>
+   b4faa:	f000 f9c7 	bl	b533c <_ZN13sysStatusData8instanceEv>
+   b4fae:	4b0d      	ldr	r3, [pc, #52]	; (b4fe4 <_ZN14LoRA_Functions35receiveAcknowledmentJoinRequestNodeEv+0x50>)
+   b4fb0:	7a19      	ldrb	r1, [r3, #8]
+   b4fb2:	f000 fab5 	bl	b5520 <_ZN13sysStatusData14set_nodeNumberEh>
 	Log.info("Join request acknowledged and node ID set to %d", sysStatus.get_nodeNumber());
-   b4fae:	f000 f9c5 	bl	b533c <_ZN13sysStatusData8instanceEv>
-   b4fb2:	f000 fa7e 	bl	b54b2 <_ZNK13sysStatusData14get_nodeNumberEv>
-   b4fb6:	490a      	ldr	r1, [pc, #40]	; (b4fe0 <_ZN14LoRA_Functions35receiveAcknowledmentJoinRequestNodeEv+0x54>)
-   b4fb8:	4602      	mov	r2, r0
-   b4fba:	4807      	ldr	r0, [pc, #28]	; (b4fd8 <_ZN14LoRA_Functions35receiveAcknowledmentJoinRequestNodeEv+0x4c>)
-   b4fbc:	f7ff f928 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
+   b4fb6:	f000 f9c1 	bl	b533c <_ZN13sysStatusData8instanceEv>
+   b4fba:	f000 fa7a 	bl	b54b2 <_ZNK13sysStatusData14get_nodeNumberEv>
+   b4fbe:	490a      	ldr	r1, [pc, #40]	; (b4fe8 <_ZN14LoRA_Functions35receiveAcknowledmentJoinRequestNodeEv+0x54>)
+   b4fc0:	4602      	mov	r2, r0
+   b4fc2:	4807      	ldr	r0, [pc, #28]	; (b4fe0 <_ZN14LoRA_Functions35receiveAcknowledmentJoinRequestNodeEv+0x4c>)
+   b4fc4:	f7ff f924 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
 	manager.setThisAddress(sysStatus.get_nodeNumber());
-   b4fc0:	f000 f9bc 	bl	b533c <_ZN13sysStatusData8instanceEv>
-   b4fc4:	f000 fa75 	bl	b54b2 <_ZNK13sysStatusData14get_nodeNumberEv>
-   b4fc8:	4601      	mov	r1, r0
-   b4fca:	4806      	ldr	r0, [pc, #24]	; (b4fe4 <_ZN14LoRA_Functions35receiveAcknowledmentJoinRequestNodeEv+0x58>)
-   b4fcc:	f001 fe09 	bl	b6be2 <_ZN10RHDatagram14setThisAddressEh>
+   b4fc8:	f000 f9b8 	bl	b533c <_ZN13sysStatusData8instanceEv>
+   b4fcc:	f000 fa71 	bl	b54b2 <_ZNK13sysStatusData14get_nodeNumberEv>
+   b4fd0:	4601      	mov	r1, r0
+   b4fd2:	4806      	ldr	r0, [pc, #24]	; (b4fec <_ZN14LoRA_Functions35receiveAcknowledmentJoinRequestNodeEv+0x58>)
+   b4fd4:	f001 fe05 	bl	b6be2 <_ZN10RHDatagram14setThisAddressEh>
 	return true;
 }
-   b4fd0:	2001      	movs	r0, #1
-   b4fd2:	bd08      	pop	{r3, pc}
-   b4fd4:	000bc8eb 	.word	0x000bc8eb
-   b4fd8:	2003e658 	.word	0x2003e658
-   b4fdc:	2003dfa0 	.word	0x2003dfa0
-   b4fe0:	000bc907 	.word	0x000bc907
-   b4fe4:	2003e1d0 	.word	0x2003e1d0
+   b4fd8:	2001      	movs	r0, #1
+   b4fda:	bd08      	pop	{r3, pc}
+   b4fdc:	000bc8ed 	.word	0x000bc8ed
+   b4fe0:	2003e658 	.word	0x2003e658
+   b4fe4:	2003dfa0 	.word	0x2003dfa0
+   b4fe8:	000bc909 	.word	0x000bc909
+   b4fec:	2003e1d0 	.word	0x2003e1d0
 
-000b4fe8 <_ZN14LoRA_Functions22composeAlertReportNodeEv>:
+000b4ff0 <_ZN14LoRA_Functions22composeAlertReportNodeEv>:
 
 bool LoRA_Functions::composeAlertReportNode() {
 	digitalWrite(BLUE_LED,HIGH);
-   b4fe8:	4b1e      	ldr	r3, [pc, #120]	; (b5064 <_ZN14LoRA_Functions22composeAlertReportNodeEv+0x7c>)
+   b4ff0:	4b1e      	ldr	r3, [pc, #120]	; (b506c <_ZN14LoRA_Functions22composeAlertReportNodeEv+0x7c>)
 bool LoRA_Functions::composeAlertReportNode() {
-   b4fea:	b537      	push	{r0, r1, r2, r4, r5, lr}
+   b4ff2:	b537      	push	{r0, r1, r2, r4, r5, lr}
 	digitalWrite(BLUE_LED,HIGH);
-   b4fec:	881d      	ldrh	r5, [r3, #0]
+   b4ff4:	881d      	ldrh	r5, [r3, #0]
 
 	buf[0] = highByte(sysStatus.get_magicNumber());					// Magic Number
-   b4fee:	4c1e      	ldr	r4, [pc, #120]	; (b5068 <_ZN14LoRA_Functions22composeAlertReportNodeEv+0x80>)
+   b4ff6:	4c1e      	ldr	r4, [pc, #120]	; (b5070 <_ZN14LoRA_Functions22composeAlertReportNodeEv+0x80>)
 	digitalWrite(BLUE_LED,HIGH);
-   b4ff0:	2101      	movs	r1, #1
-   b4ff2:	4628      	mov	r0, r5
-   b4ff4:	f006 f9f9 	bl	bb3ea <digitalWrite>
+   b4ff8:	2101      	movs	r1, #1
+   b4ffa:	4628      	mov	r0, r5
+   b4ffc:	f006 f9f5 	bl	bb3ea <digitalWrite>
 	buf[0] = highByte(sysStatus.get_magicNumber());					// Magic Number
-   b4ff8:	f000 f9a0 	bl	b533c <_ZN13sysStatusData8instanceEv>
-   b4ffc:	f000 fac0 	bl	b5580 <_ZNK13sysStatusData15get_magicNumberEv>
-   b5000:	0a00      	lsrs	r0, r0, #8
-   b5002:	7020      	strb	r0, [r4, #0]
+   b5000:	f000 f99c 	bl	b533c <_ZN13sysStatusData8instanceEv>
+   b5004:	f000 fabc 	bl	b5580 <_ZNK13sysStatusData15get_magicNumberEv>
+   b5008:	0a00      	lsrs	r0, r0, #8
+   b500a:	7020      	strb	r0, [r4, #0]
 	buf[1] = lowByte(sysStatus.get_magicNumber());					
-   b5004:	f000 f99a 	bl	b533c <_ZN13sysStatusData8instanceEv>
-   b5008:	f000 faba 	bl	b5580 <_ZNK13sysStatusData15get_magicNumberEv>
-   b500c:	7060      	strb	r0, [r4, #1]
+   b500c:	f000 f996 	bl	b533c <_ZN13sysStatusData8instanceEv>
+   b5010:	f000 fab6 	bl	b5580 <_ZNK13sysStatusData15get_magicNumberEv>
+   b5014:	7060      	strb	r0, [r4, #1]
 	buf[2] = current.get_alertCodeNode();   						// Node's Alert Code
-   b500e:	f000 f9d7 	bl	b53c0 <_ZN17currentStatusData8instanceEv>
-   b5012:	f000 fa62 	bl	b54da <_ZNK17currentStatusData17get_alertCodeNodeEv>
+   b5016:	f000 f9d3 	bl	b53c0 <_ZN17currentStatusData8instanceEv>
+   b501a:	f000 fa5e 	bl	b54da <_ZNK17currentStatusData17get_alertCodeNodeEv>
 
 
 	// Send a message to manager_server
   	// A route to the destination will be automatically discovered.
 	if (manager.sendtoWait(buf, 3, GATEWAY_ADDRESS, ALERT_RPT) == RH_ROUTER_ERROR_NONE) {
-   b5016:	2305      	movs	r3, #5
+   b501e:	2305      	movs	r3, #5
 	buf[2] = current.get_alertCodeNode();   						// Node's Alert Code
-   b5018:	70a0      	strb	r0, [r4, #2]
+   b5020:	70a0      	strb	r0, [r4, #2]
 	if (manager.sendtoWait(buf, 3, GATEWAY_ADDRESS, ALERT_RPT) == RH_ROUTER_ERROR_NONE) {
-   b501a:	4621      	mov	r1, r4
-   b501c:	9300      	str	r3, [sp, #0]
-   b501e:	4813      	ldr	r0, [pc, #76]	; (b506c <_ZN14LoRA_Functions22composeAlertReportNodeEv+0x84>)
-   b5020:	2300      	movs	r3, #0
-   b5022:	2203      	movs	r2, #3
-   b5024:	f002 f876 	bl	b7114 <_ZN6RHMesh10sendtoWaitEPhhhh>
-   b5028:	4604      	mov	r4, r0
-   b502a:	b980      	cbnz	r0, b504e <_ZN14LoRA_Functions22composeAlertReportNodeEv+0x66>
+   b5022:	4621      	mov	r1, r4
+   b5024:	9300      	str	r3, [sp, #0]
+   b5026:	4813      	ldr	r0, [pc, #76]	; (b5074 <_ZN14LoRA_Functions22composeAlertReportNodeEv+0x84>)
+   b5028:	2300      	movs	r3, #0
+   b502a:	2203      	movs	r2, #3
+   b502c:	f002 f872 	bl	b7114 <_ZN6RHMesh10sendtoWaitEPhhhh>
+   b5030:	4604      	mov	r4, r0
+   b5032:	b980      	cbnz	r0, b5056 <_ZN14LoRA_Functions22composeAlertReportNodeEv+0x66>
 		// It has been reliably delivered to the next node.
 		// Now wait for a reply from the ultimate server 
 		Log.info("Success sending Alert Report number %d to gateway at %d", current.get_alertCodeNode(), GATEWAY_ADDRESS);
-   b502c:	f000 f9c8 	bl	b53c0 <_ZN17currentStatusData8instanceEv>
-   b5030:	f000 fa53 	bl	b54da <_ZNK17currentStatusData17get_alertCodeNodeEv>
-   b5034:	490e      	ldr	r1, [pc, #56]	; (b5070 <_ZN14LoRA_Functions22composeAlertReportNodeEv+0x88>)
-   b5036:	4602      	mov	r2, r0
-   b5038:	4623      	mov	r3, r4
-   b503a:	480e      	ldr	r0, [pc, #56]	; (b5074 <_ZN14LoRA_Functions22composeAlertReportNodeEv+0x8c>)
-   b503c:	f7ff f8e8 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
+   b5034:	f000 f9c4 	bl	b53c0 <_ZN17currentStatusData8instanceEv>
+   b5038:	f000 fa4f 	bl	b54da <_ZNK17currentStatusData17get_alertCodeNodeEv>
+   b503c:	490e      	ldr	r1, [pc, #56]	; (b5078 <_ZN14LoRA_Functions22composeAlertReportNodeEv+0x88>)
+   b503e:	4602      	mov	r2, r0
+   b5040:	4623      	mov	r3, r4
+   b5042:	480e      	ldr	r0, [pc, #56]	; (b507c <_ZN14LoRA_Functions22composeAlertReportNodeEv+0x8c>)
+   b5044:	f7ff f8e4 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
 		digitalWrite(BLUE_LED, LOW);
-   b5040:	4628      	mov	r0, r5
-   b5042:	4621      	mov	r1, r4
-   b5044:	f006 f9d1 	bl	bb3ea <digitalWrite>
+   b5048:	4628      	mov	r0, r5
+   b504a:	4621      	mov	r1, r4
+   b504c:	f006 f9cd 	bl	bb3ea <digitalWrite>
 		return true;
-   b5048:	2001      	movs	r0, #1
+   b5050:	2001      	movs	r0, #1
 	else {
 		Log.info("Node - Alert Report send to Gateway failed");
 		digitalWrite(BLUE_LED, LOW);
 		return false;
 	}
 }
-   b504a:	b003      	add	sp, #12
-   b504c:	bd30      	pop	{r4, r5, pc}
+   b5052:	b003      	add	sp, #12
+   b5054:	bd30      	pop	{r4, r5, pc}
 		Log.info("Node - Alert Report send to Gateway failed");
-   b504e:	490a      	ldr	r1, [pc, #40]	; (b5078 <_ZN14LoRA_Functions22composeAlertReportNodeEv+0x90>)
-   b5050:	4808      	ldr	r0, [pc, #32]	; (b5074 <_ZN14LoRA_Functions22composeAlertReportNodeEv+0x8c>)
-   b5052:	f7ff f8dd 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
+   b5056:	490a      	ldr	r1, [pc, #40]	; (b5080 <_ZN14LoRA_Functions22composeAlertReportNodeEv+0x90>)
+   b5058:	4808      	ldr	r0, [pc, #32]	; (b507c <_ZN14LoRA_Functions22composeAlertReportNodeEv+0x8c>)
+   b505a:	f7ff f8d9 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
 		digitalWrite(BLUE_LED, LOW);
-   b5056:	4628      	mov	r0, r5
-   b5058:	2100      	movs	r1, #0
-   b505a:	f006 f9c6 	bl	bb3ea <digitalWrite>
+   b505e:	4628      	mov	r0, r5
+   b5060:	2100      	movs	r1, #0
+   b5062:	f006 f9c2 	bl	bb3ea <digitalWrite>
 		return false;
-   b505e:	2000      	movs	r0, #0
-   b5060:	e7f3      	b.n	b504a <_ZN14LoRA_Functions22composeAlertReportNodeEv+0x62>
-   b5062:	bf00      	nop
-   b5064:	000bcb20 	.word	0x000bcb20
-   b5068:	2003dfa0 	.word	0x2003dfa0
-   b506c:	2003e1cc 	.word	0x2003e1cc
-   b5070:	000bc937 	.word	0x000bc937
-   b5074:	2003e658 	.word	0x2003e658
-   b5078:	000bc96f 	.word	0x000bc96f
+   b5066:	2000      	movs	r0, #0
+   b5068:	e7f3      	b.n	b5052 <_ZN14LoRA_Functions22composeAlertReportNodeEv+0x62>
+   b506a:	bf00      	nop
+   b506c:	000bcb20 	.word	0x000bcb20
+   b5070:	2003dfa0 	.word	0x2003dfa0
+   b5074:	2003e1cc 	.word	0x2003e1cc
+   b5078:	000bc939 	.word	0x000bc939
+   b507c:	2003e658 	.word	0x2003e658
+   b5080:	000bc971 	.word	0x000bc971
 
-000b507c <_ZN14LoRA_Functions35receiveAcknowledmentAlertReportNodeEv>:
+000b5084 <_ZN14LoRA_Functions35receiveAcknowledmentAlertReportNodeEv>:
 
 bool LoRA_Functions::receiveAcknowledmentAlertReportNode() {
-   b507c:	b508      	push	{r3, lr}
+   b5084:	b508      	push	{r3, lr}
 
 	current.set_alertCodeNode(buf[2]);
-   b507e:	f000 f99f 	bl	b53c0 <_ZN17currentStatusData8instanceEv>
-   b5082:	4b05      	ldr	r3, [pc, #20]	; (b5098 <_ZN14LoRA_Functions35receiveAcknowledmentAlertReportNodeEv+0x1c>)
-   b5084:	7899      	ldrb	r1, [r3, #2]
-   b5086:	f000 fa63 	bl	b5550 <_ZN17currentStatusData17set_alertCodeNodeEh>
+   b5086:	f000 f99b 	bl	b53c0 <_ZN17currentStatusData8instanceEv>
+   b508a:	4b05      	ldr	r3, [pc, #20]	; (b50a0 <_ZN14LoRA_Functions35receiveAcknowledmentAlertReportNodeEv+0x1c>)
+   b508c:	7899      	ldrb	r1, [r3, #2]
+   b508e:	f000 fa5f 	bl	b5550 <_ZN17currentStatusData17set_alertCodeNodeEh>
 	Log.info("Alert report acknowledged");
-   b508a:	4904      	ldr	r1, [pc, #16]	; (b509c <_ZN14LoRA_Functions35receiveAcknowledmentAlertReportNodeEv+0x20>)
-   b508c:	4804      	ldr	r0, [pc, #16]	; (b50a0 <_ZN14LoRA_Functions35receiveAcknowledmentAlertReportNodeEv+0x24>)
-   b508e:	f7ff f8bf 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
+   b5092:	4904      	ldr	r1, [pc, #16]	; (b50a4 <_ZN14LoRA_Functions35receiveAcknowledmentAlertReportNodeEv+0x20>)
+   b5094:	4804      	ldr	r0, [pc, #16]	; (b50a8 <_ZN14LoRA_Functions35receiveAcknowledmentAlertReportNodeEv+0x24>)
+   b5096:	f7ff f8bb 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
 	return true;
 }
-   b5092:	2001      	movs	r0, #1
-   b5094:	bd08      	pop	{r3, pc}
-   b5096:	bf00      	nop
-   b5098:	2003dfa0 	.word	0x2003dfa0
-   b509c:	000bc99a 	.word	0x000bc99a
-   b50a0:	2003e658 	.word	0x2003e658
+   b509a:	2001      	movs	r0, #1
+   b509c:	bd08      	pop	{r3, pc}
+   b509e:	bf00      	nop
+   b50a0:	2003dfa0 	.word	0x2003dfa0
+   b50a4:	000bc99c 	.word	0x000bc99c
+   b50a8:	2003e658 	.word	0x2003e658
 
-000b50a4 <_ZN14LoRA_Functions24listenForLoRAMessageNodeEv>:
+000b50ac <_ZN14LoRA_Functions24listenForLoRAMessageNodeEv>:
 bool LoRA_Functions::listenForLoRAMessageNode() {
-   b50a4:	b5f0      	push	{r4, r5, r6, r7, lr}
-   b50a6:	b08d      	sub	sp, #52	; 0x34
+   b50ac:	b5f0      	push	{r4, r5, r6, r7, lr}
+   b50ae:	b08d      	sub	sp, #52	; 0x34
 	uint8_t len = sizeof(buf);
-   b50a8:	23f9      	movs	r3, #249	; 0xf9
-   b50aa:	f88d 301a 	strb.w	r3, [sp, #26]
+   b50b0:	23f9      	movs	r3, #249	; 0xf9
+   b50b2:	f88d 301a 	strb.w	r3, [sp, #26]
 	if (manager.recvfromAck(buf, &len, &from, &dest, &id, &messageFlag, &hops))	{	// We have received a message
-   b50ae:	f10d 031f 	add.w	r3, sp, #31
-   b50b2:	9303      	str	r3, [sp, #12]
-   b50b4:	f10d 031e 	add.w	r3, sp, #30
-   b50b8:	9302      	str	r3, [sp, #8]
-   b50ba:	4e3d      	ldr	r6, [pc, #244]	; (b51b0 <_ZN14LoRA_Functions24listenForLoRAMessageNodeEv+0x10c>)
-   b50bc:	483d      	ldr	r0, [pc, #244]	; (b51b4 <_ZN14LoRA_Functions24listenForLoRAMessageNodeEv+0x110>)
-   b50be:	f10d 031d 	add.w	r3, sp, #29
-   b50c2:	9301      	str	r3, [sp, #4]
-   b50c4:	ab07      	add	r3, sp, #28
-   b50c6:	9300      	str	r3, [sp, #0]
-   b50c8:	f10d 021a 	add.w	r2, sp, #26
-   b50cc:	f10d 031b 	add.w	r3, sp, #27
-   b50d0:	4631      	mov	r1, r6
-   b50d2:	f002 f853 	bl	b717c <_ZN6RHMesh11recvfromAckEPhS0_S0_S0_S0_S0_S0_>
-   b50d6:	4604      	mov	r4, r0
-   b50d8:	b918      	cbnz	r0, b50e2 <_ZN14LoRA_Functions24listenForLoRAMessageNodeEv+0x3e>
+   b50b6:	f10d 031f 	add.w	r3, sp, #31
+   b50ba:	9303      	str	r3, [sp, #12]
+   b50bc:	f10d 031e 	add.w	r3, sp, #30
+   b50c0:	9302      	str	r3, [sp, #8]
+   b50c2:	4e3d      	ldr	r6, [pc, #244]	; (b51b8 <_ZN14LoRA_Functions24listenForLoRAMessageNodeEv+0x10c>)
+   b50c4:	483d      	ldr	r0, [pc, #244]	; (b51bc <_ZN14LoRA_Functions24listenForLoRAMessageNodeEv+0x110>)
+   b50c6:	f10d 031d 	add.w	r3, sp, #29
+   b50ca:	9301      	str	r3, [sp, #4]
+   b50cc:	ab07      	add	r3, sp, #28
+   b50ce:	9300      	str	r3, [sp, #0]
+   b50d0:	f10d 021a 	add.w	r2, sp, #26
+   b50d4:	f10d 031b 	add.w	r3, sp, #27
+   b50d8:	4631      	mov	r1, r6
+   b50da:	f002 f84f 	bl	b717c <_ZN6RHMesh11recvfromAckEPhS0_S0_S0_S0_S0_S0_>
+   b50de:	4604      	mov	r4, r0
+   b50e0:	b918      	cbnz	r0, b50ea <_ZN14LoRA_Functions24listenForLoRAMessageNodeEv+0x3e>
 	return false;
-   b50da:	2400      	movs	r4, #0
+   b50e2:	2400      	movs	r4, #0
 }
-   b50dc:	4620      	mov	r0, r4
-   b50de:	b00d      	add	sp, #52	; 0x34
-   b50e0:	bdf0      	pop	{r4, r5, r6, r7, pc}
+   b50e4:	4620      	mov	r0, r4
+   b50e6:	b00d      	add	sp, #52	; 0x34
+   b50e8:	bdf0      	pop	{r4, r5, r6, r7, pc}
 		buf[len] = 0;
-   b50e2:	f89d 301a 	ldrb.w	r3, [sp, #26]
-   b50e6:	2700      	movs	r7, #0
-   b50e8:	54f7      	strb	r7, [r6, r3]
+   b50ea:	f89d 301a 	ldrb.w	r3, [sp, #26]
+   b50ee:	2700      	movs	r7, #0
+   b50f0:	54f7      	strb	r7, [r6, r3]
 		if ((buf[0] << 8 | buf[1]) != sysStatus.get_magicNumber()) {
-   b50ea:	8835      	ldrh	r5, [r6, #0]
-   b50ec:	f000 f926 	bl	b533c <_ZN13sysStatusData8instanceEv>
-   b50f0:	f000 fa46 	bl	b5580 <_ZNK13sysStatusData15get_magicNumberEv>
-   b50f4:	ba6d      	rev16	r5, r5
-   b50f6:	b2ad      	uxth	r5, r5
-   b50f8:	42a8      	cmp	r0, r5
-   b50fa:	d004      	beq.n	b5106 <_ZN14LoRA_Functions24listenForLoRAMessageNodeEv+0x62>
+   b50f2:	8835      	ldrh	r5, [r6, #0]
+   b50f4:	f000 f922 	bl	b533c <_ZN13sysStatusData8instanceEv>
+   b50f8:	f000 fa42 	bl	b5580 <_ZNK13sysStatusData15get_magicNumberEv>
+   b50fc:	ba6d      	rev16	r5, r5
+   b50fe:	b2ad      	uxth	r5, r5
+   b5100:	42a8      	cmp	r0, r5
+   b5102:	d004      	beq.n	b510e <_ZN14LoRA_Functions24listenForLoRAMessageNodeEv+0x62>
 			Log.info("Magic Number mismatch - ignoring message");
-   b50fc:	492e      	ldr	r1, [pc, #184]	; (b51b8 <_ZN14LoRA_Functions24listenForLoRAMessageNodeEv+0x114>)
-   b50fe:	482f      	ldr	r0, [pc, #188]	; (b51bc <_ZN14LoRA_Functions24listenForLoRAMessageNodeEv+0x118>)
-   b5100:	f7ff f886 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
+   b5104:	492e      	ldr	r1, [pc, #184]	; (b51c0 <_ZN14LoRA_Functions24listenForLoRAMessageNodeEv+0x114>)
+   b5106:	482f      	ldr	r0, [pc, #188]	; (b51c4 <_ZN14LoRA_Functions24listenForLoRAMessageNodeEv+0x118>)
+   b5108:	f7ff f882 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
 			return false;
-   b5104:	e7e9      	b.n	b50da <_ZN14LoRA_Functions24listenForLoRAMessageNodeEv+0x36>
+   b510c:	e7e9      	b.n	b50e2 <_ZN14LoRA_Functions24listenForLoRAMessageNodeEv+0x36>
 		lora_state = (LoRA_State)messageFlag;
-   b5106:	4d2e      	ldr	r5, [pc, #184]	; (b51c0 <_ZN14LoRA_Functions24listenForLoRAMessageNodeEv+0x11c>)
-   b5108:	f89d 301e 	ldrb.w	r3, [sp, #30]
+   b510e:	4d2e      	ldr	r5, [pc, #184]	; (b51c8 <_ZN14LoRA_Functions24listenForLoRAMessageNodeEv+0x11c>)
+   b5110:	f89d 301e 	ldrb.w	r3, [sp, #30]
 		Log.info("Received from node %d with rssi=%d - a %s message", from, driver.lastRssi(), loraStateNames[lora_state]);
-   b510c:	f89d 201b 	ldrb.w	r2, [sp, #27]
-   b5110:	482c      	ldr	r0, [pc, #176]	; (b51c4 <_ZN14LoRA_Functions24listenForLoRAMessageNodeEv+0x120>)
+   b5114:	f89d 201b 	ldrb.w	r2, [sp, #27]
+   b5118:	482c      	ldr	r0, [pc, #176]	; (b51cc <_ZN14LoRA_Functions24listenForLoRAMessageNodeEv+0x120>)
 		lora_state = (LoRA_State)messageFlag;
-   b5112:	702b      	strb	r3, [r5, #0]
+   b511a:	702b      	strb	r3, [r5, #0]
 		Log.info("Received from node %d with rssi=%d - a %s message", from, driver.lastRssi(), loraStateNames[lora_state]);
-   b5114:	9205      	str	r2, [sp, #20]
-   b5116:	f001 fde2 	bl	b6cde <_ZN15RHGenericDriver8lastRssiEv>
-   b511a:	492b      	ldr	r1, [pc, #172]	; (b51c8 <_ZN14LoRA_Functions24listenForLoRAMessageNodeEv+0x124>)
-   b511c:	9a05      	ldr	r2, [sp, #20]
-   b511e:	4603      	mov	r3, r0
-   b5120:	7828      	ldrb	r0, [r5, #0]
-   b5122:	eb01 1100 	add.w	r1, r1, r0, lsl #4
-   b5126:	9100      	str	r1, [sp, #0]
-   b5128:	4824      	ldr	r0, [pc, #144]	; (b51bc <_ZN14LoRA_Functions24listenForLoRAMessageNodeEv+0x118>)
-   b512a:	4928      	ldr	r1, [pc, #160]	; (b51cc <_ZN14LoRA_Functions24listenForLoRAMessageNodeEv+0x128>)
-   b512c:	f7ff f870 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
+   b511c:	9205      	str	r2, [sp, #20]
+   b511e:	f001 fdde 	bl	b6cde <_ZN15RHGenericDriver8lastRssiEv>
+   b5122:	492b      	ldr	r1, [pc, #172]	; (b51d0 <_ZN14LoRA_Functions24listenForLoRAMessageNodeEv+0x124>)
+   b5124:	9a05      	ldr	r2, [sp, #20]
+   b5126:	4603      	mov	r3, r0
+   b5128:	7828      	ldrb	r0, [r5, #0]
+   b512a:	eb01 1100 	add.w	r1, r1, r0, lsl #4
+   b512e:	9100      	str	r1, [sp, #0]
+   b5130:	4824      	ldr	r0, [pc, #144]	; (b51c4 <_ZN14LoRA_Functions24listenForLoRAMessageNodeEv+0x118>)
+   b5132:	4928      	ldr	r1, [pc, #160]	; (b51d4 <_ZN14LoRA_Functions24listenForLoRAMessageNodeEv+0x128>)
+   b5134:	f7ff f86c 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
 		Time.setTime(((buf[2] << 24) | (buf[3] << 16) | (buf[4] << 8) | buf[5]));  // Set time based on response from gateway
-   b5130:	f8d6 0002 	ldr.w	r0, [r6, #2]
-   b5134:	ba00      	rev	r0, r0
-   b5136:	17c1      	asrs	r1, r0, #31
-   b5138:	f005 fe2e 	bl	bad98 <_ZN9TimeClass7setTimeEx>
+   b5138:	f8d6 0002 	ldr.w	r0, [r6, #2]
+   b513c:	ba00      	rev	r0, r0
+   b513e:	17c1      	asrs	r1, r0, #31
+   b5140:	f005 fe2a 	bl	bad98 <_ZN9TimeClass7setTimeEx>
 		sysStatus.set_frequencyMinutes((buf[6] << 8 | buf[7]));			// Frequency of reporting set by Gateway
-   b513c:	f000 f8fe 	bl	b533c <_ZN13sysStatusData8instanceEv>
-   b5140:	88f1      	ldrh	r1, [r6, #6]
-   b5142:	ba49      	rev16	r1, r1
-   b5144:	b289      	uxth	r1, r1
-   b5146:	f000 fa4d 	bl	b55e4 <_ZN13sysStatusData20set_frequencyMinutesEt>
+   b5144:	f000 f8fa 	bl	b533c <_ZN13sysStatusData8instanceEv>
+   b5148:	88f1      	ldrh	r1, [r6, #6]
+   b514a:	ba49      	rev16	r1, r1
+   b514c:	b289      	uxth	r1, r1
+   b514e:	f000 fa49 	bl	b55e4 <_ZN13sysStatusData20set_frequencyMinutesEt>
   static uint8_t isDST();
 
         /* return string representation of the current time */
         inline String timeStr()
         {
                 return timeStr(now());
-   b514a:	f005 ff3e 	bl	bafca <_ZN9TimeClass3nowEv>
-   b514e:	17c3      	asrs	r3, r0, #31
-   b5150:	4602      	mov	r2, r0
-   b5152:	a808      	add	r0, sp, #32
-   b5154:	f005 fe34 	bl	badc0 <_ZN9TimeClass7timeStrEx>
+   b5152:	f005 ff3a 	bl	bafca <_ZN9TimeClass3nowEv>
+   b5156:	17c3      	asrs	r3, r0, #31
+   b5158:	4602      	mov	r2, r0
+   b515a:	a808      	add	r0, sp, #32
+   b515c:	f005 fe30 	bl	badc0 <_ZN9TimeClass7timeStrEx>
 	const char * c_str() const { return buffer; }
-   b5158:	9a08      	ldr	r2, [sp, #32]
-   b515a:	9205      	str	r2, [sp, #20]
+   b5160:	9a08      	ldr	r2, [sp, #32]
+   b5162:	9205      	str	r2, [sp, #20]
 		Log.info("Set clock to %s and report frequency to %d minutes", Time.timeStr().c_str(),sysStatus.get_frequencyMinutes());
-   b515c:	f000 f8ee 	bl	b533c <_ZN13sysStatusData8instanceEv>
-   b5160:	f000 fa13 	bl	b558a <_ZNK13sysStatusData20get_frequencyMinutesEv>
-   b5164:	9a05      	ldr	r2, [sp, #20]
-   b5166:	491a      	ldr	r1, [pc, #104]	; (b51d0 <_ZN14LoRA_Functions24listenForLoRAMessageNodeEv+0x12c>)
-   b5168:	4603      	mov	r3, r0
-   b516a:	4814      	ldr	r0, [pc, #80]	; (b51bc <_ZN14LoRA_Functions24listenForLoRAMessageNodeEv+0x118>)
-   b516c:	f7ff f850 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
-   b5170:	a808      	add	r0, sp, #32
-   b5172:	f005 fc1d 	bl	ba9b0 <_ZN6StringD1Ev>
+   b5164:	f000 f8ea 	bl	b533c <_ZN13sysStatusData8instanceEv>
+   b5168:	f000 fa0f 	bl	b558a <_ZNK13sysStatusData20get_frequencyMinutesEv>
+   b516c:	9a05      	ldr	r2, [sp, #20]
+   b516e:	491a      	ldr	r1, [pc, #104]	; (b51d8 <_ZN14LoRA_Functions24listenForLoRAMessageNodeEv+0x12c>)
+   b5170:	4603      	mov	r3, r0
+   b5172:	4814      	ldr	r0, [pc, #80]	; (b51c4 <_ZN14LoRA_Functions24listenForLoRAMessageNodeEv+0x118>)
+   b5174:	f7ff f84c 	bl	b4210 <_ZNK5spark6Logger4infoEPKcz>
+   b5178:	a808      	add	r0, sp, #32
+   b517a:	f005 fc19 	bl	ba9b0 <_ZN6StringD1Ev>
 		if (lora_state == DATA_ACK) { if(LoRA_Functions::instance().receiveAcknowledmentDataReportNode()) return true;}
-   b5176:	782b      	ldrb	r3, [r5, #0]
-   b5178:	2b04      	cmp	r3, #4
-   b517a:	d011      	beq.n	b51a0 <_ZN14LoRA_Functions24listenForLoRAMessageNodeEv+0xfc>
+   b517e:	782b      	ldrb	r3, [r5, #0]
+   b5180:	2b04      	cmp	r3, #4
+   b5182:	d011      	beq.n	b51a8 <_ZN14LoRA_Functions24listenForLoRAMessageNodeEv+0xfc>
 		if (lora_state == JOIN_ACK) { if(LoRA_Functions::instance().receiveAcknowledmentJoinRequestNode()) return true;}
-   b517c:	782b      	ldrb	r3, [r5, #0]
-   b517e:	2b02      	cmp	r3, #2
-   b5180:	d105      	bne.n	b518e <_ZN14LoRA_Functions24listenForLoRAMessageNodeEv+0xea>
-   b5182:	f7ff fd05 	bl	b4b90 <_ZN14LoRA_Functions8instanceEv>
-   b5186:	f7ff ff01 	bl	b4f8c <_ZN14LoRA_Functions35receiveAcknowledmentJoinRequestNodeEv>
-   b518a:	2800      	cmp	r0, #0
-   b518c:	d1a6      	bne.n	b50dc <_ZN14LoRA_Functions24listenForLoRAMessageNodeEv+0x38>
+   b5184:	782b      	ldrb	r3, [r5, #0]
+   b5186:	2b02      	cmp	r3, #2
+   b5188:	d105      	bne.n	b5196 <_ZN14LoRA_Functions24listenForLoRAMessageNodeEv+0xea>
+   b518a:	f7ff fce1 	bl	b4b50 <_ZN14LoRA_Functions8instanceEv>
+   b518e:	f7ff ff01 	bl	b4f94 <_ZN14LoRA_Functions35receiveAcknowledmentJoinRequestNodeEv>
+   b5192:	2800      	cmp	r0, #0
+   b5194:	d1a6      	bne.n	b50e4 <_ZN14LoRA_Functions24listenForLoRAMessageNodeEv+0x38>
 		if (lora_state == ALERT_ACK) { if(LoRA_Functions::instance().receiveAcknowledmentAlertReportNode()) return true;}
-   b518e:	782b      	ldrb	r3, [r5, #0]
-   b5190:	2b06      	cmp	r3, #6
-   b5192:	d1a2      	bne.n	b50da <_ZN14LoRA_Functions24listenForLoRAMessageNodeEv+0x36>
-   b5194:	f7ff fcfc 	bl	b4b90 <_ZN14LoRA_Functions8instanceEv>
-   b5198:	f7ff ff70 	bl	b507c <_ZN14LoRA_Functions35receiveAcknowledmentAlertReportNodeEv>
-   b519c:	4604      	mov	r4, r0
-   b519e:	e79d      	b.n	b50dc <_ZN14LoRA_Functions24listenForLoRAMessageNodeEv+0x38>
+   b5196:	782b      	ldrb	r3, [r5, #0]
+   b5198:	2b06      	cmp	r3, #6
+   b519a:	d1a2      	bne.n	b50e2 <_ZN14LoRA_Functions24listenForLoRAMessageNodeEv+0x36>
+   b519c:	f7ff fcd8 	bl	b4b50 <_ZN14LoRA_Functions8instanceEv>
+   b51a0:	f7ff ff70 	bl	b5084 <_ZN14LoRA_Functions35receiveAcknowledmentAlertReportNodeEv>
+   b51a4:	4604      	mov	r4, r0
+   b51a6:	e79d      	b.n	b50e4 <_ZN14LoRA_Functions24listenForLoRAMessageNodeEv+0x38>
 		if (lora_state == DATA_ACK) { if(LoRA_Functions::instance().receiveAcknowledmentDataReportNode()) return true;}
-   b51a0:	f7ff fcf6 	bl	b4b90 <_ZN14LoRA_Functions8instanceEv>
-   b51a4:	f7ff fe76 	bl	b4e94 <_ZN14LoRA_Functions34receiveAcknowledmentDataReportNodeEv>
-   b51a8:	2800      	cmp	r0, #0
-   b51aa:	d0e7      	beq.n	b517c <_ZN14LoRA_Functions24listenForLoRAMessageNodeEv+0xd8>
-   b51ac:	e796      	b.n	b50dc <_ZN14LoRA_Functions24listenForLoRAMessageNodeEv+0x38>
-   b51ae:	bf00      	nop
-   b51b0:	2003dfa0 	.word	0x2003dfa0
-   b51b4:	2003e1cc 	.word	0x2003e1cc
-   b51b8:	000bc9b4 	.word	0x000bc9b4
-   b51bc:	2003e658 	.word	0x2003e658
-   b51c0:	2003df8c 	.word	0x2003df8c
-   b51c4:	2003e09c 	.word	0x2003e09c
-   b51c8:	2003de04 	.word	0x2003de04
-   b51cc:	000bc9dd 	.word	0x000bc9dd
-   b51d0:	000bca0f 	.word	0x000bca0f
+   b51a8:	f7ff fcd2 	bl	b4b50 <_ZN14LoRA_Functions8instanceEv>
+   b51ac:	f7ff fe76 	bl	b4e9c <_ZN14LoRA_Functions34receiveAcknowledmentDataReportNodeEv>
+   b51b0:	2800      	cmp	r0, #0
+   b51b2:	d0e7      	beq.n	b5184 <_ZN14LoRA_Functions24listenForLoRAMessageNodeEv+0xd8>
+   b51b4:	e796      	b.n	b50e4 <_ZN14LoRA_Functions24listenForLoRAMessageNodeEv+0x38>
+   b51b6:	bf00      	nop
+   b51b8:	2003dfa0 	.word	0x2003dfa0
+   b51bc:	2003e1cc 	.word	0x2003e1cc
+   b51c0:	000bc9b6 	.word	0x000bc9b6
+   b51c4:	2003e658 	.word	0x2003e658
+   b51c8:	2003df8c 	.word	0x2003df8c
+   b51cc:	2003e09c 	.word	0x2003e09c
+   b51d0:	2003de04 	.word	0x2003de04
+   b51d4:	000bc9df 	.word	0x000bc9df
+   b51d8:	000bca11 	.word	0x000bca11
 
-000b51d4 <_GLOBAL__sub_I__ZN14LoRA_Functions9_instanceE>:
+000b51dc <_GLOBAL__sub_I__ZN14LoRA_Functions9_instanceE>:
 }
-   b51d4:	b510      	push	{r4, lr}
+   b51dc:	b510      	push	{r4, lr}
 RH_RF95 driver(RFM95_CS, RFM95_INT);
-   b51d6:	4a0a      	ldr	r2, [pc, #40]	; (b5200 <_GLOBAL__sub_I__ZN14LoRA_Functions9_instanceE+0x2c>)
-   b51d8:	4c0a      	ldr	r4, [pc, #40]	; (b5204 <_GLOBAL__sub_I__ZN14LoRA_Functions9_instanceE+0x30>)
-   b51da:	490b      	ldr	r1, [pc, #44]	; (b5208 <_GLOBAL__sub_I__ZN14LoRA_Functions9_instanceE+0x34>)
-   b51dc:	7812      	ldrb	r2, [r2, #0]
-   b51de:	7809      	ldrb	r1, [r1, #0]
-   b51e0:	4b0a      	ldr	r3, [pc, #40]	; (b520c <_GLOBAL__sub_I__ZN14LoRA_Functions9_instanceE+0x38>)
-   b51e2:	4620      	mov	r0, r4
-   b51e4:	f002 fc8c 	bl	b7b00 <_ZN7RH_RF95C1EhhR12RHGenericSPI>
-RHMesh manager(driver, sysStatus.get_nodeNumber());
-   b51e8:	f000 f8a8 	bl	b533c <_ZN13sysStatusData8instanceEv>
-   b51ec:	f000 f961 	bl	b54b2 <_ZNK13sysStatusData14get_nodeNumberEv>
+   b51de:	4a08      	ldr	r2, [pc, #32]	; (b5200 <_GLOBAL__sub_I__ZN14LoRA_Functions9_instanceE+0x24>)
+   b51e0:	4c08      	ldr	r4, [pc, #32]	; (b5204 <_GLOBAL__sub_I__ZN14LoRA_Functions9_instanceE+0x28>)
+   b51e2:	4909      	ldr	r1, [pc, #36]	; (b5208 <_GLOBAL__sub_I__ZN14LoRA_Functions9_instanceE+0x2c>)
+   b51e4:	7812      	ldrb	r2, [r2, #0]
+   b51e6:	7809      	ldrb	r1, [r1, #0]
+   b51e8:	4b08      	ldr	r3, [pc, #32]	; (b520c <_GLOBAL__sub_I__ZN14LoRA_Functions9_instanceE+0x30>)
+   b51ea:	4620      	mov	r0, r4
+   b51ec:	f002 fc88 	bl	b7b00 <_ZN7RH_RF95C1EhhR12RHGenericSPI>
+RHMesh manager(driver, GATEWAY_ADDRESS);
    b51f0:	4621      	mov	r1, r4
-   b51f2:	4602      	mov	r2, r0
+   b51f2:	4807      	ldr	r0, [pc, #28]	; (b5210 <_GLOBAL__sub_I__ZN14LoRA_Functions9_instanceE+0x34>)
 }
    b51f4:	e8bd 4010 	ldmia.w	sp!, {r4, lr}
-RHMesh manager(driver, sysStatus.get_nodeNumber());
-   b51f8:	4805      	ldr	r0, [pc, #20]	; (b5210 <_GLOBAL__sub_I__ZN14LoRA_Functions9_instanceE+0x3c>)
+RHMesh manager(driver, GATEWAY_ADDRESS);
+   b51f8:	2200      	movs	r2, #0
    b51fa:	f001 bf81 	b.w	b7100 <_ZN6RHMeshC1ER15RHGenericDriverh>
    b51fe:	bf00      	nop
    b5200:	000bcb28 	.word	0x000bcb28
@@ -6222,7 +6225,7 @@ void AB1805::setup(bool callBegin) {
    b693a:	2300      	movs	r3, #0
    b693c:	a802      	add	r0, sp, #8
    b693e:	9500      	str	r5, [sp, #0]
-   b6940:	f7fd ff54 	bl	b47ec <_ZN11SystemClass2onEySt8functionIFvyiEE>
+   b6940:	f7fd ff56 	bl	b47f0 <_ZN11SystemClass2onEySt8functionIFvyiEE>
     class function<_Res(_ArgTypes...)>
    b6944:	4628      	mov	r0, r5
    b6946:	f7fd fc19 	bl	b417c <_ZNSt14_Function_baseD1Ev>
@@ -16176,10 +16179,10 @@ const char* extractFuncName(const char *s, size_t *size) {
    ba238:	000bd330 	.word	0x000bd330
    ba23c:	000bd37e 	.word	0x000bd37e
    ba240:	000bd635 	.word	0x000bd635
-   ba244:	000bc730 	.word	0x000bc730
+   ba244:	000bc732 	.word	0x000bc732
    ba248:	000bd380 	.word	0x000bd380
    ba24c:	000bd383 	.word	0x000bd383
-   ba250:	000bc5b4 	.word	0x000bc5b4
+   ba250:	000bc87f 	.word	0x000bc87f
    ba254:	000bd386 	.word	0x000bd386
    ba258:	000bd38b 	.word	0x000bd38b
    ba25c:	000bd37b 	.word	0x000bd37b
@@ -21103,106 +21106,106 @@ USARTSerial& __fetch_global_Serial1()
    bc41c:	7420 206f 7325 7720 7469 2068 6e69 6176      to %s with inva
    bc42c:	696c 2064 6974 656d 4600 6f72 206d 7325     lid time.From %s
    bc43c:	7420 206f 7325 5200 7065 726f 2074 7266      to %s.Report fr
-   bc44c:	7165 6575 636e 2079 6425 6d20 6e69 2c73     equency %d mins,
-   bc45c:	6e20 7865 2074 7665 6e65 2074 6e69 2520      next event in %
-   bc46c:	756c 7320 6365 6e6f 7364 5300 656c 7065     lu seconds.Sleep
-   bc47c:	6620 726f 2520 2069 6573 6f63 646e 2073      for %i seconds 
-   bc48c:	6e75 6974 206c 656e 7478 6520 6576 746e     until next event
-   bc49c:	2520 0073 6f57 656b 7720 7469 2068 7375      %s.Woke with us
-   bc4ac:	7265 6220 7475 6f74 206e 202d 6f4c 4152     er button - LoRA
-   bc4bc:	5320 6174 6574 5700 6b6f 2065 6977 6874      State.Woke with
-   bc4cc:	7320 6e65 6f73 2072 6e69 6574 7272 7075      sensor interrup
-   bc4dc:	2074 202d 6552 6f63 6472 6320 756f 746e     t - Record count
-   bc4ec:	7420 6568 206e 6c73 6565 0070 7741 6b6f      then sleep.Awok
-   bc4fc:	2065 7461 2520 2073 6977 6874 2520 696c     e at %s with %li
-   bc50c:	6620 6572 2065 656d 6f6d 7972 4600 6961      free memory.Fai
-   bc51c:	656c 2064 6e69 6420 7461 2061 6573 646e     led in data send
-   bc52c:	4100 6b63 7220 6365 6965 6576 2064 202d     .Ack received - 
-   bc53c:	7075 6164 6974 676e 4e00 206f 6f6a 6e69     updating.No join
-   bc54c:	6120 6b63 7220 6365 6965 6576 0064 6552      ack received.Re
-   bc55c:	6573 7474 6e69 2067 6564 6976 6563 5500     setting device.U
-   bc56c:	646e 6665 6e69 6465 4520 7272 726f 5320     ndefined Error S
-   bc57c:	6174 6574 6900 0073 7369 6e20 746f 5200     tate.is.is not.R
-   bc58c:	4354 6920 696e 6974 6c61 7a69 6465 202c     TC initialized, 
-   bc59c:	6974 656d 6920 2073 7325 6120 646e 5220     time is %s and R
-   bc5ac:	4354 2520 2073 6573 0074 6f4c 4152 4920     TC %s set.LoRA I
-   bc5bc:	696e 6974 6c61 7a69 7461 6f69 206e 6166     nitialization fa
-   bc5cc:	6c69 7275 2065 6c61 7265 2074 6f63 6564     ilure alert code
-   bc5dc:	2520 2064 202d 6f70 6577 2072 7963 6c63      %d - power cycl
-   bc5ec:	2065 6e69 3320 0030 6f4e 6564 6e20 6d75     e in 30.Node num
-   bc5fc:	6562 2072 6e69 6964 6163 6574 2064 6e75     ber indicated un
-   bc60c:	6f63 666e 6769 7275 6465 6e20 646f 2065     configured node 
-   bc61c:	666f 2520 2064 6573 7474 6e69 2067 6c61     of %d setting al
-   bc62c:	7265 2074 6f63 6564 7420 206f 6425 5300     ert code to %d.S
-   bc63c:	6174 7472 7075 6320 6d6f 6c70 7465 2065     tartup complete 
-   bc64c:	6f66 2072 6874 2065 6f4e 6564 7720 7469     for the Node wit
-   bc65c:	2068 6c61 7265 2074 6f63 6564 2520 0064     h alert code %d.
-   bc66c:	6e69 7469 6620 6961 656c 0064 6f4c 4152     init failed.LoRA
-   bc67c:	5220 6461 6f69 6920 696e 6974 6c61 7a69      Radio initializ
-   bc68c:	6465 6120 2073 6f6e 6564 2520 2069 6e61     ed as node %i an
-   bc69c:	2064 2061 6564 6976 6563 4449 6f20 2066     d a deviceID of 
-   bc6ac:	7325 4c00 526f 2041 6152 6964 206f 6e69     %s.LoRA Radio in
-   bc6bc:	7469 6169 696c 657a 2064 7361 6120 6720     itialized as a g
-   bc6cc:	7461 7765 7961 7720 7469 2068 2061 6564     ateway with a de
-   bc6dc:	6976 6563 4449 6f20 2066 7325 5300 6e65     viceID of %s.Sen
-   bc6ec:	6964 676e 6420 7461 2061 6572 6f70 7472     ding data report
-   bc6fc:	6e20 6d75 6562 2072 6425 4400 7461 2061      number %d.Data 
-   bc70c:	6572 6f70 7472 6420 6c65 7669 7265 6465     report delivered
-   bc71c:	2d20 7320 6375 6563 7373 7220 7461 2065      - success rate 
-   bc72c:	3425 322e 0066 6f4e 6564 2520 2064 202d     %4.2f.Node %d - 
-   bc73c:	6144 6174 7220 7065 726f 2074 6573 646e     Data report send
-   bc74c:	7420 206f 6167 6574 6177 2079 6425 6620      to gateway %d f
-   bc75c:	6961 656c 2064 202d 6f4e 5220 756f 6574     ailed - No Route
-   bc76c:	2d20 7320 6375 6563 7373 7220 7461 2065      - success rate 
-   bc77c:	3425 322e 0066 6f4e 6564 2520 2064 202d     %4.2f.Node %d - 
-   bc78c:	6144 6174 7220 7065 726f 2074 6573 646e     Data report send
-   bc79c:	7420 206f 6167 6574 6177 2079 6425 6620      to gateway %d f
-   bc7ac:	6961 656c 2064 202d 6e55 6261 656c 7420     ailed - Unable t
-   bc7bc:	206f 6544 696c 6576 2072 202d 7573 6363     o Deliver - succ
-   bc7cc:	7365 2073 6172 6574 2520 2e34 6632 4e00     ess rate %4.2f.N
-   bc7dc:	646f 2065 6425 2d20 4420 7461 2061 6572     ode %d - Data re
-   bc7ec:	6f70 7472 7320 6e65 2064 6f74 6720 7461     port send to gat
-   bc7fc:	7765 7961 2520 2064 6166 6c69 6465 2020     eway %d failed  
-   bc80c:	202d 6e55 6e6b 776f 206e 202d 7573 6363     - Unknown - succ
-   bc81c:	7365 2073 6172 6574 2520 2e34 6632 4400     ess rate %4.2f.D
-   bc82c:	7461 2061 6572 6f70 7472 6120 6b63 6f6e     ata report ackno
-   bc83c:	6c77 6465 6567 2064 6f66 2072 656d 7373     wledged for mess
-   bc84c:	6761 2065 6425 6100 4e20 646f 4e65 6d75     age %d.a NodeNum
-   bc85c:	6562 2072 7369 6e20 6565 6564 0064 6874     ber is needed.th
-   bc86c:	2065 6c63 636f 206b 7369 6e20 746f 7320     e clock is not s
-   bc87c:	7465 5300 6e65 6964 676e 6a20 696f 206e     et.Sending join 
-   bc88c:	6572 7571 7365 2074 6562 6163 7375 2065     request because 
-   bc89c:	7325 4400 7461 2061 6572 6f70 7472 7320     %s.Data report s
-   bc8ac:	6e65 2064 6f74 6720 7461 7765 7961 7320     end to gateway s
-   bc8bc:	6375 6563 7373 7566 6c6c 0079 6144 6174     uccessfully.Data
-   bc8cc:	7220 7065 726f 2074 6573 646e 7420 206f      report send to 
-   bc8dc:	6147 6574 6177 2079 6166 6c69 6465 4900     Gateway failed.I
-   bc8ec:	206e 6572 6563 7669 2065 6f4a 6e69 4120     n receive Join A
-   bc8fc:	6b63 6f6e 6c77 6465 6567 4a00 696f 206e     cknowledge.Join 
-   bc90c:	6572 7571 7365 2074 6361 6e6b 776f 656c     request acknowle
-   bc91c:	6764 6465 6120 646e 6e20 646f 2065 4449     dged and node ID
-   bc92c:	7320 7465 7420 206f 6425 5300 6375 6563      set to %d.Succe
-   bc93c:	7373 7320 6e65 6964 676e 4120 656c 7472     ss sending Alert
-   bc94c:	5220 7065 726f 2074 756e 626d 7265 2520      Report number %
-   bc95c:	2064 6f74 6720 7461 7765 7961 6120 2074     d to gateway at 
-   bc96c:	6425 4e00 646f 2065 202d 6c41 7265 2074     %d.Node - Alert 
-   bc97c:	6552 6f70 7472 7320 6e65 2064 6f74 4720     Report send to G
-   bc98c:	7461 7765 7961 6620 6961 656c 0064 6c41     ateway failed.Al
-   bc99c:	7265 2074 6572 6f70 7472 6120 6b63 6f6e     ert report ackno
-   bc9ac:	6c77 6465 6567 0064 614d 6967 2063 754e     wledged.Magic Nu
-   bc9bc:	626d 7265 6d20 7369 616d 6374 2068 202d     mber mismatch - 
-   bc9cc:	6769 6f6e 6972 676e 6d20 7365 6173 6567     ignoring message
-   bc9dc:	5200 6365 6965 6576 2064 7266 6d6f 6e20     .Received from n
-   bc9ec:	646f 2065 6425 7720 7469 2068 7372 6973     ode %d with rssi
-   bc9fc:	253d 2064 202d 2061 7325 6d20 7365 6173     =%d - a %s messa
-   bca0c:	6567 5300 7465 6320 6f6c 6b63 7420 206f     ge.Set clock to 
-   bca1c:	7325 6120 646e 7220 7065 726f 2074 7266     %s and report fr
-   bca2c:	7165 6575 636e 2079 6f74 2520 2064 696d     equency to %d mi
-   bca3c:	756e 6574 0073 0000                         nutes...
+   bc44c:	7165 6575 636e 2079 666f 2520 2064 696d     equency of %d mi
+   bc45c:	756e 6574 2e73 2020 6c53 6565 2070 6f66     nutes.  Sleep fo
+   bc46c:	2072 6925 7320 6365 6e6f 7364 7520 746e     r %i seconds unt
+   bc47c:	6c69 6e20 7865 2074 7665 6e65 2074 7461     il next event at
+   bc48c:	2520 0073 6f57 656b 7720 7469 2068 7375      %s.Woke with us
+   bc49c:	7265 6220 7475 6f74 206e 202d 6f4c 4152     er button - LoRA
+   bc4ac:	5320 6174 6574 5700 6b6f 2065 6977 6874      State.Woke with
+   bc4bc:	7320 6e65 6f73 2072 6e69 6574 7272 7075      sensor interrup
+   bc4cc:	2074 202d 6552 6f63 6472 6320 756f 746e     t - Record count
+   bc4dc:	7420 6568 206e 6c73 6565 0070 7741 6b6f      then sleep.Awok
+   bc4ec:	2065 7461 2520 2073 6977 6874 2520 696c     e at %s with %li
+   bc4fc:	6620 6572 2065 656d 6f6d 7972 4600 6961      free memory.Fai
+   bc50c:	656c 2064 6e69 6420 7461 2061 6573 646e     led in data send
+   bc51c:	4100 6b63 7220 6365 6965 6576 2064 202d     .Ack received - 
+   bc52c:	7075 6164 6974 676e 4e00 206f 6f6a 6e69     updating.No join
+   bc53c:	6120 6b63 7220 6365 6965 6576 0064 6552      ack received.Re
+   bc54c:	6573 7474 6e69 2067 6564 6976 6563 5500     setting device.U
+   bc55c:	646e 6665 6e69 6465 4520 7272 726f 5320     ndefined Error S
+   bc56c:	6174 6574 4c00 526f 2041 6e49 7469 6169     tate.LoRA Initia
+   bc57c:	696c 617a 6974 6e6f 6620 6961 756c 6572     lization failure
+   bc58c:	6120 656c 7472 6320 646f 2065 6425 2d20      alert code %d -
+   bc59c:	7020 776f 7265 6320 6379 656c 6920 206e      power cycle in 
+   bc5ac:	3033 4e00 646f 2065 756e 626d 7265 6920     30.Node number i
+   bc5bc:	646e 6369 7461 6465 7520 636e 6e6f 6966     ndicated unconfi
+   bc5cc:	7567 6572 2064 6f6e 6564 6f20 2066 6425     gured node of %d
+   bc5dc:	7320 7465 6974 676e 6120 656c 7472 6320      setting alert c
+   bc5ec:	646f 2065 6f74 2520 0064 7453 7261 7574     ode to %d.Startu
+   bc5fc:	2070 6f63 706d 656c 6574 6620 726f 7420     p complete for t
+   bc60c:	6568 4e20 646f 2065 6977 6874 6120 656c     he Node with ale
+   bc61c:	7472 6320 646f 2065 6425 6900 696e 2074     rt code %d.init 
+   bc62c:	6166 6c69 6465 4c00 526f 2041 6152 6964     failed.LoRA Radi
+   bc63c:	206f 6e69 7469 6169 696c 657a 2064 7361     o initialized as
+   bc64c:	6120 6720 7461 7765 7961 7720 7469 2068      a gateway with 
+   bc65c:	2061 6564 6976 6563 4449 6f20 2066 7325     a deviceID of %s
+   bc66c:	4c00 526f 2041 6152 6964 206f 6e69 7469     .LoRA Radio init
+   bc67c:	6169 696c 657a 2064 7361 6e20 646f 2065     ialized as node 
+   bc68c:	6925 6120 646e 6120 6420 7665 6369 4965     %i and a deviceI
+   bc69c:	2044 666f 2520 0073 6f4c 4152 5220 6461     D of %s.LoRA Rad
+   bc6ac:	6f69 6920 696e 6974 6c61 7a69 6465 6120     io initialized a
+   bc6bc:	2073 6e61 7520 636e 6e6f 6966 7567 6572     s an unconfigure
+   bc6cc:	2064 6f6e 6564 2520 2069 6e61 2064 2061     d node %i and a 
+   bc6dc:	6564 6976 6563 4449 6f20 2066 7325 5300     deviceID of %s.S
+   bc6ec:	6e65 6964 676e 6420 7461 2061 6572 6f70     ending data repo
+   bc6fc:	7472 6e20 6d75 6562 2072 6425 4400 7461     rt number %d.Dat
+   bc70c:	2061 6572 6f70 7472 6420 6c65 7669 7265     a report deliver
+   bc71c:	6465 2d20 7320 6375 6563 7373 7220 7461     ed - success rat
+   bc72c:	2065 3425 322e 0066 6f4e 6564 2520 2064     e %4.2f.Node %d 
+   bc73c:	202d 6144 6174 7220 7065 726f 2074 6573     - Data report se
+   bc74c:	646e 7420 206f 6167 6574 6177 2079 6425     nd to gateway %d
+   bc75c:	6620 6961 656c 2064 202d 6f4e 5220 756f      failed - No Rou
+   bc76c:	6574 2d20 7320 6375 6563 7373 7220 7461     te - success rat
+   bc77c:	2065 3425 322e 0066 6f4e 6564 2520 2064     e %4.2f.Node %d 
+   bc78c:	202d 6144 6174 7220 7065 726f 2074 6573     - Data report se
+   bc79c:	646e 7420 206f 6167 6574 6177 2079 6425     nd to gateway %d
+   bc7ac:	6620 6961 656c 2064 202d 6e55 6261 656c      failed - Unable
+   bc7bc:	7420 206f 6544 696c 6576 2072 202d 7573      to Deliver - su
+   bc7cc:	6363 7365 2073 6172 6574 2520 2e34 6632     ccess rate %4.2f
+   bc7dc:	4e00 646f 2065 6425 2d20 4420 7461 2061     .Node %d - Data 
+   bc7ec:	6572 6f70 7472 7320 6e65 2064 6f74 6720     report send to g
+   bc7fc:	7461 7765 7961 2520 2064 6166 6c69 6465     ateway %d failed
+   bc80c:	2020 202d 6e55 6e6b 776f 206e 202d 7573       - Unknown - su
+   bc81c:	6363 7365 2073 6172 6574 2520 2e34 6632     ccess rate %4.2f
+   bc82c:	4400 7461 2061 6572 6f70 7472 6120 6b63     .Data report ack
+   bc83c:	6f6e 6c77 6465 6567 2064 6f66 2072 656d     nowledged for me
+   bc84c:	7373 6761 2065 6425 6100 4e20 646f 4e65     ssage %d.a NodeN
+   bc85c:	6d75 6562 2072 7369 6e20 6565 6564 0064     umber is needed.
+   bc86c:	6874 2065 6c63 636f 206b 7369 6e20 746f     the clock is not
+   bc87c:	7320 7465 5300 6e65 6964 676e 6a20 696f      set.Sending joi
+   bc88c:	206e 6572 7571 7365 2074 6562 6163 7375     n request becaus
+   bc89c:	2065 7325 4400 7461 2061 6572 6f70 7472     e %s.Data report
+   bc8ac:	7320 6e65 2064 6f74 6720 7461 7765 7961      send to gateway
+   bc8bc:	7320 6375 6563 7373 7566 6c6c 0079 6144      successfully.Da
+   bc8cc:	6174 7220 7065 726f 2074 6573 646e 7420     ta report send t
+   bc8dc:	206f 6147 6574 6177 2079 6166 6c69 6465     o Gateway failed
+   bc8ec:	4900 206e 6572 6563 7669 2065 6f4a 6e69     .In receive Join
+   bc8fc:	4120 6b63 6f6e 6c77 6465 6567 4a00 696f      Acknowledge.Joi
+   bc90c:	206e 6572 7571 7365 2074 6361 6e6b 776f     n request acknow
+   bc91c:	656c 6764 6465 6120 646e 6e20 646f 2065     ledged and node 
+   bc92c:	4449 7320 7465 7420 206f 6425 5300 6375     ID set to %d.Suc
+   bc93c:	6563 7373 7320 6e65 6964 676e 4120 656c     cess sending Ale
+   bc94c:	7472 5220 7065 726f 2074 756e 626d 7265     rt Report number
+   bc95c:	2520 2064 6f74 6720 7461 7765 7961 6120      %d to gateway a
+   bc96c:	2074 6425 4e00 646f 2065 202d 6c41 7265     t %d.Node - Aler
+   bc97c:	2074 6552 6f70 7472 7320 6e65 2064 6f74     t Report send to
+   bc98c:	4720 7461 7765 7961 6620 6961 656c 0064      Gateway failed.
+   bc99c:	6c41 7265 2074 6572 6f70 7472 6120 6b63     Alert report ack
+   bc9ac:	6f6e 6c77 6465 6567 0064 614d 6967 2063     nowledged.Magic 
+   bc9bc:	754e 626d 7265 6d20 7369 616d 6374 2068     Number mismatch 
+   bc9cc:	202d 6769 6f6e 6972 676e 6d20 7365 6173     - ignoring messa
+   bc9dc:	6567 5200 6365 6965 6576 2064 7266 6d6f     ge.Received from
+   bc9ec:	6e20 646f 2065 6425 7720 7469 2068 7372      node %d with rs
+   bc9fc:	6973 253d 2064 202d 2061 7325 6d20 7365     si=%d - a %s mes
+   bca0c:	6173 6567 5300 7465 6320 6f6c 6b63 7420     sage.Set clock t
+   bca1c:	206f 7325 6120 646e 7220 7065 726f 2074     o %s and report 
+   bca2c:	7266 7165 6575 636e 2079 6f74 2520 2064     frequency to %d 
+   bca3c:	696d 756e 6574 0073                         minutes.
 
 000bca44 <_ZTV14LoRA_Functions>:
 	...
-   bca4c:	4b81 000b 4b83 000b 2041 656e 2077 6164     .K...K..A new da
+   bca4c:	4b41 000b 4b43 000b 2041 656e 2077 6164     AK..CK..A new da
    bca5c:	2079 202d 6572 6573 7474 6e69 2067 7665     y - resetting ev
    bca6c:	7265 7479 6968 676e 0000 0000               erything....
 
@@ -21515,8 +21518,8 @@ USARTSerial& __fetch_global_Serial1()
 	...
 
 000bd738 <link_const_variable_data_end>:
-   bd738:	000b4b21 	.word	0x000b4b21
-   bd73c:	000b51d5 	.word	0x000b51d5
+   bd738:	000b4ae1 	.word	0x000b4ae1
+   bd73c:	000b51dd 	.word	0x000b51dd
    bd740:	000b5771 	.word	0x000b5771
    bd744:	000b59f1 	.word	0x000b59f1
    bd748:	000b5e55 	.word	0x000b5e55

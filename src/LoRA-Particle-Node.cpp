@@ -17,6 +17,7 @@
 // v0.09 - Added LoRA Radio sleep / clear buffer
 // v0.10 - Lots of little fixes minimally works now
 // v0.11 - Big changes to messages and storage.  Works reliably now.
+// v0.12 - Better management of node number at startup, also explicit set time for RTC
 
 // Particle Libraries
 #include "AB1805_RK.h"                              // Watchdog and Real Time Clock - https://github.com/rickkas7/AB1805_RK
@@ -30,7 +31,7 @@
 
 // Support for Particle Products (changes coming in 4.x - https://docs.particle.io/cards/firmware/macros/product_id/)
 PRODUCT_VERSION(0);
-char currentPointRelease[6] ="0.11";
+char currentPointRelease[6] ="0.12";
 
 // Prototype functions
 void publishStateTransition(void);                  // Keeps track of state machine changes - for debugging
@@ -78,8 +79,6 @@ void setup() {
         ab1805.setWDT(AB1805::WATCHDOG_MAX_SECONDS);// Enable watchdog
     }
 
-	Log.info("RTC initialized, time is %s and RTC %s set", Time.timeStr(Time.now()).c_str(), (ab1805.isRTCSet()) ? "is" : "is not");
-
 	System.on(out_of_memory, outOfMemoryHandler);     // Enabling an out of memory handler is a good safety tip. If we run out of memory a System.reset() is done.
 
 	// In this section we test for issues and set alert codes as needed
@@ -118,7 +117,7 @@ void loop() {
 			if (state != oldState) publishStateTransition();              	// We will apply the back-offs before sending to ERROR state - so if we are here we will take action
 			ab1805.stopWDT();  												// No watchdogs interrupting our slumber
 			wakeInSeconds = secondsUntilNextEvent();						// Figure out how long to sleep 
-			Log.info("Sleep for %i seconds until next event %s", wakeInSeconds, (Time.isValid()) ? Time.timeStr(Time.now()+wakeInSeconds).c_str(): " ");
+			Log.info("Report frequency of %d minutes.  Sleep for %i seconds until next event at %s", sysStatus.get_frequencyMinutes(), wakeInSeconds, (Time.isValid()) ? Time.timeStr(Time.now()+wakeInSeconds).c_str(): " ");
 			config.mode(SystemSleepMode::ULTRA_LOW_POWER)
 				.gpio(BUTTON_PIN,CHANGE)
 				.gpio(INT_PIN,RISING)
@@ -292,8 +291,9 @@ int secondsUntilNextEvent() {												// Time till next scheduled event
 	unsigned long secondsToReturn = 0;
 	unsigned long wakeBoundary = sysStatus.get_frequencyMinutes() * 60UL;
    	if (Time.isValid()) {
-		secondsToReturn = constrain( wakeBoundary - Time.now() % wakeBoundary, 0UL, wakeBoundary);  // Adding one second to reduce prospect of round tripping to IDLE
-        Log.info("Report frequency %d mins, next event in %lu seconds", sysStatus.get_frequencyMinutes(), secondsToReturn);
+		secondsToReturn = constrain( wakeBoundary - Time.now() % wakeBoundary, 0UL, wakeBoundary);  // If Time is valid, we can compute time to the start of the next report window
+		if (sysStatus.get_nodeNumber() < 10) secondsToReturn += 10UL * sysStatus.get_nodeNumber();	// If the node is configured - add an offset to sequence node send windows - unconfigured nodes go first
+		return secondsToReturn;
     }
-	return secondsToReturn + 10;											// Add an off-set - need to refine this later.
+	else return 60UL;	// If time is not valid, we need to keep trying to catch the Gateway when it next wakes up.
 }
