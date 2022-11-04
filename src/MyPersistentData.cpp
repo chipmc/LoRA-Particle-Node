@@ -13,8 +13,8 @@ MB85RC64 fram(Wire, 0);
  */
 void resetEverything() {                                              // The device is waking up in a new day or is a new install
   Log.info("A new day - resetting everything");
-  current.set_dailyCount(0);                                            // Reset the counts in FRAM as well
-  current.set_hourlyCount(0);
+  current.set_dailyCount(1);                                            // Reset the counts in FRAM as well
+  current.set_hourlyCount(1);
   current.set_lastCountTime(Time.now());
   sysStatus.set_resetCount(0);                                           // Reset the reset count as well
 }
@@ -33,16 +33,10 @@ void loadSystemDefaults() {                         // This code is only execute
   sysStatus.set_structuresVersion(1);
   sysStatus.set_magicNumber(27617);
   sysStatus.set_firmwareRelease(1);
-  sysStatus.set_solarPowerMode(true);
-  sysStatus.set_lowPowerMode(true);
   sysStatus.set_resetCount(0);
   sysStatus.set_lastHookResponse(0);
-  sysStatus.set_frequencyMinutes(60);
-  sysStatus.set_alertCodeGateway(0);
-  sysStatus.set_alertTimestampGateway(0);
-  sysStatus.set_openTime(6);
-  sysStatus.set_closeTime(22);
-  sysStatus.set_verizonSIM(false);
+  sysStatus.set_frequencyMinutes(10);
+  sysStatus.set_openHours(true);
 
 }
 
@@ -109,22 +103,6 @@ void sysStatusData::set_firmwareRelease(uint8_t value) {
     setValue<uint8_t>(offsetof(SysData, firmwareRelease), value);
 }
 
-bool sysStatusData::get_solarPowerMode() const {
-    return getValue<bool>(offsetof(SysData, solarPowerMode));
-}
-
-void sysStatusData::set_solarPowerMode(bool value) {
-    setValue<bool>(offsetof(SysData, solarPowerMode), value);
-}
-
-bool sysStatusData::get_lowPowerMode() const {
-    return getValue<bool>(offsetof(SysData, lowPowerMode));
-}
-
-void sysStatusData::set_lowPowerMode(bool value) {
-    setValue<bool>(offsetof(SysData, lowPowerMode), value);
-}
-
 uint8_t sysStatusData::get_resetCount() const {
     return getValue<uint8_t>(offsetof(SysData, resetCount));
 }
@@ -165,54 +143,21 @@ void sysStatusData::set_frequencyMinutes(uint16_t value) {
     setValue<uint16_t>(offsetof(SysData, frequencyMinutes), value);
 }
 
-uint8_t sysStatusData::get_alertCodeGateway() const {
-    return getValue<uint8_t>(offsetof(SysData, alertCodeGateway));
+uint8_t sysStatusData::get_sensorType() const {
+    return getValue<uint8_t>(offsetof(SysData, sensorType));
 }
 
-void sysStatusData::set_alertCodeGateway(uint8_t value) {
-    setValue<uint8_t>(offsetof(SysData, alertCodeGateway), value);
+void sysStatusData::set_sensorType(uint8_t value) {
+    setValue<uint8_t>(offsetof(SysData, sensorType), value);
 }
 
-time_t sysStatusData::get_alertTimestampGateway() const {
-    return getValue<time_t>(offsetof(SysData, alertTimestampGateway));
+bool sysStatusData::get_openHours() const {
+    return getValue<bool>(offsetof(SysData, openHours));
 }
 
-void sysStatusData::set_alertTimestampGateway(time_t value) {
-    setValue<time_t>(offsetof(SysData, alertTimestampGateway), value);
+void sysStatusData::set_openHours(bool value) {
+    setValue<bool>(offsetof(SysData, openHours), value);
 }
-
-bool sysStatusData::get_sensorType() const {
-    return getValue<bool>(offsetof(SysData, sensorType));
-}
-
-void sysStatusData::set_sensorType(bool value) {
-    setValue<bool>(offsetof(SysData, sensorType), value);
-}
-
-uint8_t sysStatusData::get_openTime() const {
-    return getValue<uint8_t>(offsetof(SysData, openTime));
-}
-
-void sysStatusData::set_openTime(uint8_t value) {
-    setValue<uint8_t>(offsetof(SysData, openTime), value);
-}
-
-uint8_t sysStatusData::get_closeTime() const {
-    return getValue<uint8_t>(offsetof(SysData, closeTime));
-}
-
-void sysStatusData::set_closeTime(uint8_t value) {
-    setValue<uint8_t>(offsetof(SysData, closeTime), value);
-}
-
-bool sysStatusData::get_verizonSIM() const {
-    return getValue<bool>(offsetof(SysData, verizonSIM));
-}
-
-void sysStatusData::set_verizonSIM(bool value) {
-    setValue<bool>(offsetof(SysData, verizonSIM), value);
-}
-
 
 // *****************  Current Status Storage Object *******************
 // Offset of 50 bytes - make room for SysStatus

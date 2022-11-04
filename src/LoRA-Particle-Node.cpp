@@ -18,6 +18,8 @@
 // v0.10 - Lots of little fixes minimally works now
 // v0.11 - Big changes to messages and storage.  Works reliably now.
 // v0.12 - Better management of node number at startup, also explicit set time for RTC
+// v0.13 - Gateway sets open / close and alerts - sysStatus object and join ack updated
+// v0.14 - Gateway can trigger join request to fix issues with deviceID and sensorType
 
 // Particle Libraries
 #include "AB1805_RK.h"                              // Watchdog and Real Time Clock - https://github.com/rickkas7/AB1805_RK
@@ -29,9 +31,18 @@
 #include "MyPersistentData.h"						// Persistent Storage
 #include "node_configuration.h"
 
-// Support for Particle Products (changes coming in 4.x - https://docs.particle.io/cards/firmware/macros/product_id/)
-PRODUCT_VERSION(0);
-char currentPointRelease[6] ="0.12";
+// Prototypes and System Mode calls
+SYSTEM_MODE(SEMI_AUTOMATIC);                        // This will enable user code to start executing automatically.
+SYSTEM_THREAD(ENABLED);                             // Means my code will not be held up by Particle processes.
+STARTUP(System.enableFeature(FEATURE_RESET_INFO));
+
+// For monitoring / debugging, you have some options on the next few lines - uncomment one
+//SerialLogHandler logHandler(LOG_LEVEL_TRACE);
+//SerialLogHandler logHandler(LOG_LEVEL_ALL);         // All the loggings 
+SerialLogHandler logHandler(LOG_LEVEL_INFO);     // Easier to see the program flow
+// Serial1LogHandler logHandler1(57600);            // This line is for when we are using the OTII ARC for power analysis
+
+char currentPointRelease[6] ="0.14";
 
 // Prototype functions
 void publishStateTransition(void);                  // Keeps track of state machine changes - for debugging
@@ -113,18 +124,21 @@ void loop() {
 		} break;
 
 		case SLEEPING_STATE: {
-			int wakeInSeconds = 0;
 			if (state != oldState) publishStateTransition();              	// We will apply the back-offs before sending to ERROR state - so if we are here we will take action
-			ab1805.stopWDT();  												// No watchdogs interrupting our slumber
-			wakeInSeconds = secondsUntilNextEvent();						// Figure out how long to sleep 
-			Log.info("Report frequency of %d minutes.  Sleep for %i seconds until next event at %s", sysStatus.get_frequencyMinutes(), wakeInSeconds, (Time.isValid()) ? Time.timeStr(Time.now()+wakeInSeconds).c_str(): " ");
+			int wakeInSeconds = secondsUntilNextEvent();					// Figure out how long to sleep 
+			if (!sysStatus.get_openHours()) digitalWrite(MODULE_POWER_PIN,HIGH);  // disable (HIGH) the sensor
+			Log.info("Report frequency of %d minutes.  Sleep for %i seconds until next event at %s with sensor %s", \
+			sysStatus.get_frequencyMinutes(), wakeInSeconds, (Time.isValid()) ? Time.timeStr(Time.now()+wakeInSeconds).c_str(): " ", (sysStatus.get_openHours()) ? "on" : "off");
 			config.mode(SystemSleepMode::ULTRA_LOW_POWER)
 				.gpio(BUTTON_PIN,CHANGE)
 				.gpio(INT_PIN,RISING)
 				.duration(wakeInSeconds * 1000L);
+			if (Time.hour())
+			ab1805.stopWDT();  												// No watchdogs interrupting our slumber
 			SystemSleepResult result = System.sleep(config);              	// Put the device to sleep device continues operations from here
 			waitFor(Serial.isConnected, 10000);								// Wait for serial connection
 			ab1805.resumeWDT();                                             // Wakey Wakey - WDT can resume
+			digitalWrite(MODULE_POWER_PIN,LOW);             				// Enable (LOW) the sensor
 			if (result.wakeupPin() == BUTTON_PIN) {                         // If the user woke the device we need to get up - device was sleeping so we need to reset opening hours
 				Log.info("Woke with user button - LoRA State");
 				state = LoRA_STATE;
@@ -159,7 +173,7 @@ void loop() {
 			while (millis() - startListening < 5000) {
 				// The big difference between a node and a gateway - the Node initiates a LoRA exchange by sending data
 				if (LoRA_Functions::instance().listenForLoRAMessageNode()) {// Listen for acknowledgement
-					current.set_hourlyCount(0);								// Zero the hourly count
+					if (!current.get_alertCodeNode()) current.set_hourlyCount(0);	// Zero the hourly count unless there is an alert
 					sysStatus.set_lastConnection(Time.now());
 					ab1805.setRtcFromTime(Time.now());
 					break;
@@ -167,7 +181,8 @@ void loop() {
 			}
 
 			LoRA_Functions::instance().sleepLoRaRadio();					// Done with LoRA - put radio to sleep
-			state = SLEEPING_STATE;
+			if (current.get_alertCodeNode() > 0) state = IDLE_STATE;
+			else state = SLEEPING_STATE;
 
 		} break;
 
@@ -242,6 +257,7 @@ void loop() {
 	if (outOfMemory >= 0) {                         // In this function we are going to reset the system if there is an out of memory error
 		System.reset();
   	}
+
 }
 
 /**

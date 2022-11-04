@@ -59,10 +59,8 @@ float tmp36TemperatureC (int adcValue) {
 bool batteryState() {
     current.set_batteryState(System.batteryState());                      // Call before isItSafeToCharge() as it may overwrite the context
 
-  if (sysStatus.get_lowPowerMode()) {                                        // Need to take these steps if we are sleeping
     fuelGauge.quickStart();                                            // May help us re-establish a baseline for SoC
     delay(500);
-  }
 
   current.set_stateOfCharge(System.batteryCharge());                   // Assign to system value
 

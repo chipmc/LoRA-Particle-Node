@@ -152,15 +152,16 @@ bool LoRA_Functions::composeDataReportNode() {
 	buf[4] = lowByte(current.get_hourlyCount()); 
 	buf[5] = highByte(current.get_dailyCount());
 	buf[6] = lowByte(current.get_dailyCount()); 
-	buf[7] = current.get_internalTempC();
-	buf[8] = current.get_stateOfCharge();
-	buf[9] = current.get_batteryState();	
-	buf[10] = sysStatus.get_resetCount();
-	buf[11] = msgCnt;
+	buf[7] = sysStatus.get_sensorType();
+	buf[8] = current.get_internalTempC();
+	buf[9] = current.get_stateOfCharge();
+	buf[10] = current.get_batteryState();	
+	buf[11] = sysStatus.get_resetCount();
+	buf[12] = msgCnt;
 
 	// Send a message to manager_server
   	// A route to the destination will be automatically discovered.
-	unsigned char result = manager.sendtoWait(buf, 17, GATEWAY_ADDRESS, DATA_RPT);
+	unsigned char result = manager.sendtoWait(buf, 13, GATEWAY_ADDRESS, DATA_RPT);
 	
 	if ( result == RH_ROUTER_ERROR_NONE) {
 		// It has been reliably delivered to the next node.
@@ -184,8 +185,19 @@ bool LoRA_Functions::composeDataReportNode() {
 }
 
 bool LoRA_Functions::receiveAcknowledmentDataReportNode() {
-		
-	Log.info("Data report acknowledged for message %d", buf[8]);
+	if (buf[8] == 0) {
+		sysStatus.set_openHours(false);					// Open hours or not - impacts whether we power down the sensor for sleep
+		Log.info("Park is closed - reset everything");
+		resetEverything();
+	}
+	else sysStatus.set_openHours(true);
+
+	if (buf[9] > 0) {									// the Gateway set an alert
+		current.set_alertCodeNode(buf[9]);				
+		sysStatus.set_nodeNumber(11);					// Set node number to unconfigured
+		manager.setThisAddress(11);						// Make sure the next message reflects an unconfigured node
+	}
+	Log.info("Data report acknowledged %s alert for message %d park is %s and alert code is %d", (buf[9] > 0) ? "with":"without", buf[10], (buf[8] ==1) ? "open":"closed", buf[9]);
 	return true;
 }
 
@@ -201,19 +213,20 @@ bool LoRA_Functions::composeJoinRequesttNode() {
 	for (uint8_t i=0; i < sizeof(deviceID); i++) {
 		buf[i+2] = deviceID[i];
 	}
+	buf[27] = sysStatus.get_sensorType();
 
 	// Send a message to manager_server
   	// A route to the destination will be automatically discovered.
 	Log.info("Sending join request because %s",(sysStatus.get_nodeNumber() > 10) ? "a NodeNumber is needed" : "the clock is not set");
-	if (manager.sendtoWait(buf, 27, GATEWAY_ADDRESS, JOIN_REQ) == RH_ROUTER_ERROR_NONE) {
+	if (manager.sendtoWait(buf, 28, GATEWAY_ADDRESS, JOIN_REQ) == RH_ROUTER_ERROR_NONE) {
 		// It has been reliably delivered to the next node.
 		// Now wait for a reply from the ultimate server 
-		Log.info("Data report send to gateway successfully");
+		Log.info("Join request sent to gateway successfully");
 		digitalWrite(BLUE_LED, LOW);
 		return true;
 	}
 	else {
-		Log.info("Data report send to Gateway failed");
+		Log.info("Join request to Gateway failed");
 		digitalWrite(BLUE_LED, LOW);
 		return false;
 	}
@@ -226,6 +239,7 @@ bool LoRA_Functions::receiveAcknowledmentJoinRequestNode() {
 	if (sysStatus.get_nodeNumber() > 10) sysStatus.set_nodeNumber(buf[8]);
 	Log.info("Join request acknowledged and node ID set to %d", sysStatus.get_nodeNumber());
 	manager.setThisAddress(sysStatus.get_nodeNumber());
+	sysStatus.set_sensorType(buf[9]);
 	return true;
 }
 

@@ -70,19 +70,13 @@ public:
 		uint8_t structuresVersion;                        // Version of the data structures (system and data)
 		uint16_t magicNumber;							  // A way to identify nodes and gateways so they can trust each other
 		uint8_t firmwareRelease;                          // Version of the device firmware (integer - aligned to particle prodict firmware)
-		bool solarPowerMode;                              // Powered by a solar panel or utility power
-		bool lowPowerMode;                                // Does the device need to run disconnected to save battery
 		uint8_t resetCount;                               // reset count of device (0-256)
 		time_t lastHookResponse;                   		  // Last time we got a valid Webhook response
 		time_t lastConnection;                     		  // Last time we successfully connected to Particle
 		uint16_t lastConnectionDuration;                  // How long - in seconds - did it take to last connect to the Particle cloud
 		uint16_t frequencyMinutes;                        // When we are reporing at minute increments - what are they - for Gateways
-		uint8_t alertCodeGateway;                         // Alert code for Gateway Alerts
-		time_t alertTimestampGateway;              		  // When was the last alert
-		bool sensorType;                                  // PIR sensor, car counter, others?
-		uint8_t openTime;                                 // Open time 24 hours
-		uint8_t closeTime;                                // Close time 24 hours
-		bool verizonSIM;                                  // Are we using a Verizon SIM?
+		uint8_t sensorType;                               // PIR sensor, car counter, others - this value is changed by the Gateway
+		bool openHours;									  // Are we collecting data or is it outside open hours?
 	};
 
 	SysData sysData;
@@ -124,12 +118,6 @@ public:
 	uint8_t get_firmwareRelease() const;
 	void set_firmwareRelease(uint8_t value);
 
-	bool get_solarPowerMode() const;
-	void set_solarPowerMode(bool value);
-
-	bool get_lowPowerMode() const;
-	void set_lowPowerMode(bool value);
-
 	uint8_t get_resetCount() const;
 	void set_resetCount(uint8_t value);
 
@@ -145,23 +133,11 @@ public:
 	uint16_t get_frequencyMinutes() const;
 	void set_frequencyMinutes(uint16_t value);
 
-	uint8_t get_alertCodeGateway() const;
-	void set_alertCodeGateway(uint8_t value);
+	uint8_t get_sensorType() const;
+	void set_sensorType(uint8_t value);
 
-	time_t get_alertTimestampGateway() const;
-	void set_alertTimestampGateway(time_t value);
-
-	bool get_sensorType() const;
-	void set_sensorType(bool value);
-
-	uint8_t get_openTime() const;
-	void set_openTime(uint8_t value);
-
-	uint8_t get_closeTime() const;
-	void set_closeTime(uint8_t value);
-
-	bool get_verizonSIM() const;
-	void set_verizonSIM(bool value);
+	bool get_openHours() const;
+	void set_openHours(bool value);
 
 	//Members here are internal only and therefore protected
 protected:
@@ -195,7 +171,7 @@ protected:
     static sysStatusData *_instance;
 
     //Since these variables are only used internally - They can be private. 
-	static const uint32_t SYS_DATA_MAGIC = 0x20a99e73;
+	static const uint32_t SYS_DATA_MAGIC = 0x20a99e74;
 	static const uint16_t SYS_DATA_VERSION = 1;
 
 };
