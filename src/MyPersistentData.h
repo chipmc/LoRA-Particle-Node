@@ -5,10 +5,6 @@
 #include "MB85RC256V-FRAM-RK.h"
 #include "StorageHelperRK.h"
 
-// Common Storage Functions
-void loadSystemDefaults();                          // Initilize the object values for new deployments
-void resetEverything();                                  // Resets the current hourly and daily counts
-
 //Include other application specific header files
 // #include (no other header files required from other singleton classes)
 
@@ -58,6 +54,18 @@ public:
      */
     void loop();
 
+	/**
+	 * @brief Load the appropriate system defaults - good ot initialize a system to "factory settings"
+	 * 
+	 */
+	void loadSystemDefaults(); 
+
+	/**
+	 * @brief Checks to make sure the system values are in-order
+	 * 
+	 */
+	void checkSystemValues();	
+
 
 	class SysData {
 	public:
@@ -69,12 +77,12 @@ public:
 		uint16_t nodeNumber;                              // Assigned by the gateway on joining the network
 		uint8_t structuresVersion;                        // Version of the data structures (system and data)
 		uint16_t magicNumber;							  // A way to identify nodes and gateways so they can trust each other
-		uint8_t firmwareRelease;                          // Version of the device firmware (integer - aligned to particle prodict firmware)
+		uint8_t firmwareRelease;                          // Version of the device firmware (integer - aligned to particle product firmware)
 		uint8_t resetCount;                               // reset count of device (0-256)
-		time_t lastHookResponse;                   		  // Last time we got a valid Webhook response
 		time_t lastConnection;                     		  // Last time we successfully connected to Particle
-		uint16_t lastConnectionDuration;                  // How long - in seconds - did it take to last connect to the Particle cloud
 		uint16_t frequencyMinutes;                        // When we are reporing at minute increments - what are they - for Gateways
+		uint8_t alertCodeNode;                            // Alert code from node
+		time_t alertTimestampNode;                 	      // Timestamp of alert
 		uint8_t sensorType;                               // PIR sensor, car counter, others - this value is changed by the Gateway
 		bool openHours;									  // Are we collecting data or is it outside open hours?
 	};
@@ -121,17 +129,17 @@ public:
 	uint8_t get_resetCount() const;
 	void set_resetCount(uint8_t value);
 
-	time_t get_lastHookResponse() const;
-	void set_lastHookResponse(time_t value);
-
 	time_t get_lastConnection() const;
 	void set_lastConnection(time_t value);
 
-	uint16_t get_lastConnectionDuration() const;
-	void set_lastConnectionDuration(uint16_t value);
-
 	uint16_t get_frequencyMinutes() const;
 	void set_frequencyMinutes(uint16_t value);
+
+	uint8_t get_alertCodeNode() const;
+	void set_alertCodeNode(uint8_t value);
+
+	time_t get_alertTimestampNode() const;
+	void set_alertTimestampNode(time_t value);
 
 	uint8_t get_sensorType() const;
 	void set_sensorType(uint8_t value);
@@ -171,7 +179,7 @@ protected:
     static sysStatusData *_instance;
 
     //Since these variables are only used internally - They can be private. 
-	static const uint32_t SYS_DATA_MAGIC = 0x20a99e74;
+	static const uint32_t SYS_DATA_MAGIC = 0x20a99e75;
 	static const uint16_t SYS_DATA_VERSION = 1;
 
 };
@@ -207,6 +215,18 @@ public:
      */
     void loop();
 
+	/**
+	 * @brief Load the appropriate system defaults - good ot initialize a system to "factory settings"
+	 * 
+	 */
+	void loadCurrentDefaults();                          // Initilize the object values for new deployments
+
+	/**
+	 * @brief Resets the current and hourly counts
+	 * 
+	 */
+	void resetEverything();  
+
 	class CurrentData {
 	public:
 		// This structure must always begin with the header (16 bytes)
@@ -220,12 +240,11 @@ public:
 		uint8_t batteryState;                             // Stores the current battery state (charging, discharging, etc)
 		time_t lastSampleTime;                            // Timestamp of last data collection
 		uint16_t RSSI;                                    // Latest signal strength value
-		uint8_t messageNumber;                            // What message are we on
+		uint8_t messageCount;                            // What message are we on
+		uint8_t successCount;							  // How many messages are delivered successfully
 		time_t lastCountTime;                             // When did we last record a count
 		uint16_t hourlyCount;                             // Current Hourly Count
 		uint16_t dailyCount;                              // Current Daily Count
-		uint8_t alertCodeNode;                            // Alert code from node
-		time_t alertTimestampNode;                 	      // Timestamp of alert
 		// OK to add more fields here 
 	};
 	CurrentData currentData;
@@ -270,8 +289,11 @@ public:
 	uint16_t get_RSSI() const;
 	void set_RSSI(uint16_t value);
 
-	uint8_t get_messageNumber() const;
-	void set_messageNumber(uint8_t value);
+	uint8_t get_messageCount() const;
+	void set_messageCount(uint8_t value);
+
+	uint8_t get_successCount() const;
+	void set_successCount(uint8_t value);
 
 	time_t get_lastCountTime() const;
 	void set_lastCountTime(time_t value);
@@ -281,14 +303,6 @@ public:
 
 	uint16_t get_dailyCount() const;
 	void set_dailyCount(uint16_t value);
-
-	uint8_t get_alertCodeNode() const;
-	void set_alertCodeNode(uint8_t value);
-
-	time_t get_alertTimestampNode() const;
-	void set_alertTimestampNode(time_t value);
-
-    void logData(const char *msg);
 
 		//Members here are internal only and therefore protected
 protected:
@@ -322,7 +336,7 @@ protected:
     static currentStatusData *_instance;
 
     //Since these variables are only used internally - They can be private. 
-	static const uint32_t CURRENT_DATA_MAGIC = 0x20a99e73;
+	static const uint32_t CURRENT_DATA_MAGIC = 0x20a99e74;
 	static const uint16_t CURRENT_DATA_VERSION = 1;
 };
 

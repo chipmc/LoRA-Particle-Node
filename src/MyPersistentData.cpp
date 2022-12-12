@@ -19,27 +19,6 @@ void resetEverything() {                                              // The dev
   sysStatus.set_resetCount(0);                                           // Reset the reset count as well
 }
 
-/**
- * @brief This function is called in setup if the version of the FRAM stoage map has been changed
- * 
- */
-void loadSystemDefaults() {                         // This code is only executed with a new device or a new storage object structure
-  if (Particle.connected()) {
-    Particle.publish("Mode","Loading System Defaults", PRIVATE);
-  }
-  Log.info("Loading system defaults");              // Letting us know that defaults are being loaded
-
-  sysStatus.set_nodeNumber(11);
-  sysStatus.set_structuresVersion(1);
-  sysStatus.set_magicNumber(27617);
-  sysStatus.set_firmwareRelease(1);
-  sysStatus.set_resetCount(0);
-  sysStatus.set_lastHookResponse(0);
-  sysStatus.set_frequencyMinutes(10);
-  sysStatus.set_openHours(true);
-
-}
-
 // *******************  SysStatus Storage Object **********************
 //
 // ********************************************************************
@@ -68,6 +47,36 @@ void sysStatusData::setup() {
 
 void sysStatusData::loop() {
     sysStatus.flush(false);
+}
+
+/**
+ * @brief This function is called in setup if the version of the FRAM stoage map has been changed
+ * 
+ */
+void sysStatusData::loadSystemDefaults() {                         // This code is only executed with a new device or a new storage object structure
+  Log.info("Loading system defaults");              // Letting us know that defaults are being loaded
+
+  sysStatus.set_nodeNumber(11);
+  sysStatus.set_structuresVersion(1);
+  sysStatus.set_magicNumber(27617);
+  sysStatus.set_firmwareRelease(1);
+  sysStatus.set_resetCount(0);
+  sysStatus.set_frequencyMinutes(10);
+  sysStatus.set_alertCodeNode(0);
+  sysStatus.set_alertTimestampNode(0);
+  sysStatus.set_openHours(true);
+
+}
+
+void sysStatusData::checkSystemValues() {               // Values out of bounds indicates an initialization error - will reload defaults
+    bool reset = false;
+ 
+    if (sysStatus.get_frequencyMinutes() <=0 || sysStatus.get_frequencyMinutes() > 60) reset = true;
+    if (sysStatus.get_sensorType() <= 0 || sysStatus.get_sensorType() >2) reset = true;
+    if (sysStatus.get_nodeNumber() > 11) reset = true;
+
+    if (reset) sysStatusData::loadSystemDefaults();
+
 }
 
 uint8_t sysStatusData::get_nodeNumber() const {
@@ -111,14 +120,6 @@ void sysStatusData::set_resetCount(uint8_t value) {
     setValue<uint8_t>(offsetof(SysData, resetCount), value);
 }
 
-time_t sysStatusData::get_lastHookResponse() const {
-    return getValue<time_t>(offsetof(SysData, lastHookResponse));
-}
-
-void sysStatusData::set_lastHookResponse(time_t value) {
-    setValue<time_t>(offsetof(SysData, lastHookResponse), value);
-}
-
 time_t sysStatusData::get_lastConnection() const {
     return getValue<time_t>(offsetof(SysData, lastConnection));
 }
@@ -127,20 +128,28 @@ void sysStatusData::set_lastConnection(time_t value) {
     setValue<time_t>(offsetof(SysData, lastConnection), value);
 }
 
-uint16_t sysStatusData::get_lastConnectionDuration() const {
-    return getValue<uint16_t>(offsetof(SysData,lastConnectionDuration));
-}
-
-void sysStatusData::set_lastConnectionDuration(uint16_t value) {
-    setValue<uint16_t>(offsetof(SysData,lastConnectionDuration), value);
-}
-
 uint16_t sysStatusData::get_frequencyMinutes() const {
     return getValue<uint16_t>(offsetof(SysData,frequencyMinutes));
 }
 
 void sysStatusData::set_frequencyMinutes(uint16_t value) {
     setValue<uint16_t>(offsetof(SysData, frequencyMinutes), value);
+}
+
+uint8_t sysStatusData::get_alertCodeNode() const {
+    return getValue<uint8_t>(offsetof(SysData, alertCodeNode));
+}
+
+void sysStatusData::set_alertCodeNode(uint8_t value) {
+    setValue<uint8_t>(offsetof(SysData, alertCodeNode), value);
+}
+
+time_t sysStatusData::get_alertTimestampNode() const {
+    return getValue<time_t>(offsetof(SysData, alertTimestampNode));
+}
+
+void sysStatusData::set_alertTimestampNode(time_t value) {
+    setValue<time_t>(offsetof(SysData, alertTimestampNode), value);
 }
 
 uint8_t sysStatusData::get_sensorType() const {
@@ -188,6 +197,21 @@ void currentStatusData::loop() {
     current.flush(false);
 }
 
+void currentStatusData::loadCurrentDefaults() {                         // This code is only executed with a new device or a new storage object structure
+  Log.info("Loading current defaults");              // Letting us know that defaults are being loaded
+}
+
+void currentStatusData::resetEverything() {                             // The device is waking up in a new day or is a new install
+  Log.info("A new day - resetting everything");
+  current.set_dailyCount(0);                                            // Reset the counts in FRAM as well
+  current.set_hourlyCount(0);
+  current.set_lastCountTime(Time.now());
+  sysStatus.set_resetCount(0);                                          // Reset the reset count as well
+  current.set_messageCount(0);
+  current.set_successCount(0);
+}
+
+
 uint8_t currentStatusData::get_internalTempC() const {
     return getValue<uint8_t>(offsetof(CurrentData, internalTempC));
 }
@@ -228,12 +252,20 @@ void currentStatusData::set_RSSI(uint16_t value) {
     setValue<uint16_t>(offsetof(CurrentData, RSSI), value);
 }
 
-uint8_t currentStatusData::get_messageNumber() const {
-    return getValue<uint8_t>(offsetof(CurrentData, messageNumber));
+uint8_t currentStatusData::get_messageCount() const {
+    return getValue<uint8_t>(offsetof(CurrentData, messageCount));
 }
 
-void currentStatusData::set_messageNumber(uint8_t value) {
-    setValue<uint8_t>(offsetof(CurrentData, messageNumber), value);
+void currentStatusData::set_messageCount(uint8_t value) {
+    setValue<uint8_t>(offsetof(CurrentData, messageCount), value);
+}
+
+uint8_t currentStatusData::get_successCount() const {
+    return getValue<uint8_t>(offsetof(CurrentData, successCount));
+}
+
+void currentStatusData::set_successCount(uint8_t value) {
+    setValue<uint8_t>(offsetof(CurrentData, successCount), value);
 }
 
 time_t currentStatusData::get_lastCountTime() const {
@@ -260,23 +292,4 @@ void currentStatusData::set_dailyCount(uint16_t value) {
     setValue<uint16_t>(offsetof(CurrentData, dailyCount), value);
 }
 
-uint8_t currentStatusData::get_alertCodeNode() const {
-    return getValue<uint8_t>(offsetof(CurrentData, alertCodeNode));
-}
-
-void currentStatusData::set_alertCodeNode(uint8_t value) {
-    setValue<uint8_t>(offsetof(CurrentData, alertCodeNode), value);
-}
-
-time_t currentStatusData::get_alertTimestampNode() const {
-    return getValue<time_t>(offsetof(CurrentData, alertTimestampNode));
-}
-
-void currentStatusData::set_alertTimestampNode(time_t value) {
-    setValue<time_t>(offsetof(CurrentData, alertTimestampNode), value);
-}
-
-void currentStatusData::logData(const char *msg) {
-    Log.info("Current Structure values - %d, %4.2f", currentData.internalTempC, currentData.stateOfCharge);
-}
 

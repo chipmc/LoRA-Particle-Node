@@ -11,7 +11,7 @@ void setNodeConfiguration() {
   sysStatus.set_sensorType(true); // Default is the car counter (true for PIR)
   // sysStatus.set_deviceID(32148);
   // sysStatus.set_structuresVersion(14);
-  // sysStatus.set_nodeNumber(11);
-
+ sysStatus.set_nodeNumber(11);
+ sysStatus.set_magicNumber(27617);
   // sysStatus.flush(true);
 }

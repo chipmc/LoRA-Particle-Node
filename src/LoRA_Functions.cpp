@@ -99,7 +99,24 @@ void LoRA_Functions::clearBuffer() {
 }
 
 void LoRA_Functions::sleepLoRaRadio() {
-	driver.sleep();                             // Here is where we will power down the LoRA radio module
+	driver.sleep();                             	// Here is where we will power down the LoRA radio module
+}
+
+bool  LoRA_Functions::initializeRadio() {  			// Set up the Radio Module
+	digitalWrite(RFM95_RST,LOW);					// Reset the radio module before setup
+	delay(10);
+	digitalWrite(RFM95_RST,HIGH);
+	delay(10);
+
+	if (!manager.init()) {
+		Log.info("init failed");					// Defaults after init are 434.0MHz, 0.05MHz AFC pull-in, modulation FSK_Rb2_4Fd36
+		// delay(10000);
+		return false;
+	}
+	driver.setFrequency(RF95_FREQ);					// Frequency is typically 868.0 or 915.0 in the Americas, or 433.0 in the EU - Are there more settings possible here?
+	driver.setTxPower(23, false);                   // If you are using RFM95/96/97/98 modules which uses the PA_BOOST transmitter pin, then you can set transmitter powers from 5 to 23 dBm (13dBm default).  PA_BOOST?
+
+return true;
 }
 
 
@@ -135,15 +152,16 @@ bool LoRA_Functions::listenForLoRAMessageNode() {
 
 
 bool LoRA_Functions::composeDataReportNode() {
-	static int attempts = 0;
-	static int success = 0;
-	static uint8_t msgCnt = 0;
 
+	float percentSuccess = ((current.get_successCount() * 1.0)/ current.get_messageCount())*100.0;
 
 	digitalWrite(BLUE_LED,HIGH);
-	attempts++;
-	msgCnt++;
-	Log.info("Sending data report number %d",msgCnt);
+	if (current.get_messageCount() == 255) {		// This should not happen in a day unless we pick a very small reporting freq
+		current.set_messageCount(0);				// Prevent divide by zero
+		current.set_successCount(0);				// Zero as well
+	}
+	else current.set_messageCount(current.get_messageCount()+1);
+	Log.info("Sending data report number %d",current.get_messageCount());
 
 	buf[0] = highByte(sysStatus.get_magicNumber());
 	buf[1] = lowByte(sysStatus.get_magicNumber());			
@@ -157,28 +175,30 @@ bool LoRA_Functions::composeDataReportNode() {
 	buf[9] = current.get_stateOfCharge();
 	buf[10] = current.get_batteryState();	
 	buf[11] = sysStatus.get_resetCount();
-	buf[12] = msgCnt;
+	buf[12] = current.get_messageCount();
+	buf[13] = current.get_successCount();
 
 	// Send a message to manager_server
   	// A route to the destination will be automatically discovered.
-	unsigned char result = manager.sendtoWait(buf, 13, GATEWAY_ADDRESS, DATA_RPT);
+	unsigned char result = manager.sendtoWait(buf, 14, GATEWAY_ADDRESS, DATA_RPT);
 	
 	if ( result == RH_ROUTER_ERROR_NONE) {
 		// It has been reliably delivered to the next node.
 		// Now wait for a reply from the ultimate server 
-		success++;
-		Log.info("Data report delivered - success rate %4.2f",((success * 1.0)/ attempts)*100.0);
+		current.set_successCount(current.get_successCount()+1);
+		percentSuccess = ((current.get_successCount() * 1.0)/ current.get_messageCount())*100.0;
+		Log.info("Data report delivered - success rate %4.2f",percentSuccess);
 		digitalWrite(BLUE_LED, LOW);
 		return true;
 	}
 	else if (result == RH_ROUTER_ERROR_NO_ROUTE) {
-        Log.info("Node %d - Data report send to gateway %d failed - No Route - success rate %4.2f", sysStatus.get_nodeNumber(), GATEWAY_ADDRESS, ((success * 1.0)/ attempts)*100.0);
+        Log.info("Node %d - Data report send to gateway %d failed - No Route - success rate %4.2f", sysStatus.get_nodeNumber(), GATEWAY_ADDRESS, percentSuccess);
     }
     else if (result == RH_ROUTER_ERROR_UNABLE_TO_DELIVER) {
-        Log.info("Node %d - Data report send to gateway %d failed - Unable to Deliver - success rate %4.2f", sysStatus.get_nodeNumber(), GATEWAY_ADDRESS, ((success * 1.0)/ attempts)*100.0);
+        Log.info("Node %d - Data report send to gateway %d failed - Unable to Deliver - success rate %4.2f", sysStatus.get_nodeNumber(), GATEWAY_ADDRESS,percentSuccess);
 	}
 	else  {
-		Log.info("Node %d - Data report send to gateway %d failed  - Unknown - success rate %4.2f", sysStatus.get_nodeNumber(), GATEWAY_ADDRESS, ((success * 1.0)/ attempts)*100.0);
+		Log.info("Node %d - Data report send to gateway %d failed  - Unknown - success rate %4.2f", sysStatus.get_nodeNumber(), GATEWAY_ADDRESS,percentSuccess);
 	}
 	digitalWrite(BLUE_LED, LOW);
 	return false;
@@ -188,12 +208,12 @@ bool LoRA_Functions::receiveAcknowledmentDataReportNode() {
 	if (buf[8] == 0) {
 		sysStatus.set_openHours(false);					// Open hours or not - impacts whether we power down the sensor for sleep
 		Log.info("Park is closed - reset everything");
-		resetEverything();
+		current.resetEverything();
 	}
 	else sysStatus.set_openHours(true);
 
 	if (buf[9] > 0) {									// the Gateway set an alert
-		current.set_alertCodeNode(buf[9]);				
+		sysStatus.set_alertCodeNode(buf[9]);				
 		sysStatus.set_nodeNumber(11);					// Set node number to unconfigured
 		manager.setThisAddress(11);						// Make sure the next message reflects an unconfigured node
 	}
@@ -248,7 +268,7 @@ bool LoRA_Functions::composeAlertReportNode() {
 
 	buf[0] = highByte(sysStatus.get_magicNumber());					// Magic Number
 	buf[1] = lowByte(sysStatus.get_magicNumber());					
-	buf[2] = current.get_alertCodeNode();   						// Node's Alert Code
+	buf[2] = sysStatus.get_alertCodeNode();   						// Node's Alert Code
 
 
 	// Send a message to manager_server
@@ -256,7 +276,7 @@ bool LoRA_Functions::composeAlertReportNode() {
 	if (manager.sendtoWait(buf, 3, GATEWAY_ADDRESS, ALERT_RPT) == RH_ROUTER_ERROR_NONE) {
 		// It has been reliably delivered to the next node.
 		// Now wait for a reply from the ultimate server 
-		Log.info("Success sending Alert Report number %d to gateway at %d", current.get_alertCodeNode(), GATEWAY_ADDRESS);
+		Log.info("Success sending Alert Report number %d to gateway at %d", sysStatus.get_alertCodeNode(), GATEWAY_ADDRESS);
 		digitalWrite(BLUE_LED, LOW);
 		return true;
 	}
@@ -269,7 +289,7 @@ bool LoRA_Functions::composeAlertReportNode() {
 
 bool LoRA_Functions::receiveAcknowledmentAlertReportNode() {
 
-	current.set_alertCodeNode(buf[2]);
+	sysStatus.set_alertCodeNode(buf[2]);
 	Log.info("Alert report acknowledged");
 	return true;
 }

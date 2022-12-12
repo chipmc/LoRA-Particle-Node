@@ -19,7 +19,8 @@ buf[8] temp;                                // Enclosure temp
 buf[9] battChg;                             // State of charge
 buf[10] battState;                           // Battery State
 buf[11] resets                              // Reset count
-buf[12] msgCnt++;                           // Sequential message number
+buf[12] messageCount;                       // Sequential message number
+buf[13] successCount;                       // Number of messages sent successfully
 */
 
 // Format of a data acknowledgement
@@ -118,6 +119,12 @@ public:
      * 
     */
     void sleepLoRaRadio();
+
+    /**
+     * @brief Initialize the LoRA radio
+     * 
+     */
+   bool initializeRadio();
 
  
     // Node Functions
