@@ -6,5 +6,5 @@
     },
     "particle.targetPlatform": "boron",
     "particle.targetDevice": "NCParks189-LoRA-Node-BeanShoals",
-    "particle.firmwareVersion": "4.0.1"
+    "particle.firmwareVersion": "4.0.2"
 }
