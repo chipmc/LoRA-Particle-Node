@@ -64,6 +64,8 @@ bool LoRA_Functions::setup(bool gatewayID) {
 	driver.setFrequency(RF95_FREQ);					// Frequency is typically 868.0 or 915.0 in the Americas, or 433.0 in the EU - Are there more settings possible here?
 	driver.setTxPower(23, false);                   // If you are using RFM95/96/97/98 modules which uses the PA_BOOST transmitter pin, then you can set transmitter powers from 5 to 23 dBm (13dBm default).  PA_BOOST?
 	
+	Log.info("in LoRA setup - node number %d",sysStatus.get_nodeNumber());
+
 	if (gatewayID == true) {
 		sysStatus.set_nodeNumber(GATEWAY_ADDRESS);							// Gateway - Manager is initialized by default with GATEWAY_ADDRESS - make sure it is stored in FRAM
 		Log.info("LoRA Radio initialized as a gateway with a deviceID of %s", System.deviceID().c_str());
@@ -110,7 +112,6 @@ bool  LoRA_Functions::initializeRadio() {  			// Set up the Radio Module
 
 	if (!manager.init()) {
 		Log.info("init failed");					// Defaults after init are 434.0MHz, 0.05MHz AFC pull-in, modulation FSK_Rb2_4Fd36
-		// delay(10000);
 		return false;
 	}
 	driver.setFrequency(RF95_FREQ);					// Frequency is typically 868.0 or 915.0 in the Americas, or 433.0 in the EU - Are there more settings possible here?
@@ -141,6 +142,11 @@ bool LoRA_Functions::listenForLoRAMessageNode() {
 
 		Time.setTime(((buf[2] << 24) | (buf[3] << 16) | (buf[4] << 8) | buf[5]));  // Set time based on response from gateway
 		sysStatus.set_frequencyMinutes((buf[6] << 8 | buf[7]));			// Frequency of reporting set by Gateway
+
+		// The gateway may set an alert code for the node
+		sysStatus.set_alertCodeNode(buf[8]);
+		sysStatus.set_alertTimestampNode(Time.now());
+
 		Log.info("Set clock to %s and report frequency to %d minutes", Time.timeStr().c_str(),sysStatus.get_frequencyMinutes());
 
 		if (lora_state == DATA_ACK) { if(LoRA_Functions::instance().receiveAcknowledmentDataReportNode()) return true;}
@@ -205,19 +211,37 @@ bool LoRA_Functions::composeDataReportNode() {
 }
 
 bool LoRA_Functions::receiveAcknowledmentDataReportNode() {
-	if (buf[8] == 0) {
-		sysStatus.set_openHours(false);					// Open hours or not - impacts whether we power down the sensor for sleep
+	LEDStatus blinkBlue(RGB_COLOR_BLUE, LED_PATTERN_BLINK, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
+
+	// contents of response for 1-7 handled in common function above
+	byte alertSetByGateway = buf[8];
+	if (alertSetByGateway == 1) {								// Gateway did not recognize our node number, need to re-join
+		sysStatus.set_nodeNumber(11);
+		manager.setThisAddress(11);
+		sysStatus.set_alertCodeNode(alertSetByGateway);	
+		sysStatus.set_alertTimestampNode(Time.now());	
+		Log.info("LoRA Radio initialized as an unconfigured node %i and a deviceID of %s", manager.thisAddress(), System.deviceID().c_str());
+	}
+	else if (buf[8] > 0) {							// the Gateway set an alert
+		Log.info("The gateway set an alert %d", alertSetByGateway);
+		sysStatus.set_alertCodeNode(alertSetByGateway);	
+		sysStatus.set_alertTimestampNode(Time.now());			
+	}
+	sysStatus.set_sensorType(buf[9]); 				// In data response gateway overwrites node
+
+	if (buf[10] == 0) {								// Open Hours Processing
+		sysStatus.set_openHours(false);				// Open hours or not - impacts whether we power down the sensor for sleep
 		Log.info("Park is closed - reset everything");
-		current.resetEverything();
 	}
 	else sysStatus.set_openHours(true);
 
-	if (buf[9] > 0) {									// the Gateway set an alert
-		sysStatus.set_alertCodeNode(buf[9]);				
-		sysStatus.set_nodeNumber(11);					// Set node number to unconfigured
-		manager.setThisAddress(11);						// Make sure the next message reflects an unconfigured node
-	}
-	Log.info("Data report acknowledged %s alert for message %d park is %s and alert code is %d", (buf[9] > 0) ? "with":"without", buf[10], (buf[8] ==1) ? "open":"closed", buf[9]);
+	Log.info("Data report acknowledged %s alert for message %d park is %s and alert code is %d", (alertSetByGateway > 0) ? "with":"without", buf[11], (buf[10] ==1) ? "open":"closed", sysStatus.get_alertCodeNode());
+	
+	blinkBlue.setActive(true);
+	unsigned long strength = (unsigned long)(map(driver.lastRssi(),-30,-120,2000,0));
+    delay(strength);
+    blinkBlue.setActive(false);
+
 	return true;
 }
 
@@ -253,13 +277,18 @@ bool LoRA_Functions::composeJoinRequesttNode() {
 }
 
 bool LoRA_Functions::receiveAcknowledmentJoinRequestNode() {
+	LEDStatus blinkOrange(RGB_COLOR_ORANGE, LED_PATTERN_BLINK, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
 
-	Log.info("In receive Join Acknowledge");
-
-	if (sysStatus.get_nodeNumber() > 10) sysStatus.set_nodeNumber(buf[8]);
-	Log.info("Join request acknowledged and node ID set to %d", sysStatus.get_nodeNumber());
+	if (sysStatus.get_nodeNumber() > 10) sysStatus.set_nodeNumber(buf[9]);
+	sysStatus.set_sensorType(buf[10]);
+	Log.info("Node %d Join request acknowledged and sensor set to %d", sysStatus.get_nodeNumber(), sysStatus.get_sensorType());
 	manager.setThisAddress(sysStatus.get_nodeNumber());
-	sysStatus.set_sensorType(buf[9]);
+
+    blinkOrange.setActive(true);
+	unsigned long strength = (unsigned long)(map(driver.lastRssi(),-30,-120,2000,0));
+    delay(strength);
+    blinkOrange.setActive(false);
+
 	return true;
 }
 
@@ -289,8 +318,7 @@ bool LoRA_Functions::composeAlertReportNode() {
 
 bool LoRA_Functions::receiveAcknowledmentAlertReportNode() {
 
-	sysStatus.set_alertCodeNode(buf[2]);
-	Log.info("Alert report acknowledged");
+	Log.info("Alert report acknowledged with alert code %d", sysStatus.get_alertCodeNode());
 	return true;
 }
 

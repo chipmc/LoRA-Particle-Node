@@ -10,23 +10,16 @@ const char* batteryContext[7] = {"Unknown","Not Charging","Charging","Charged","
 
 FuelGauge fuelGauge;                                // Needed to address issue with updates in low battery state 
 
-char internalTempStr[16] = " ";                       // External as this can be called as a Particle variable
-char soilTempStr[16] = " ";                           // External as this can be called as a Particle variable
-char soilMoistureStr[16] = " ";                       // External as this can be called as a Particle variable
-char signalStr[64] = " ";
-
-
 bool takeMeasurements() { 
 
     // Temperature inside the enclosure
     current.set_internalTempC((int)tmp36TemperatureC(analogRead(TMP36_SENSE_PIN)));
-    snprintf(internalTempStr,sizeof(internalTempStr), "%i C", current.get_internalTempC());
 
     batteryState();
 
     isItSafeToCharge();
 
-    getSignalStrength();
+    if (sysStatus.get_nodeNumber() == 0 ) getSignalStrength();
 
     return 1;
 
@@ -52,8 +45,6 @@ float tmp36TemperatureC (int adcValue) {
     // inaccurate values!
     return (mV - 500) / 10;
 }
-
-
 
 
 bool batteryState() {
@@ -85,6 +76,7 @@ bool isItSafeToCharge()                             // Returns a true or false i
 
 
 void getSignalStrength() {
+  char signalStr[16];
   const char* radioTech[10] = {"Unknown","None","WiFi","GSM","UMTS","CDMA","LTE","IEEE802154","LTE_CAT_M1","LTE_CAT_NB1"};
   // New Signal Strength capability - https://community.particle.io/t/boron-lte-and-cellular-rssi-funny-values/45299/8
   CellularSignal sig = Cellular.RSSI();
@@ -98,6 +90,7 @@ void getSignalStrength() {
   float qualityPercentage = sig.getQuality();
 
   snprintf(signalStr,sizeof(signalStr), "%s S:%2.0f%%, Q:%2.0f%% ", radioTech[rat], strengthPercentage, qualityPercentage);
+  Log.info(signalStr);
 }
 
 

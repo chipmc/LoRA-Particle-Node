@@ -5,9 +5,6 @@
 #include "MB85RC256V-FRAM-RK.h"
 #include "StorageHelperRK.h"
 
-//Include other application specific header files
-// #include (no other header files required from other singleton classes)
-
 //Define external class instances. These are typically declared public in the main .CPP. I wonder if we can only declare it here?
 extern MB85RC64 fram;
 
@@ -180,7 +177,7 @@ protected:
 
     //Since these variables are only used internally - They can be private. 
 	static const uint32_t SYS_DATA_MAGIC = 0x20a99e75;
-	static const uint16_t SYS_DATA_VERSION = 1;
+	static const uint16_t SYS_DATA_VERSION = 2;
 
 };
 
@@ -337,7 +334,7 @@ protected:
 
     //Since these variables are only used internally - They can be private. 
 	static const uint32_t CURRENT_DATA_MAGIC = 0x20a99e74;
-	static const uint16_t CURRENT_DATA_VERSION = 1;
+	static const uint16_t CURRENT_DATA_VERSION = 2;
 };
 
 

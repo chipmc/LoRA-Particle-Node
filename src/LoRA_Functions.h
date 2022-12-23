@@ -17,10 +17,10 @@ buf[5 - 6] = daily                          // Daily Count
 buf[7] sensorType                           // What sensor type is it
 buf[8] temp;                                // Enclosure temp
 buf[9] battChg;                             // State of charge
-buf[10] battState;                           // Battery State
+buf[10] battState;                          // Battery State
 buf[11] resets                              // Reset count
 buf[12] messageCount;                       // Sequential message number
-buf[13] successCount;                       // Number of messages sent successfully
+buf[13] successCount;
 */
 
 // Format of a data acknowledgement
@@ -28,16 +28,17 @@ buf[13] successCount;                       // Number of messages sent successfu
     buf[0 - 1 ] magicNumber                 // Magic Number
     buf[2 - 5 ] Time.now()                  // Set the time 
     buf[6 - 7] frequencyMinutes             // For the Gateway minutes on the hour
-    buf[8] openHours                        // From the Gateway to the node - is the park open?
-    buf[9] alertCode                        // This lets the Gateway trigger an alert on the node - typically a join request
-    buf[10] message number                  // Parrot this back to see if it matches
+    buf[8] alertCode                        // This lets the Gateway trigger an alert on the node - typically a join request
+    buf[9] sensorType                       // Let's the Gateway reset the sensor if needed 
+    buf[10] openHours                        // From the Gateway to the node - is the park open?
+    buf[11] message number                  // Parrot this back to see if it matches
 */
 
 // Format of a join request
 /*
 buf[0-1] magicNumber;                       // Magic Number
 buf[2- 26] Particle deviceID;               // deviceID is unique to the device
-buf[27] sensorType				// Identifies sensor type to Gateway
+buf[27] sensorType				            // Identifies sensor type to Gateway
 */
 
 // Format for a join acknowledgement
@@ -45,15 +46,16 @@ buf[27] sensorType				// Identifies sensor type to Gateway
     buf[0 - 1 ]  magicNumber                // Magic Number
     buf[2 - 5 ] Time.now()                  // Set the time 
     buf[6 - 7] frequencyMinutes             // For the Gateway minutes on the hour  
-    buf[8]  newNodeNumber                   // New Node Number for device
-    buf[9] sensorType				// Gateway confirms sensor type
-*/
+    buf[8] alertCodeNode                   // Gateway can set an alert code here
+    buf[9]  newNodeNumber                   // New Node Number for device
+    buf[10]  sensorType				        // Gateway confirms sensor type
 
+*/
 
 // Format for an alert Report
 /*
 buf[0 - 1 ] magicNumber                     // Magic Number
-buf[2] = alertCodeNode);                    // Node's Alert Code
+buf[2] = alertCodeNode;                     // Node's Alert Code
 */
 
 // Format for an Alert Report Acknowledgement
@@ -61,7 +63,7 @@ buf[2] = alertCodeNode);                    // Node's Alert Code
     buf[0 - 1 ]  magicNumber                // Magic Number
     buf[2 - 5 ] Time.now()                  // Set the time 
     buf[6 - 7] frequencyMinutes             // For the Gateway minutes on the hour  
-    buf[7] alertCodeNode                    // Zero for acknowledgement 
+    buf[8] alertCodeNode                    // Gateway can set an alert code here
 */
 
 

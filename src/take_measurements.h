@@ -4,8 +4,8 @@
  * @brief This function will take measurements at intervals defined int he sleep_helper_config file.  
  * The libraries and functions needed will depend the spectifics of the device and sensors
  * 
- * @version 0.1
- * @date 2022-06-30
+ * @version 0.2
+ * @date 2022-12-23
  * 
  */
 

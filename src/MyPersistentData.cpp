@@ -3,21 +3,7 @@
 #include "StorageHelperRK.h"
 #include "MyPersistentData.h"
 
-MB85RC64 fram(Wire, 0);   
-
-// Common Functions
-/**
- * @brief Resets all counts to start a new day.
- *
- * @details Once run, it will reset all daily-specific counts and trigger an update in FRAM.
- */
-void resetEverything() {                                              // The device is waking up in a new day or is a new install
-  Log.info("A new day - resetting everything");
-  current.set_dailyCount(1);                                            // Reset the counts in FRAM as well
-  current.set_hourlyCount(1);
-  current.set_lastCountTime(Time.now());
-  sysStatus.set_resetCount(0);                                           // Reset the reset count as well
-}
+MB85RC64 fram(Wire, 0);  
 
 // *******************  SysStatus Storage Object **********************
 //
@@ -46,7 +32,7 @@ void sysStatusData::setup() {
 }
 
 void sysStatusData::loop() {
-    sysStatus.flush(false);
+    sysStatus.flush(true);
 }
 
 /**
@@ -55,28 +41,27 @@ void sysStatusData::loop() {
  */
 void sysStatusData::loadSystemDefaults() {                         // This code is only executed with a new device or a new storage object structure
   Log.info("Loading system defaults");              // Letting us know that defaults are being loaded
-
   sysStatus.set_nodeNumber(11);
   sysStatus.set_structuresVersion(1);
   sysStatus.set_magicNumber(27617);
-  sysStatus.set_firmwareRelease(1);
+  // sysStatus.set_firmwareRelease(1);
   sysStatus.set_resetCount(0);
-  sysStatus.set_frequencyMinutes(10);
-  sysStatus.set_alertCodeNode(0);
+  sysStatus.set_frequencyMinutes(5);
+  sysStatus.set_alertCodeNode(1);
   sysStatus.set_alertTimestampNode(0);
   sysStatus.set_openHours(true);
-
 }
 
 void sysStatusData::checkSystemValues() {               // Values out of bounds indicates an initialization error - will reload defaults
     bool reset = false;
+
+    Log.info("freq = %d, type = %d, node = %d, current %4.2f",sysStatus.get_frequencyMinutes(), sysStatus.get_sensorType(),sysStatus.get_nodeNumber(), current.get_stateOfCharge() );
  
     if (sysStatus.get_frequencyMinutes() <=0 || sysStatus.get_frequencyMinutes() > 60) reset = true;
-    if (sysStatus.get_sensorType() <= 0 || sysStatus.get_sensorType() >2) reset = true;
+    if (sysStatus.get_sensorType() < 0 || sysStatus.get_sensorType() >2) reset = true;
     if (sysStatus.get_nodeNumber() > 11) reset = true;
 
     if (reset) sysStatusData::loadSystemDefaults();
-
 }
 
 uint8_t sysStatusData::get_nodeNumber() const {
@@ -194,15 +179,14 @@ void currentStatusData::setup() {
 }
 
 void currentStatusData::loop() {
-    current.flush(false);
+    current.flush(true);
 }
 
 void currentStatusData::loadCurrentDefaults() {                         // This code is only executed with a new device or a new storage object structure
-  Log.info("Loading current defaults");              // Letting us know that defaults are being loaded
+  Log.info("Loading current defaults");                                 // Letting us know that defaults are being loaded
 }
 
 void currentStatusData::resetEverything() {                             // The device is waking up in a new day or is a new install
-  Log.info("A new day - resetting everything");
   current.set_dailyCount(0);                                            // Reset the counts in FRAM as well
   current.set_hourlyCount(0);
   current.set_lastCountTime(Time.now());
