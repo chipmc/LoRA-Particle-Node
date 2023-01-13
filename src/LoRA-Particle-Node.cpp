@@ -24,6 +24,7 @@
 // v0.16 - More robust try and less missed reporting events
 // v0.17 - Implemented full alert suite
 // v1 - Release Candidate - sending to Pilot mountain
+// v1.07 - Aligning numbers to Gateway - added nodeNumber validation, removed Alert message type
 
 #define NODENUMBEROFFSET 10UL						// By how much do we off set each node by node number
 
@@ -46,7 +47,7 @@ STARTUP(System.enableFeature(FEATURE_RESET_INFO));
 // For monitoring / debugging, you have some options on the next few lines - uncomment one
 SerialLogHandler logHandler(LOG_LEVEL_INFO);     // Easier to see the program flow
 
-char currentPointRelease[6] ="0.17";
+char currentPointRelease[6] ="1.07";
 
 // Prototype functions
 void publishStateTransition(void);                  // Keeps track of state machine changes - for debugging
@@ -82,9 +83,8 @@ void setup() {
 
     initializePowerCfg();                           // Sets the power configuration for solar
 
-	current.setup();
 	sysStatus.setup();								// Initialize persistent storage
-	sysStatus.checkSystemValues();					// Make sure system values are in bounds for normal operation
+	current.setup();
                               
     ab1805.withFOUT(D8).setup();                	// The carrier board has D8 connected to FOUT for wake interrupts
     ab1805.setWDT(AB1805::WATCHDOG_MAX_SECONDS);	// Enable watchdog
@@ -113,7 +113,7 @@ void setup() {
 	attachInterrupt(BUTTON_PIN,userSwitchISR,CHANGE); 						// We may need to monitor the user switch to change behaviours / modes
 
 	if (state == INITIALIZATION_STATE) state = SLEEPING_STATE;               	// Sleep unless otherwise from above code
-  	Log.info("Startup complete for the Node with alert code %d", sysStatus.get_alertCodeNode());
+  	Log.info("Startup complete for the Node with alert code %d and last connect %s", sysStatus.get_alertCodeNode(), Time.format(sysStatus.get_lastConnection(), "%T").c_str());
   	digitalWrite(BLUE_LED,LOW);                                          	// Signal the end of startup
 }
 
@@ -121,12 +121,17 @@ void loop() {
 	switch (state) {
 		case IDLE_STATE: {													// Unlike most sketches - nodes spend most time in sleep and only transit IDLE once or twice each period
 			if (state != oldState) publishStateTransition();              	// We will apply the back-offs before sending to ERROR state - so if we are here we will take action
-			if ((Time.now() - sysStatus.get_lastConnection() > 2 * sysStatus.get_frequencyMinutes() * 60UL) && sysStatus.get_openHours()) { // Park is open but no connect for over two hours
-				Log.info("Park is open but we have not connected for over two reporting periods - need to reset");
+
+			// In this section, we will work through steps to recover from lost connectivity
+			if (sysStatus.get_frequencyMinutes() == 1) Log.info("Trying to reconnect to gateway");  // Something is wrong - attempting every minute to connect
+			else if ((Time.now() - sysStatus.get_lastConnection() > 2 * sysStatus.get_frequencyMinutes() * 60UL) && sysStatus.get_openHours()) { // Park is open but no connect for over two hours
+				Log.info("Park is open but we have not connected for over two reporting periods - need to power cycle and go to 1 min frequency");
 				sysStatus.set_alertCodeNode(3);								// This will trigger a power cycle reset
-				sysStatus.set_alertTimestampNode(Time.now());				
+				sysStatus.set_alertTimestampNode(Time.now());		
+				sysStatus.set_frequencyMinutes(1);							// Will wake every minute to send data - have to catch gateway when it is awake
 				sysStatus.set_lastConnection(Time.now());					// Prevents cyclical resets
 			}
+
 			if (sysStatus.get_alertCodeNode() != 0) state = ERROR_STATE;
 			else state = LoRA_TRANSMISSION_STATE;  							// No error - send data
 
@@ -147,15 +152,17 @@ void loop() {
 			ab1805.stopWDT();  												// No watchdogs interrupting our slumber
 			SystemSleepResult result = System.sleep(config);              	// Put the device to sleep device continues operations from here
 			ab1805.resumeWDT();                                             // Wakey Wakey - WDT can resume
+			delay(2000);		//  Diagnostic code
 			digitalWrite(MODULE_POWER_PIN,LOW);             				// Enable (LOW) the sensor
-
 			if (result.wakeupPin() == BUTTON_PIN) {                         // If the user woke the device we need to get up - device was sleeping so we need to reset opening hours
 				Log.info("Woke with user button - LoRA State");
 				state = LoRA_TRANSMISSION_STATE;
 			}
 			else if (result.wakeupPin() == INT_PIN) {
 				Log.info("Woke with sensor interrupt");						// Will count at the bottom of the main loop
-				if (secondsUntilNextEvent() <= 2 || secondsUntilNextEvent() >= 598) state = IDLE_STATE;		// If more or less than 2 seconds we may miss reporting
+				if (secondsUntilNextEvent() <= 2 || \
+					secondsUntilNextEvent() >= ((sysStatus.get_frequencyMinutes() * 60) - 2)) \
+					state = IDLE_STATE;										// If more or less than 2 seconds we may miss reporting
 				else state = SLEEPING_STATE;								// This is the normal behavioud
 			}
 			else {
@@ -172,18 +179,14 @@ void loop() {
 				LoRA_Functions::instance().clearBuffer();
 				takeMeasurements();
 
+				// Based on Alert code, determine what message to send
 				if (sysStatus.get_alertCodeNode() == 0) result = LoRA_Functions::instance().composeDataReportNode();
-				else if (sysStatus.get_alertCodeNode() == 1) {
-					result = LoRA_Functions::instance().composeJoinRequesttNode();
-					sysStatus.set_alertCodeNode(0);									// Sent the join request - cleat the flag
-				}
-				else {
-					result = LoRA_Functions::instance().composeAlertReportNode();	// Sent the alert - clear the flag
-					sysStatus.set_alertCodeNode(0);
-				}
+				else if (sysStatus.get_alertCodeNode() == 1) result = LoRA_Functions::instance().composeJoinRequesttNode();
+				else Log.info("Alert code %d, will handle in ERROR state", sysStatus.get_alertCodeNode());
 
 				if (!result) {
 					retryState++;
+					if (sysStatus.get_frequencyMinutes() == 1) retryState = 0;	// When we are in recovery mode, we don't need retries as we are sending every minute
 					Log.info("Failed in data send, retryState = %d",retryState);
 					state = SLEEPING_STATE;
 				}
@@ -196,6 +199,7 @@ void loop() {
 
 		case LoRA_LISTENING_STATE: {
 			static system_tick_t startListening = 0;
+			bool messageReceived = false;
 
 			if (state != oldState) {
 				publishStateTransition();                   				// We will apply the back-offs before sending to ERROR state - so if we are here we will take action
@@ -206,6 +210,7 @@ void loop() {
 			while (millis() - startListening < 5000) {
 				// The big difference between a node and a gateway - the Node initiates a LoRA exchange by sending data
 				if (LoRA_Functions::instance().listenForLoRAMessageNode()) {// Listen for acknowledgement
+					messageReceived = true;
 					sysStatus.set_lastConnection(Time.now());
 					randomSeed(sysStatus.get_lastConnection());				// Done so we can genrate rando numbers later
 					ab1805.setRtcFromTime(Time.now());
@@ -223,6 +228,7 @@ void loop() {
 					break;
 				}
 			}
+			if (!messageReceived) Log.info("Did not receive a response");
 		} break;
 
 		case ERROR_STATE: {													// Where we go if things are not quite right
@@ -244,7 +250,7 @@ void loop() {
 					Log.info("Alert 3 - Resetting device");
 					sysStatus.set_alertCodeNode(0);							// Need to clear so we don't get in a retry cycle
 					sysStatus.set_alertTimestampNode(Time.now());
-					sysStatus.flush(false);									// All this is required as we are done trainsiting loop
+					sysStatus.flush(true);									// All this is required as we are done trainsiting loop
 					delay(2000);
 					ab1805.deepPowerDown();
 				}
@@ -252,9 +258,7 @@ void loop() {
 			case 4: 														// In this state, we have retried sending - time to reinitilize the modem
 				Log.info("Initialize LoRA radio");
 				if(LoRA_Functions::instance().initializeRadio()) {
-					Log.info("Initialization successful");
-					sysStatus.set_alertCodeNode(1);							// Send a join request as node is unconfigured
-					sysStatus.set_alertTimestampNode(Time.now());	
+					Log.info("Initialization successful");	
 					state = LoRA_TRANSMISSION_STATE;						// Sends the alert and clears alert code
 				}
 				else {
@@ -265,7 +269,7 @@ void loop() {
 				}
 			break;
 			case 5:															// In this case, we will reset all data
-				sysStatus.loadSystemDefaults();								// Resets the sysStatus values to factory default
+				sysStatus.initialize();										// Resets the sysStatus values to factory default
 				current.resetEverything();									// Resets the node counts
 				sysStatus.set_alertCodeNode(1);								// Resetting system values requires we re-join the network
 				sysStatus.set_alertTimestampNode(Time.now());			
@@ -274,10 +278,12 @@ void loop() {
 			case 6: 														// In this state system data is retained but current data is reset
 				current.resetEverything();
 				sysStatus.set_alertCodeNode(0);
-				state = IDLE_STATE;
+				state = SLEEPING_STATE;										// Once we clear the counts - go to sleep
 			break;
 			case 7:
 				// This alert code is handled in the Data response function - on Data response Gateway type overwrites node type
+				sysStatus.set_alertCodeNode(0);
+				state = SLEEPING_STATE;										// Once we clear the counts - go to sleep
 			break;
 			default:
 				Log.info("Undefined Error State");

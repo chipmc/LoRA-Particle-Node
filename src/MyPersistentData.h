@@ -6,7 +6,7 @@
 #include "StorageHelperRK.h"
 
 //Define external class instances. These are typically declared public in the main .CPP. I wonder if we can only declare it here?
-extern MB85RC64 fram;
+// extern MB85RC64 fram;
 
 //Macros(#define) to swap out during pre-processing (use sparingly). This is typically used outside of this .H and .CPP file within the main .CPP file or other .CPP files that reference this header file. 
 // This way you can do "data.setup()" instead of "MyPersistentData::instance().setup()" as an example
@@ -52,16 +52,20 @@ public:
     void loop();
 
 	/**
-	 * @brief Load the appropriate system defaults - good ot initialize a system to "factory settings"
+	 * @brief Validates values and, if valid, checks that data is in the correct range.
 	 * 
 	 */
-	void loadSystemDefaults(); 
+	bool validate(size_t dataSize);
 
 	/**
-	 * @brief Checks to make sure the system values are in-order
+	 * @brief Will reinitialize data if it is found not to be valid
+	 * 
+	 * Be careful doing this, because when MyData is extended to add new fields,
+	 * the initialize method is not called! This is only called when first
+	 * initialized.
 	 * 
 	 */
-	void checkSystemValues();	
+	void initialize();
 
 
 	class SysData {
@@ -223,6 +227,22 @@ public:
 	 * 
 	 */
 	void resetEverything();  
+
+	/**
+	 * @brief Validates values and, if valid, checks that data is in the correct range.
+	 * 
+	 */
+	bool validate(size_t dataSize);
+
+	/**
+	 * @brief Will reinitialize data if it is found not to be valid
+	 * 
+	 * Be careful doing this, because when MyData is extended to add new fields,
+	 * the initialize method is not called! This is only called when first
+	 * initialized.
+	 * 
+	 */
+	void initialize();  
 
 	class CurrentData {
 	public:

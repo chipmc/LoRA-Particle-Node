@@ -28,40 +28,67 @@ sysStatusData::~sysStatusData() {
 
 void sysStatusData::setup() {
     fram.begin();
-    sysStatus.load();
+
+    // fram.erase();
+
+    sysStatus
+    //    .withLogData(true)
+        .withSaveDelayMs(100)
+        .load();
+
+    if (!sysStatus.validate(56)) {                  // 64 is the size of the sysStatus storage object
+        Log.info("sysStatus object not valid - reinitializing");
+        sysStatus.initialize();
+    }
+    else Log.info("sysStatus object is valid");
 }
 
 void sysStatusData::loop() {
-    sysStatus.flush(true);
+    sysStatus.flush(false);
 }
 
-/**
- * @brief This function is called in setup if the version of the FRAM stoage map has been changed
- * 
- */
-void sysStatusData::loadSystemDefaults() {                         // This code is only executed with a new device or a new storage object structure
-  Log.info("Loading system defaults");              // Letting us know that defaults are being loaded
-  sysStatus.set_nodeNumber(11);
-  sysStatus.set_structuresVersion(1);
-  sysStatus.set_magicNumber(27617);
-  // sysStatus.set_firmwareRelease(1);
-  sysStatus.set_resetCount(0);
-  sysStatus.set_frequencyMinutes(5);
-  sysStatus.set_alertCodeNode(1);
-  sysStatus.set_alertTimestampNode(0);
-  sysStatus.set_openHours(true);
+bool sysStatusData::validate(size_t dataSize) {
+    bool valid = PersistentDataFRAM::validate(dataSize);
+    if (valid) {
+        // If test1 < 0 or test1 > 100, then the data is invalid
+
+        if (sysStatus.get_frequencyMinutes() <=0 || sysStatus.get_frequencyMinutes() > 60) {
+            Log.info("data not valid frequency minutes =%d", sysStatus.get_frequencyMinutes());
+            valid = false;
+        }
+        else if (sysStatus.get_nodeNumber() < 1 || sysStatus.get_nodeNumber() > 11) {
+            Log.info("data not valid node number =%d", sysStatus.get_nodeNumber());
+            valid = false;
+        }
+    }
+    Log.info("sysStatus data is %s",(valid) ? "valid": "not valid");
+
+    sysStatus.set_alertCodeNode(0);                     // At setup we start with a clean slate
+    return valid;
 }
 
-void sysStatusData::checkSystemValues() {               // Values out of bounds indicates an initialization error - will reload defaults
-    bool reset = false;
+void sysStatusData::initialize() {
+    PersistentDataFRAM::initialize();
 
-    Log.info("freq = %d, type = %d, node = %d, current %4.2f",sysStatus.get_frequencyMinutes(), sysStatus.get_sensorType(),sysStatus.get_nodeNumber(), current.get_stateOfCharge() );
- 
-    if (sysStatus.get_frequencyMinutes() <=0 || sysStatus.get_frequencyMinutes() > 60) reset = true;
-    if (sysStatus.get_sensorType() < 0 || sysStatus.get_sensorType() >2) reset = true;
-    if (sysStatus.get_nodeNumber() > 11) reset = true;
+    Log.info("data initialized");
 
-    if (reset) sysStatusData::loadSystemDefaults();
+    // Initialize the default value to 10 if the structure is reinitialized.
+    // Be careful doing this, because when MyData is extended to add new fields,
+    // the initialize method is not called! This is only called when first
+    // initialized.
+    Log.info("Loading system defaults");              // Letting us know that defaults are being loaded
+    sysStatus.set_nodeNumber(11);
+    sysStatus.set_structuresVersion(1);
+    sysStatus.set_magicNumber(27617);
+    // sysStatus.set_firmwareRelease(1);
+    sysStatus.set_resetCount(0);
+    sysStatus.set_frequencyMinutes(60);
+    sysStatus.set_alertCodeNode(1);
+    sysStatus.set_alertTimestampNode(0);
+    sysStatus.set_openHours(true);
+
+    // If you manually update fields here, be sure to update the hash
+    updateHash();
 }
 
 uint8_t sysStatusData::get_nodeNumber() const {
@@ -154,7 +181,7 @@ void sysStatusData::set_openHours(bool value) {
 }
 
 // *****************  Current Status Storage Object *******************
-// Offset of 50 bytes - make room for SysStatus
+// Offset of 100 bytes - make room for SysStatus
 // ********************************************************************
 
 currentStatusData *currentStatusData::_instance;
@@ -167,7 +194,7 @@ currentStatusData &currentStatusData::instance() {
     return *_instance;
 }
 
-currentStatusData::currentStatusData() : StorageHelperRK::PersistentDataFRAM(::fram, 50, &currentData.currentHeader, sizeof(CurrentData), CURRENT_DATA_MAGIC, CURRENT_DATA_VERSION) {
+currentStatusData::currentStatusData() : StorageHelperRK::PersistentDataFRAM(::fram, 100, &currentData.currentHeader, sizeof(CurrentData), CURRENT_DATA_MAGIC, CURRENT_DATA_VERSION) {
 };
 
 currentStatusData::~currentStatusData() {
@@ -175,15 +202,21 @@ currentStatusData::~currentStatusData() {
 
 void currentStatusData::setup() {
     fram.begin();
-    current.load();
+
+    current
+    //    .withLogData(true)
+        .withSaveDelayMs(250)
+        .load();
+
+    if (!current.validate(72)) {                  // 64 is the size of the sysStatus storage object
+        Log.info("current object not valid - reinitializing");
+        current.initialize();
+    }
+    else Log.info("current object is valid");
 }
 
 void currentStatusData::loop() {
-    current.flush(true);
-}
-
-void currentStatusData::loadCurrentDefaults() {                         // This code is only executed with a new device or a new storage object structure
-  Log.info("Loading current defaults");                                 // Letting us know that defaults are being loaded
+    current.flush(false);
 }
 
 void currentStatusData::resetEverything() {                             // The device is waking up in a new day or is a new install
@@ -193,6 +226,29 @@ void currentStatusData::resetEverything() {                             // The d
   sysStatus.set_resetCount(0);                                          // Reset the reset count as well
   current.set_messageCount(0);
   current.set_successCount(0);
+}
+
+bool currentStatusData::validate(size_t dataSize) {
+    bool valid = PersistentDataFRAM::validate(dataSize);
+    if (valid) {
+        if (current.get_hourlyCount() < 0 || current.get_hourlyCount()  > 1024) {
+            Log.info("current data not valid hourlyCount=%d" , current.get_hourlyCount());
+            valid = false;
+        }
+    }
+    Log.info("current data is %s",(valid) ? "valid": "not valid");
+    return valid;
+}
+
+void currentStatusData::initialize() {
+    PersistentDataFRAM::initialize();
+
+    Log.info("Current Data Initialized");
+
+    currentStatusData::resetEverything();
+
+    // If you manually update fields here, be sure to update the hash
+    updateHash();
 }
 
 

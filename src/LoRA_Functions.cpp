@@ -150,8 +150,9 @@ bool LoRA_Functions::listenForLoRAMessageNode() {
 		Log.info("Set clock to %s and report frequency to %d minutes", Time.timeStr().c_str(),sysStatus.get_frequencyMinutes());
 
 		if (lora_state == DATA_ACK) { if(LoRA_Functions::instance().receiveAcknowledmentDataReportNode()) return true;}
-		if (lora_state == JOIN_ACK) { if(LoRA_Functions::instance().receiveAcknowledmentJoinRequestNode()) return true;}
-		if (lora_state == ALERT_ACK) { if(LoRA_Functions::instance().receiveAcknowledmentAlertReportNode()) return true;}
+		else if (lora_state == JOIN_ACK) { if(LoRA_Functions::instance().receiveAcknowledmentJoinRequestNode()) return true;}
+		else {Log.info("Invaled LoRA message flag"); return false;}
+
 	}
 	return false;
 }
@@ -169,31 +170,34 @@ bool LoRA_Functions::composeDataReportNode() {
 	else current.set_messageCount(current.get_messageCount()+1);
 	Log.info("Sending data report number %d",current.get_messageCount());
 
+	int deviceIDCheckSum = stringCheckSum(System.deviceID());
+
 	buf[0] = highByte(sysStatus.get_magicNumber());
 	buf[1] = lowByte(sysStatus.get_magicNumber());			
-	buf[2] = 1;						// Set for code release - fix later
-	buf[3] = highByte(current.get_hourlyCount());
-	buf[4] = lowByte(current.get_hourlyCount()); 
-	buf[5] = highByte(current.get_dailyCount());
-	buf[6] = lowByte(current.get_dailyCount()); 
-	buf[7] = sysStatus.get_sensorType();
-	buf[8] = current.get_internalTempC();
-	buf[9] = current.get_stateOfCharge();
-	buf[10] = current.get_batteryState();	
-	buf[11] = sysStatus.get_resetCount();
-	buf[12] = current.get_messageCount();
-	buf[13] = current.get_successCount();
+	buf[2] = highByte(deviceIDCheckSum);
+	buf[3] = lowByte(deviceIDCheckSum);
+	buf[4] = highByte(current.get_hourlyCount());
+	buf[5] = lowByte(current.get_hourlyCount()); 
+	buf[6] = highByte(current.get_dailyCount());
+	buf[7] = lowByte(current.get_dailyCount()); 
+	buf[8] = sysStatus.get_sensorType();
+	buf[9] = current.get_internalTempC();
+	buf[10] = current.get_stateOfCharge();
+	buf[11] = current.get_batteryState();	
+	buf[12] = sysStatus.get_resetCount();
+	buf[13] = current.get_messageCount();
+	buf[14] = current.get_successCount();
 
 	// Send a message to manager_server
   	// A route to the destination will be automatically discovered.
-	unsigned char result = manager.sendtoWait(buf, 14, GATEWAY_ADDRESS, DATA_RPT);
+	unsigned char result = manager.sendtoWait(buf, 15, GATEWAY_ADDRESS, DATA_RPT);
 	
 	if ( result == RH_ROUTER_ERROR_NONE) {
 		// It has been reliably delivered to the next node.
 		// Now wait for a reply from the ultimate server 
 		current.set_successCount(current.get_successCount()+1);
 		percentSuccess = ((current.get_successCount() * 1.0)/ current.get_messageCount())*100.0;
-		Log.info("Data report delivered - success rate %4.2f",percentSuccess);
+		Log.info("Node %d data report delivered - success rate %4.2f",sysStatus.get_nodeNumber(),percentSuccess);
 		digitalWrite(BLUE_LED, LOW);
 		return true;
 	}
@@ -222,15 +226,20 @@ bool LoRA_Functions::receiveAcknowledmentDataReportNode() {
 		sysStatus.set_alertTimestampNode(Time.now());	
 		Log.info("LoRA Radio initialized as an unconfigured node %i and a deviceID of %s", manager.thisAddress(), System.deviceID().c_str());
 	}
-	else if (buf[8] > 0) {							// the Gateway set an alert
+	else if (alertSetByGateway == 7) {
+		sysStatus.set_sensorType(buf[9]);
+	}
+	else if (alertSetByGateway > 0) {							// the Gateway set an alert
 		Log.info("The gateway set an alert %d", alertSetByGateway);
 		sysStatus.set_alertCodeNode(alertSetByGateway);	
 		sysStatus.set_alertTimestampNode(Time.now());			
 	}
-	sysStatus.set_sensorType(buf[9]); 				// In data response gateway overwrites node
+	else sysStatus.set_alertCodeNode(0);
 
 	if (buf[10] == 0) {								// Open Hours Processing
 		sysStatus.set_openHours(false);				// Open hours or not - impacts whether we power down the sensor for sleep
+		current.resetEverything();					// Since we are not open anymore and will stop reporting - might as well zero counts
+		sysStatus.set_alertCodeNode(6);				// This will reset the counts and go to sleep
 		Log.info("Park is closed - reset everything");
 	}
 	else sysStatus.set_openHours(true);
@@ -251,18 +260,26 @@ bool LoRA_Functions::composeJoinRequesttNode() {
 
 	char deviceID[25];
 	System.deviceID().toCharArray(deviceID, 25);					// the deviceID is 24 charcters long
+	int deviceIDCheckSum = stringCheckSum(System.deviceID());
+
 
 	buf[0] = highByte(sysStatus.get_magicNumber());					// Needs to equal 128
 	buf[1] = lowByte(sysStatus.get_magicNumber());					// Needs to equal 128
+	buf[2] = highByte(deviceIDCheckSum);
+	buf[3] = lowByte(deviceIDCheckSum);
 	for (uint8_t i=0; i < sizeof(deviceID); i++) {
-		buf[i+2] = deviceID[i];
+		buf[i+4] = deviceID[i];
 	}
-	buf[27] = sysStatus.get_sensorType();
+	buf[29] = sysStatus.get_sensorType();
 
 	// Send a message to manager_server
   	// A route to the destination will be automatically discovered.
-	Log.info("Sending join request because %s",(sysStatus.get_nodeNumber() > 10) ? "a NodeNumber is needed" : "the clock is not set");
-	if (manager.sendtoWait(buf, 28, GATEWAY_ADDRESS, JOIN_REQ) == RH_ROUTER_ERROR_NONE) {
+	if (sysStatus.get_nodeNumber() > 10) Log.info("Sending join request for unconfigured node");
+	else if (!Time.isValid()) Log.info("Sending join request as Time is not valid");
+	else Log.info("Sending join request to clear alert code");
+
+
+	if (manager.sendtoWait(buf, 30, GATEWAY_ADDRESS, JOIN_REQ) == RH_ROUTER_ERROR_NONE) {
 		// It has been reliably delivered to the next node.
 		// Now wait for a reply from the ultimate server 
 		Log.info("Join request sent to gateway successfully");
@@ -292,34 +309,22 @@ bool LoRA_Functions::receiveAcknowledmentJoinRequestNode() {
 	return true;
 }
 
-bool LoRA_Functions::composeAlertReportNode() {
-	digitalWrite(BLUE_LED,HIGH);
 
-	buf[0] = highByte(sysStatus.get_magicNumber());					// Magic Number
-	buf[1] = lowByte(sysStatus.get_magicNumber());					
-	buf[2] = sysStatus.get_alertCodeNode();   						// Node's Alert Code
+int LoRA_Functions::stringCheckSum(String str){												// This function is made for the Particle DeviceID
+    int result = 0;
+    for(unsigned int i = 0; i < str.length(); i++){
+      int asciiCode = (int)str[i];
 
-
-	// Send a message to manager_server
-  	// A route to the destination will be automatically discovered.
-	if (manager.sendtoWait(buf, 3, GATEWAY_ADDRESS, ALERT_RPT) == RH_ROUTER_ERROR_NONE) {
-		// It has been reliably delivered to the next node.
-		// Now wait for a reply from the ultimate server 
-		Log.info("Success sending Alert Report number %d to gateway at %d", sysStatus.get_alertCodeNode(), GATEWAY_ADDRESS);
-		digitalWrite(BLUE_LED, LOW);
-		return true;
-	}
-	else {
-		Log.info("Node - Alert Report send to Gateway failed");
-		digitalWrite(BLUE_LED, LOW);
-		return false;
-	}
+      if (asciiCode >=48 && asciiCode <58) {              // 0-9
+        result += asciiCode - 48;
+      } 
+      else if (asciiCode >=65 && asciiCode < 71) {        // A-F
+        result += 10 + asciiCode -65;
+      }
+      else if (asciiCode >=97 && asciiCode < 103) {       // a - f
+        result += 10 + asciiCode -97;
+      }
+    }
+    return result;
 }
-
-bool LoRA_Functions::receiveAcknowledmentAlertReportNode() {
-
-	Log.info("Alert report acknowledged with alert code %d", sysStatus.get_alertCodeNode());
-	return true;
-}
-
 

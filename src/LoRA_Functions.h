@@ -11,16 +11,16 @@
 // Format of a data report
 /*
 buf[0 - 1] magicNumber                      // Magic number for devices
-buf[2] firmVersion                          // Set for code release
-buf[3 - 4] hourly                           // Hourly count
-buf[5 - 6] = daily                          // Daily Count
-buf[7] sensorType                           // What sensor type is it
-buf[8] temp;                                // Enclosure temp
-buf[9] battChg;                             // State of charge
-buf[10] battState;                          // Battery State
-buf[11] resets                              // Reset count
-buf[12] messageCount;                       // Sequential message number
-buf[13] successCount;
+buf[2 - 3] nodeID                            // nodeID for verification
+buf[4 - 5] hourly                           // Hourly count
+buf[6 - 7] = daily                          // Daily Count
+buf[8] sensorType                           // What sensor type is it
+buf[9] temp;                                // Enclosure temp
+buf[10] battChg;                             // State of charge
+buf[11] battState;                          // Battery State
+buf[12] resets                              // Reset count
+buf[13] messageCount;                       // Sequential message number
+buf[14] successCount;
 */
 
 // Format of a data acknowledgement
@@ -30,15 +30,16 @@ buf[13] successCount;
     buf[6 - 7] frequencyMinutes             // For the Gateway minutes on the hour
     buf[8] alertCode                        // This lets the Gateway trigger an alert on the node - typically a join request
     buf[9] sensorType                       // Let's the Gateway reset the sensor if needed 
-    buf[10] openHours                        // From the Gateway to the node - is the park open?
+    buf[10] openHours                       // From the Gateway to the node - is the park open?
     buf[11] message number                  // Parrot this back to see if it matches
 */
 
 // Format of a join request
 /*
 buf[0-1] magicNumber;                       // Magic Number
-buf[2- 26] Particle deviceID;               // deviceID is unique to the device
-buf[27] sensorType				            // Identifies sensor type to Gateway
+buf[2 - 3] nodeID                            // nodeID for verification
+buf[4- 28] Particle deviceID;               // deviceID is unique to the device
+buf[29] sensorType				            // Identifies sensor type to Gateway
 */
 
 // Format for a join acknowledgement
@@ -46,26 +47,10 @@ buf[27] sensorType				            // Identifies sensor type to Gateway
     buf[0 - 1 ]  magicNumber                // Magic Number
     buf[2 - 5 ] Time.now()                  // Set the time 
     buf[6 - 7] frequencyMinutes             // For the Gateway minutes on the hour  
-    buf[8] alertCodeNode                   // Gateway can set an alert code here
+    buf[8] alertCodeNode                    // Gateway can set an alert code here
     buf[9]  newNodeNumber                   // New Node Number for device
     buf[10]  sensorType				        // Gateway confirms sensor type
-
 */
-
-// Format for an alert Report
-/*
-buf[0 - 1 ] magicNumber                     // Magic Number
-buf[2] = alertCodeNode;                     // Node's Alert Code
-*/
-
-// Format for an Alert Report Acknowledgement
-/*
-    buf[0 - 1 ]  magicNumber                // Magic Number
-    buf[2 - 5 ] Time.now()                  // Set the time 
-    buf[6 - 7] frequencyMinutes             // For the Gateway minutes on the hour  
-    buf[8] alertCodeNode                    // Gateway can set an alert code here
-*/
-
 
 #ifndef __LORA_FUNCTIONS_H
 #define __LORA_FUNCTIONS_H
@@ -166,19 +151,12 @@ public:
      */
     bool receiveAcknowledmentJoinRequestNode();    // Node - received join request asknowledgement
     /**
-     * @brief Composes an alert report and sends to the Gateway
+     * @brief computes a two digit checksum based on the Particle deviceID
      * 
-     * @return true 
-     * @return false 
+     * @param str - a 24 character hex number string
+     * @return int - a value from 0 to 360 based on the character string
      */
-    bool composeAlertReportNode();                  // Node - Composes alert report
-    /**
-      * @brief Acknowledges the response from the Gateway that acknowledges receipt of an alert report
-     * 
-     * @return true 
-     * @return false 
-     */
-    bool receiveAcknowledmentAlertReportNode();    // Node - received alert report asknowledgement
+    int stringCheckSum(String str);
 
 
 protected:
