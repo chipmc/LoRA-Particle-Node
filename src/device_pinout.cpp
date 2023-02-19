@@ -62,9 +62,33 @@ bool initializePinModes() {
     pinMode(INT_PIN, INPUT);
     pinMode(MODULE_POWER_PIN, OUTPUT);
     pinMode(LED_POWER_PIN,OUTPUT);
-    digitalWrite(LED_POWER_PIN,LOW);                // Turns on the LEd on the PIR sensor
-    digitalWrite(MODULE_POWER_PIN,LOW);             // Enable (LOW) or disable (HIGH) the sensor
     return true;
+}
+
+void sensorControl(int sensorType, bool enableSensor) { // What is the sensor type - 0-Pressure Sensor, 1-PIR Sensor
+
+  if (enableSensor) {
+    digitalWrite(MODULE_POWER_PIN,false);           // Enable or disable the sensor
+
+    if (sensorType == 0) {                          // This is the pressure sensor and we are enabling it
+        digitalWrite(LED_POWER_PIN,HIGH);        // For the pressure sensor, this is how you activate it
+    }
+    else {
+        digitalWrite(LED_POWER_PIN,LOW);         // Turns on the LED on the PIR sensor board
+    }
+  }
+
+  else {
+    digitalWrite(MODULE_POWER_PIN,true);
+
+    if (sensorType == 0) {                          // This is the pressure sensor and we are enabling it
+        digitalWrite(LED_POWER_PIN,LOW);         // Turns off the LED on the pressure sensor board
+    }
+    else {
+        digitalWrite(LED_POWER_PIN,HIGH);        // Turns off the LED on the PIR sensor board
+    }
+  }
+
 }
 
 

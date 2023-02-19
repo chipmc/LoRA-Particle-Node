@@ -29,18 +29,12 @@ sysStatusData::~sysStatusData() {
 void sysStatusData::setup() {
     fram.begin();
 
-    // fram.erase();
-
     sysStatus
     //    .withLogData(true)
         .withSaveDelayMs(100)
         .load();
 
-    if (!sysStatus.validate(56)) {                  // 64 is the size of the sysStatus storage object
-        Log.info("sysStatus object not valid - reinitializing");
-        sysStatus.initialize();
-    }
-    else Log.info("sysStatus object is valid");
+    // Log.info("sizeof(SysData): %u", sizeof(SysData));
 }
 
 void sysStatusData::loop() {
@@ -62,8 +56,6 @@ bool sysStatusData::validate(size_t dataSize) {
         }
     }
     Log.info("sysStatus data is %s",(valid) ? "valid": "not valid");
-
-    sysStatus.set_alertCodeNode(0);                     // At setup we start with a clean slate
     return valid;
 }
 
@@ -207,12 +199,6 @@ void currentStatusData::setup() {
     //    .withLogData(true)
         .withSaveDelayMs(250)
         .load();
-
-    if (!current.validate(72)) {                  // 64 is the size of the sysStatus storage object
-        Log.info("current object not valid - reinitializing");
-        current.initialize();
-    }
-    else Log.info("current object is valid");
 }
 
 void currentStatusData::loop() {
@@ -284,12 +270,12 @@ void currentStatusData::set_lastSampleTime(time_t value) {
     setValue<time_t>(offsetof(CurrentData, lastSampleTime), value);
 }
 
-uint16_t currentStatusData::get_RSSI() const {
-    return getValue<uint16_t>(offsetof(CurrentData, RSSI));
+int16_t currentStatusData::get_RSSI() const {
+    return getValue<int16_t>(offsetof(CurrentData, RSSI));
 }
 
-void currentStatusData::set_RSSI(uint16_t value) {
-    setValue<uint16_t>(offsetof(CurrentData, RSSI), value);
+void currentStatusData::set_RSSI(int16_t value) {
+    setValue<int16_t>(offsetof(CurrentData, RSSI), value);
 }
 
 uint8_t currentStatusData::get_messageCount() const {

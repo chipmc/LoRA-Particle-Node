@@ -256,7 +256,7 @@ public:
 		double stateOfCharge;                                // Battery charge level
 		uint8_t batteryState;                             // Stores the current battery state (charging, discharging, etc)
 		time_t lastSampleTime;                            // Timestamp of last data collection
-		uint16_t RSSI;                                    // Latest signal strength value
+		int16_t RSSI;                                    // Latest signal strength value
 		uint8_t messageCount;                            // What message are we on
 		uint8_t successCount;							  // How many messages are delivered successfully
 		time_t lastCountTime;                             // When did we last record a count
@@ -303,8 +303,8 @@ public:
 	time_t get_lastSampleTime() const;
 	void set_lastSampleTime(time_t value);
 
-	uint16_t get_RSSI() const;
-	void set_RSSI(uint16_t value);
+	int16_t get_RSSI() const;
+	void set_RSSI(int16_t value);
 
 	uint8_t get_messageCount() const;
 	void set_messageCount(uint8_t value);

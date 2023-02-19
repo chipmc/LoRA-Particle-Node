@@ -102,7 +102,8 @@ bool recordCount() // This is where we check to see if an interrupt is set when 
   current.set_hourlyCount(current.get_hourlyCount() +1);                                              // Increment the PersonCount
   current.set_dailyCount(current.get_dailyCount() +1);                                               // Increment the PersonCount
   Log.info("Count, hourly: %i. daily: %i",current.get_hourlyCount(),current.get_dailyCount());
-  delay(200);
+  
+  delay(500);
   pinResetFast(BLUE_LED);
 
   return true;

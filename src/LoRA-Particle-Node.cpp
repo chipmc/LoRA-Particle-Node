@@ -25,6 +25,12 @@
 // v0.17 - Implemented full alert suite
 // v1 - Release Candidate - sending to Pilot mountain
 // v1.07 - Aligning numbers to Gateway - added nodeNumber validation, removed Alert message type
+// v1.08 - Added logic for pressure and PIR sensor light control
+// v1.09 - Changed startup behaviour - pressing the user button puts device into 60 second connect mode
+// v3.00 - Updated to reset the device after connecting so there is not an attempt to reconnect on each wake. (Gateway v2)
+// v4.00 - Makig the disconnect process cleaner and disabling watchdog during update
+// v5.00 - Updates to improve reliability
+// v7.00 - Fixed issue with uncontrained blinking - need to get to Pilot mountain
 
 #define NODENUMBEROFFSET 10UL						// By how much do we off set each node by node number
 
@@ -47,13 +53,15 @@ STARTUP(System.enableFeature(FEATURE_RESET_INFO));
 // For monitoring / debugging, you have some options on the next few lines - uncomment one
 SerialLogHandler logHandler(LOG_LEVEL_INFO);     // Easier to see the program flow
 
-char currentPointRelease[6] ="1.07";
+char currentPointRelease[6] ="7.00";
+PRODUCT_VERSION(7);									// For now, we are putting nodes and gateways in the same product group - need to deconflict #
 
 // Prototype functions
 void publishStateTransition(void);                  // Keeps track of state machine changes - for debugging
 void userSwitchISR();                               // interrupt service routime for the user switch
 int secondsUntilNextEvent(); 						// Time till next scheduled event
 void sensorISR();
+bool disconnectFromParticle();						// Makes sure we are disconnected from Particle
 
 // System Health Variables
 int outOfMemory = -1;                               // From reference code provided in AN0023 (see above)
@@ -105,12 +113,23 @@ void setup() {
   	takeMeasurements();                                                  	// Populates values so you can read them before the hour
 
 	if (!digitalRead(BUTTON_PIN)) {
-		Log.info("User button pressed, will force connection to Particle");
-		Particle.connect();													// Will stay connected until reset
+		Log.info("User button pressed at startup - attempt to connect");
+		state = LoRA_TRANSMISSION_STATE;
+		Particle.connect();													// Connects to Particle and stays connected until reset
+		if (!waitFor(Particle.connected,600000)) System.reset();
+		Log.info("Connected - staying online");
+        unsigned long start = millis();
+		ab1805.stopWDT();  													// No watchdogs as we will not transit the main loop for 2 mins
+        while (millis() - start < (120 * 1000)) {							// Stay on-line for two minutes
+            Particle.process();
+        }
+		if (!disconnectFromParticle()) System.reset();        				// You won't reach this point if there is an update but we need to reset to take the device back off-line
 	}
   
     attachInterrupt(INT_PIN, sensorISR, RISING);                     		// PIR or Pressure Sensor interrupt from low to high
 	attachInterrupt(BUTTON_PIN,userSwitchISR,CHANGE); 						// We may need to monitor the user switch to change behaviours / modes
+
+	if (sysStatus.get_openHours()) sensorControl(sysStatus.get_sensorType(),true); // Turn the sensor on during open hours
 
 	if (state == INITIALIZATION_STATE) state = SLEEPING_STATE;               	// Sleep unless otherwise from above code
   	Log.info("Startup complete for the Node with alert code %d and last connect %s", sysStatus.get_alertCodeNode(), Time.format(sysStatus.get_lastConnection(), "%T").c_str());
@@ -144,7 +163,7 @@ void loop() {
 
 			Log.info("Sleep for %i seconds until next event at %s with sensor %s", \
 			wakeInSeconds, (Time.isValid()) ? Time.format(time, "%T").c_str():"invalid time", (sysStatus.get_openHours()) ? "on" : "off");
-			if (!sysStatus.get_openHours()) digitalWrite(MODULE_POWER_PIN,HIGH);  // disable (HIGH) the sensor
+			if (!sysStatus.get_openHours()) if (sysStatus.get_openHours()) sensorControl(sysStatus.get_sensorType(),false);
 			config.mode(SystemSleepMode::ULTRA_LOW_POWER)
 				.gpio(BUTTON_PIN,CHANGE)
 				.gpio(INT_PIN,RISING)
@@ -152,9 +171,10 @@ void loop() {
 			ab1805.stopWDT();  												// No watchdogs interrupting our slumber
 			SystemSleepResult result = System.sleep(config);              	// Put the device to sleep device continues operations from here
 			ab1805.resumeWDT();                                             // Wakey Wakey - WDT can resume
-			delay(2000);		//  Diagnostic code
-			digitalWrite(MODULE_POWER_PIN,LOW);             				// Enable (LOW) the sensor
+			sensorControl(sysStatus.get_sensorType(),true);				// Enable the sensor
 			if (result.wakeupPin() == BUTTON_PIN) {                         // If the user woke the device we need to get up - device was sleeping so we need to reset opening hours
+				waitFor(Serial.isConnected, 10000);				// Wait for serial connection
+				delay(1000);
 				Log.info("Woke with user button - LoRA State");
 				state = LoRA_TRANSMISSION_STATE;
 			}
@@ -181,7 +201,7 @@ void loop() {
 
 				// Based on Alert code, determine what message to send
 				if (sysStatus.get_alertCodeNode() == 0) result = LoRA_Functions::instance().composeDataReportNode();
-				else if (sysStatus.get_alertCodeNode() == 1) result = LoRA_Functions::instance().composeJoinRequesttNode();
+				else if (sysStatus.get_alertCodeNode() == 1 || sysStatus.get_alertCodeNode() == 2) result = LoRA_Functions::instance().composeJoinRequesttNode();
 				else Log.info("Alert code %d, will handle in ERROR state", sysStatus.get_alertCodeNode());
 
 				if (!result) {
@@ -259,6 +279,7 @@ void loop() {
 				Log.info("Initialize LoRA radio");
 				if(LoRA_Functions::instance().initializeRadio()) {
 					Log.info("Initialization successful");	
+					sysStatus.set_alertCodeNode(0);							// Modem reinitialized successfully, going back to retransmit
 					state = LoRA_TRANSMISSION_STATE;						// Sends the alert and clears alert code
 				}
 				else {
@@ -273,7 +294,7 @@ void loop() {
 				current.resetEverything();									// Resets the node counts
 				sysStatus.set_alertCodeNode(1);								// Resetting system values requires we re-join the network
 				sysStatus.set_alertTimestampNode(Time.now());			
-				state = IDLE_STATE;	
+				state = LoRA_TRANSMISSION_STATE;							// Sends the alert and clears alert code
 			break;
 			case 6: 														// In this state system data is retained but current data is reset
 				current.resetEverything();
@@ -394,4 +415,33 @@ int secondsUntilNextEvent() {												// Time till next scheduled event
 		return secondsToReturn;
     }
 	else return 60UL;	// If time is not valid, we need to keep trying to catch the Gateway when it next wakes up.
+}
+
+bool disconnectFromParticle()                      							// Ensures we disconnect cleanly from Particle
+                                                                       		// Updated based on this thread: https://community.particle.io/t/waitfor-particle-connected-timeout-does-not-time-out/59181
+{
+  time_t startTime = Time.now();
+  Log.info("In the disconnect from Particle function");
+  Particle.disconnect();                                               		// Disconnect from Particle
+  waitForNot(Particle.connected, 15000);                               		// Up to a 15 second delay() 
+  Particle.process();
+  if (Particle.connected()) {                      							// As this disconnect from Particle thing can be a·syn·chro·nous, we need to take an extra step to wait, 
+    Log.info("Failed to disconnect from Particle");
+    return(false);
+  }
+  else Log.info("Disconnected from Particle in %i seconds", (int)(Time.now() - startTime));
+  // Then we need to disconnect from Cellular and power down the cellular modem
+  startTime = Time.now();
+  Cellular.disconnect();                                               // Disconnect from the cellular network
+  Cellular.off();                                                      // Turn off the cellular modem
+  waitFor(Cellular.isOff, 30000);                                      // As per TAN004: https://support.particle.io/hc/en-us/articles/1260802113569-TAN004-Power-off-Recommendations-for-SARA-R410M-Equipped-Devices
+  Particle.process();
+  if (Cellular.isOn()) {                                               // At this point, if cellular is not off, we have a problem
+    Log.info("Failed to turn off the Cellular modem");
+    return(false);                                                     // Let the calling function know that we were not able to turn off the cellular modem
+  }
+  else {
+    Log.info("Turned off the cellular modem in %i seconds", (int)(Time.now() - startTime));
+    return true;
+  }
 }

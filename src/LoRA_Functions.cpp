@@ -138,7 +138,8 @@ bool LoRA_Functions::listenForLoRAMessageNode() {
 			return false;
 		} 
 		lora_state = (LoRA_State)messageFlag;
-		Log.info("Received from node %d with rssi=%d - a %s message", from, driver.lastRssi(), loraStateNames[lora_state]);
+		current.set_RSSI(driver.lastRssi());
+		Log.info("Received from node %d with rssi=%d - a %s message with %d hops", from, current.get_RSSI(), loraStateNames[lora_state], hops);
 
 		Time.setTime(((buf[2] << 24) | (buf[3] << 16) | (buf[4] << 8) | buf[5]));  // Set time based on response from gateway
 		sysStatus.set_frequencyMinutes((buf[6] << 8 | buf[7]));			// Frequency of reporting set by Gateway
@@ -247,7 +248,8 @@ bool LoRA_Functions::receiveAcknowledmentDataReportNode() {
 	Log.info("Data report acknowledged %s alert for message %d park is %s and alert code is %d", (alertSetByGateway > 0) ? "with":"without", buf[11], (buf[10] ==1) ? "open":"closed", sysStatus.get_alertCodeNode());
 	
 	blinkBlue.setActive(true);
-	unsigned long strength = (unsigned long)(map(driver.lastRssi(),-30,-120,2000,0));
+	unsigned long strength = (unsigned long)(map(current.get_RSSI(),-10,-140,3000,0));
+	strength = constrain(strength,0UL,3000UL);
     delay(strength);
     blinkBlue.setActive(false);
 
@@ -302,7 +304,8 @@ bool LoRA_Functions::receiveAcknowledmentJoinRequestNode() {
 	manager.setThisAddress(sysStatus.get_nodeNumber());
 
     blinkOrange.setActive(true);
-	unsigned long strength = (unsigned long)(map(driver.lastRssi(),-30,-120,2000,0));
+	unsigned long strength = (unsigned long)(map(current.get_RSSI(),-10,-140,3000,0));
+	strength = constrain(strength,0UL,2000UL);
     delay(strength);
     blinkOrange.setActive(false);
 
