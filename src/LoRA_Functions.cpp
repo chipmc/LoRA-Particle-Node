@@ -63,7 +63,10 @@ bool LoRA_Functions::setup(bool gatewayID) {
 
 	driver.setFrequency(RF95_FREQ);					// Frequency is typically 868.0 or 915.0 in the Americas, or 433.0 in the EU - Are there more settings possible here?
 	driver.setTxPower(23, false);                   // If you are using RFM95/96/97/98 modules which uses the PA_BOOST transmitter pin, then you can set transmitter powers from 5 to 23 dBm (13dBm default).  PA_BOOST?
-	
+	// driver.setModemConfig(RH_RF95::Bw31_25Cr48Sf512);	// This optimized the radio for long range - https://www.airspayce.com/mikem/arduino/RadioHead/classRH__RF95.html
+	// manager.setTimeout(200);						// 200mSec is the default - may need to extend once we play with other settings on the modem
+
+
 	Log.info("in LoRA setup - node number %d",sysStatus.get_nodeNumber());
 
 	if (gatewayID == true) {
@@ -248,8 +251,8 @@ bool LoRA_Functions::receiveAcknowledmentDataReportNode() {
 	Log.info("Data report acknowledged %s alert for message %d park is %s and alert code is %d", (alertSetByGateway > 0) ? "with":"without", buf[11], (buf[10] ==1) ? "open":"closed", sysStatus.get_alertCodeNode());
 	
 	blinkBlue.setActive(true);
-	unsigned long strength = (unsigned long)(map(current.get_RSSI(),-10,-140,3000,0));
-	strength = constrain(strength,0UL,3000UL);
+	unsigned long strength = (unsigned long)(map(current.get_RSSI(),-10,-140,3000,100));
+	strength = constrain(strength,100UL,3000UL);
     delay(strength);
     blinkBlue.setActive(false);
 
@@ -304,8 +307,8 @@ bool LoRA_Functions::receiveAcknowledmentJoinRequestNode() {
 	manager.setThisAddress(sysStatus.get_nodeNumber());
 
     blinkOrange.setActive(true);
-	unsigned long strength = (unsigned long)(map(current.get_RSSI(),-10,-140,3000,0));
-	strength = constrain(strength,0UL,2000UL);
+	unsigned long strength = (unsigned long)(map(current.get_RSSI(),-10,-140,3000,100));
+	strength = constrain(strength,100UL,3000UL);
     delay(strength);
     blinkOrange.setActive(false);
 

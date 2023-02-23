@@ -30,7 +30,7 @@
 // v3.00 - Updated to reset the device after connecting so there is not an attempt to reconnect on each wake. (Gateway v2)
 // v4.00 - Makig the disconnect process cleaner and disabling watchdog during update
 // v5.00 - Updates to improve reliability
-// v7.00 - Fixed issue with uncontrained blinking - need to get to Pilot mountain
+// v7.00 - Fixed issue with unconstrained blinking - need to get to Pilot mountain
 
 #define NODENUMBEROFFSET 10UL						// By how much do we off set each node by node number
 
@@ -62,6 +62,7 @@ void userSwitchISR();                               // interrupt service routime
 int secondsUntilNextEvent(); 						// Time till next scheduled event
 void sensorISR();
 bool disconnectFromParticle();						// Makes sure we are disconnected from Particle
+void softDelay(uint32_t t);                 		// Soft delay is safer than delay
 
 // System Health Variables
 int outOfMemory = -1;                               // From reference code provided in AN0023 (see above)
@@ -93,6 +94,25 @@ void setup() {
 
 	sysStatus.setup();								// Initialize persistent storage
 	current.setup();
+
+	if (!digitalRead(BUTTON_PIN)) {											// We will use this to connect in order to get an update only
+		Log.info("User button pressed at startup - attempt to connect");
+		Particle.connect();													// Connects to Particle and stays connected until reset
+		if (!waitFor(Particle.connected,600000)) {
+			Log.info("Connection timeout - disconnect and reset");
+			disconnectFromParticle();										// Times out after 10 minutes - then disconnects and continues
+			System.reset();
+		}
+		else {
+			Log.info("Connected - staying online for update");
+ 	    	unsigned long start = millis();
+			while (millis() - start < (120 * 1000)) {							// Stay on-line for two minutes
+				Particle.process();
+			}
+			disconnectFromParticle();
+			System.reset();        				// You won't reach this point if there is an update but we need to reset to take the device back off-line
+		}
+	}
                               
     ab1805.withFOUT(D8).setup();                	// The carrier board has D8 connected to FOUT for wake interrupts
     ab1805.setWDT(AB1805::WATCHDOG_MAX_SECONDS);	// Enable watchdog
@@ -111,20 +131,6 @@ void setup() {
 	}
 
   	takeMeasurements();                                                  	// Populates values so you can read them before the hour
-
-	if (!digitalRead(BUTTON_PIN)) {
-		Log.info("User button pressed at startup - attempt to connect");
-		state = LoRA_TRANSMISSION_STATE;
-		Particle.connect();													// Connects to Particle and stays connected until reset
-		if (!waitFor(Particle.connected,600000)) System.reset();
-		Log.info("Connected - staying online");
-        unsigned long start = millis();
-		ab1805.stopWDT();  													// No watchdogs as we will not transit the main loop for 2 mins
-        while (millis() - start < (120 * 1000)) {							// Stay on-line for two minutes
-            Particle.process();
-        }
-		if (!disconnectFromParticle()) System.reset();        				// You won't reach this point if there is an update but we need to reset to take the device back off-line
-	}
   
     attachInterrupt(INT_PIN, sensorISR, RISING);                     		// PIR or Pressure Sensor interrupt from low to high
 	attachInterrupt(BUTTON_PIN,userSwitchISR,CHANGE); 						// We may need to monitor the user switch to change behaviours / modes
@@ -167,7 +173,7 @@ void loop() {
 			config.mode(SystemSleepMode::ULTRA_LOW_POWER)
 				.gpio(BUTTON_PIN,CHANGE)
 				.gpio(INT_PIN,RISING)
-				.duration(wakeInSeconds * 1000L);
+				.duration((wakeInSeconds -5) * 1000L);						// Offsetting by 5 seconds to let the device wake and get battery level
 			ab1805.stopWDT();  												// No watchdogs interrupting our slumber
 			SystemSleepResult result = System.sleep(config);              	// Put the device to sleep device continues operations from here
 			ab1805.resumeWDT();                                             // Wakey Wakey - WDT can resume
@@ -186,6 +192,7 @@ void loop() {
 				else state = SLEEPING_STATE;								// This is the normal behavioud
 			}
 			else {
+				softDelay(5000);
 				Log.info("Time is up at %s with %li free memory", Time.format((Time.now()+wakeInSeconds), "%T").c_str(), System.freeMemory());
 				state = IDLE_STATE;
 			}
@@ -444,4 +451,14 @@ bool disconnectFromParticle()                      							// Ensures we disconne
     Log.info("Turned off the cellular modem in %i seconds", (int)(Time.now() - startTime));
     return true;
   }
+}
+
+/**
+ * @brief soft delay let's us process Particle functions and service the sensor interrupts while pausing
+ * 
+ * @details takes a single unsigned long input in millis
+ * 
+ */
+inline void softDelay(uint32_t t) {
+  for (uint32_t ms = millis(); millis() - ms < t; Particle.process());  //  safer than a delay()
 }
