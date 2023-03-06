@@ -30,7 +30,7 @@
 // v3.00 - Updated to reset the device after connecting so there is not an attempt to reconnect on each wake. (Gateway v2)
 // v4.00 - Makig the disconnect process cleaner and disabling watchdog during update
 // v5.00 - Updates to improve reliability
-// v7.00 - Fixed issue with unconstrained blinking - need to get to Pilot mountain
+// v8.00 - Fixed issue with unconstrained blinking - need to get to Pilot mountain - changed battery montiroing / center freq for stick antenna
 
 #define NODENUMBEROFFSET 10UL						// By how much do we off set each node by node number
 
@@ -53,8 +53,8 @@ STARTUP(System.enableFeature(FEATURE_RESET_INFO));
 // For monitoring / debugging, you have some options on the next few lines - uncomment one
 SerialLogHandler logHandler(LOG_LEVEL_INFO);     // Easier to see the program flow
 
-char currentPointRelease[6] ="7.00";
-PRODUCT_VERSION(7);									// For now, we are putting nodes and gateways in the same product group - need to deconflict #
+char currentPointRelease[6] ="8.00";
+PRODUCT_VERSION(8);									// For now, we are putting nodes and gateways in the same product group - need to deconflict #
 
 // Prototype functions
 void publishStateTransition(void);                  // Keeps track of state machine changes - for debugging
@@ -177,10 +177,10 @@ void loop() {
 			ab1805.stopWDT();  												// No watchdogs interrupting our slumber
 			SystemSleepResult result = System.sleep(config);              	// Put the device to sleep device continues operations from here
 			ab1805.resumeWDT();                                             // Wakey Wakey - WDT can resume
-			sensorControl(sysStatus.get_sensorType(),true);				// Enable the sensor
+			sensorControl(sysStatus.get_sensorType(),true);					// Enable the sensor
 			if (result.wakeupPin() == BUTTON_PIN) {                         // If the user woke the device we need to get up - device was sleeping so we need to reset opening hours
-				waitFor(Serial.isConnected, 10000);				// Wait for serial connection
-				delay(1000);
+				waitFor(Serial.isConnected, 10000);							// Wait for serial connection
+				softDelay(1000);
 				Log.info("Woke with user button - LoRA State");
 				state = LoRA_TRANSMISSION_STATE;
 			}
@@ -192,7 +192,7 @@ void loop() {
 				else state = SLEEPING_STATE;								// This is the normal behavioud
 			}
 			else {
-				softDelay(5000);
+				softDelay(2000);
 				Log.info("Time is up at %s with %li free memory", Time.format((Time.now()+wakeInSeconds), "%T").c_str(), System.freeMemory());
 				state = IDLE_STATE;
 			}

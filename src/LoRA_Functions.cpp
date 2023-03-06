@@ -29,7 +29,8 @@ LoRA_Functions::~LoRA_Functions() {
 // In this implementation - we have one gateway numde number 0 and up to 10 nodes with node numbers 1-10
 // Node numbers greater than 10 initiate a join request
 const uint8_t GATEWAY_ADDRESS = 0;
-const double RF95_FREQ = 915.0;				 // Frequency - ISM
+// const double RF95_FREQ = 915.0;				 	// Frequency - ISM
+const double RF95_FREQ = 926.84;				// Center frequency for the omni-directional antenna I am using
 
 // Define the message flags
 typedef enum { NULL_STATE, JOIN_REQ, JOIN_ACK, DATA_RPT, DATA_ACK, ALERT_RPT, ALERT_ACK} LoRA_State;
@@ -56,16 +57,7 @@ uint8_t buf[RH_MESH_MAX_MESSAGE_LEN];               // Related to max message si
 
 bool LoRA_Functions::setup(bool gatewayID) {
     // Set up the Radio Module
-	if (!manager.init()) {
-		Log.info("init failed");					// Defaults after init are 434.0MHz, 0.05MHz AFC pull-in, modulation FSK_Rb2_4Fd36
-		return false;
-	}
-
-	driver.setFrequency(RF95_FREQ);					// Frequency is typically 868.0 or 915.0 in the Americas, or 433.0 in the EU - Are there more settings possible here?
-	driver.setTxPower(23, false);                   // If you are using RFM95/96/97/98 modules which uses the PA_BOOST transmitter pin, then you can set transmitter powers from 5 to 23 dBm (13dBm default).  PA_BOOST?
-	// driver.setModemConfig(RH_RF95::Bw31_25Cr48Sf512);	// This optimized the radio for long range - https://www.airspayce.com/mikem/arduino/RadioHead/classRH__RF95.html
-	// manager.setTimeout(200);						// 200mSec is the default - may need to extend once we play with other settings on the modem
-
+	LoRA_Functions::initializeRadio();
 
 	Log.info("in LoRA setup - node number %d",sysStatus.get_nodeNumber());
 
@@ -119,6 +111,8 @@ bool  LoRA_Functions::initializeRadio() {  			// Set up the Radio Module
 	}
 	driver.setFrequency(RF95_FREQ);					// Frequency is typically 868.0 or 915.0 in the Americas, or 433.0 in the EU - Are there more settings possible here?
 	driver.setTxPower(23, false);                   // If you are using RFM95/96/97/98 modules which uses the PA_BOOST transmitter pin, then you can set transmitter powers from 5 to 23 dBm (13dBm default).  PA_BOOST?
+	driver.setModemConfig(RH_RF95::Bw125Cr48Sf4096);	// This optimized the radio for long range - https://www.airspayce.com/mikem/arduino/RadioHead/classRH__RF95.html
+	manager.setTimeout(2000);						// 200mSec is the default - may need to extend once we play with other settings on the modem - https://www.airspayce.com/mikem/arduino/RadioHead/classRHReliableDatagram.html
 
 return true;
 }
