@@ -30,9 +30,11 @@
 // v3.00 - Updated to reset the device after connecting so there is not an attempt to reconnect on each wake. (Gateway v2)
 // v4.00 - Makig the disconnect process cleaner and disabling watchdog during update
 // v5.00 - Updates to improve reliability
-// v8.00 - Fixed issue with unconstrained blinking - need to get to Pilot mountain - changed battery montiroing / center freq for stick antenna
+// v8.00 - Fixed issue with unconstrained blinking - need to get to Pilot mountain - changed battery montiroing / center freq for stick antenna (v8 Node / v7 Gateway)
+// v10.00 - Breaking Change - v9 Gateway required - Node reports RSSI / SNR to Gateway - Listening / repeating mode, Simplified error handling
 
-#define NODENUMBEROFFSET 10UL						// By how much do we off set each node by node number
+
+#define NODENUMBEROFFSET 10000UL					// By how much do we off set each node by node number
 
 // Particle Libraries
 #include "AB1805_RK.h"                              // Watchdog and Real Time Clock - https://github.com/rickkas7/AB1805_RK
@@ -53,36 +55,36 @@ STARTUP(System.enableFeature(FEATURE_RESET_INFO));
 // For monitoring / debugging, you have some options on the next few lines - uncomment one
 SerialLogHandler logHandler(LOG_LEVEL_INFO);     // Easier to see the program flow
 
-char currentPointRelease[6] ="8.00";
-PRODUCT_VERSION(8);									// For now, we are putting nodes and gateways in the same product group - need to deconflict #
+PRODUCT_VERSION(10);									// For now, we are putting nodes and gateways in the same product group - need to deconflict #
 
 // Prototype functions
 void publishStateTransition(void);                  // Keeps track of state machine changes - for debugging
 void userSwitchISR();                               // interrupt service routime for the user switch
-int secondsUntilNextEvent(); 						// Time till next scheduled event
 void sensorISR();
 bool disconnectFromParticle();						// Makes sure we are disconnected from Particle
-void softDelay(uint32_t t);                 		// Soft delay is safer than delay
 
 // System Health Variables
 int outOfMemory = -1;                               // From reference code provided in AN0023 (see above)
 
 // State Machine Variables
-enum State { INITIALIZATION_STATE, ERROR_STATE, IDLE_STATE, SLEEPING_STATE, LoRA_TRANSMISSION_STATE, LoRA_LISTENING_STATE, CONNECTING_STATE, DISCONNECTING_STATE, REPORTING_STATE};
-char stateNames[9][16] = {"Initialize", "Error", "Idle", "Sleeping", "LoRA Transmit", "LoRA Listening", "Connecting", "Disconnecting", "Reporting"};
-State state = INITIALIZATION_STATE;
+enum State { INITIALIZATION_STATE, ERROR_STATE, IDLE_STATE, SLEEPING_STATE, LoRA_TRANSMISSION_STATE, LoRA_LISTENING_STATE, LoRA_RETRY_WAIT_STATE, CONNECTING_STATE, DISCONNECTING_STATE, REPORTING_STATE};
+char stateNames[10][16] = {"Initialize", "Error", "Idle", "Sleeping", "LoRA Transmit", "LoRA Listening", "LoRA Retry Wait", "Connecting", "Disconnecting", "Reporting"};
+volatile State state = INITIALIZATION_STATE;
 State oldState = INITIALIZATION_STATE;
 
 // Initialize Functions
 SystemSleepConfiguration config;                    // Initialize new Sleep 2.0 Api
 AB1805 ab1805(Wire);                                // Rickkas' RTC / Watchdog library
 void outOfMemoryHandler(system_event_t event, int param);
-
+void transmitDelayTimerISR();
+void listeningDurationTimerISR();
 
 // Program Variables
 volatile bool userSwitchDectected = false;		
 volatile bool sensorDetect = false;
-int retryState = 0;									// We will attempt up to three retries - exponential backoff
+
+Timer transmitDelayTimer(10000,transmitDelayTimerISR,true);
+Timer listeningDurationTimer(300000,listeningDurationTimerISR,true);
 
 void setup() {
 
@@ -147,129 +149,138 @@ void loop() {
 		case IDLE_STATE: {													// Unlike most sketches - nodes spend most time in sleep and only transit IDLE once or twice each period
 			if (state != oldState) publishStateTransition();              	// We will apply the back-offs before sending to ERROR state - so if we are here we will take action
 
-			// In this section, we will work through steps to recover from lost connectivity
-			if (sysStatus.get_frequencyMinutes() == 1) Log.info("Trying to reconnect to gateway");  // Something is wrong - attempting every minute to connect
-			else if ((Time.now() - sysStatus.get_lastConnection() > 2 * sysStatus.get_frequencyMinutes() * 60UL) && sysStatus.get_openHours()) { // Park is open but no connect for over two hours
-				Log.info("Park is open but we have not connected for over two reporting periods - need to power cycle and go to 1 min frequency");
-				sysStatus.set_alertCodeNode(3);								// This will trigger a power cycle reset
-				sysStatus.set_alertTimestampNode(Time.now());		
-				sysStatus.set_frequencyMinutes(1);							// Will wake every minute to send data - have to catch gateway when it is awake
-				sysStatus.set_lastConnection(Time.now());					// Prevents cyclical resets
-			}
-
-			if (sysStatus.get_alertCodeNode() != 0) state = ERROR_STATE;
-			else state = LoRA_TRANSMISSION_STATE;  							// No error - send data
-
+			if (sysStatus.get_alertCodeNode() != 0) state = ERROR_STATE;	// Error - let's handle this first
+			else state = LoRA_LISTENING_STATE;  							// No error - Enter the LoRA state
 		} break;
 
 		case SLEEPING_STATE: {
-			if (state != oldState) publishStateTransition();              	// We will apply the back-offs before sending to ERROR state - so if we are here we will take action
-			int wakeInSeconds = secondsUntilNextEvent();					// Figure out how long to sleep 
-			time_t time = Time.now() + wakeInSeconds;
+			unsigned long wakeInSeconds, wakeBoundary;
+			time_t time;
 
-			Log.info("Sleep for %i seconds until next event at %s with sensor %s", \
-			wakeInSeconds, (Time.isValid()) ? Time.format(time, "%T").c_str():"invalid time", (sysStatus.get_openHours()) ? "on" : "off");
+			publishStateTransition();              							// Publish state transition
+			// How long to sleep
+			if (Time.isValid()) {
+				wakeBoundary = (sysStatus.get_frequencyMinutes() * 60UL);
+				wakeInSeconds = constrain(wakeBoundary - Time.now() % wakeBoundary, 0UL, wakeBoundary);  // If Time is valid, we can compute time to the start of the next report window	
+				time = Time.now() + wakeInSeconds;
+				Log.info("Sleep for %lu seconds until next event at %s with sensor %s", wakeInSeconds, Time.format(time, "%T").c_str(), (sysStatus.get_openHours()) ? "on" : "off");
+			}
+			else {
+				wakeInSeconds = 60UL;
+				Log.info("Time not valid, sleeping for 60 seconds");
+			}
+			// Turn things off to save power
 			if (!sysStatus.get_openHours()) if (sysStatus.get_openHours()) sensorControl(sysStatus.get_sensorType(),false);
+			// Configure Sleep
 			config.mode(SystemSleepMode::ULTRA_LOW_POWER)
 				.gpio(BUTTON_PIN,CHANGE)
 				.gpio(INT_PIN,RISING)
-				.duration((wakeInSeconds -5) * 1000L);						// Offsetting by 5 seconds to let the device wake and get battery level
+				.duration((wakeInSeconds) * 1000L);							// Configuring sleep
 			ab1805.stopWDT();  												// No watchdogs interrupting our slumber
 			SystemSleepResult result = System.sleep(config);              	// Put the device to sleep device continues operations from here
 			ab1805.resumeWDT();                                             // Wakey Wakey - WDT can resume
 			sensorControl(sysStatus.get_sensorType(),true);					// Enable the sensor
 			if (result.wakeupPin() == BUTTON_PIN) {                         // If the user woke the device we need to get up - device was sleeping so we need to reset opening hours
-				waitFor(Serial.isConnected, 10000);							// Wait for serial connection
-				softDelay(1000);
-				Log.info("Woke with user button - LoRA State");
-				state = LoRA_TRANSMISSION_STATE;
+				waitFor(Serial.isConnected, 10000);							// Wait for serial connection if we are using the button - we may want to monito serial 
+				Log.info("Woke with user button");
+				state = IDLE_STATE;
 			}
 			else if (result.wakeupPin() == INT_PIN) {
 				Log.info("Woke with sensor interrupt");						// Will count at the bottom of the main loop
-				if (secondsUntilNextEvent() <= 2 || \
-					secondsUntilNextEvent() >= ((sysStatus.get_frequencyMinutes() * 60) - 2)) \
-					state = IDLE_STATE;										// If more or less than 2 seconds we may miss reporting
-				else state = SLEEPING_STATE;								// This is the normal behavioud
+				state = SLEEPING_STATE;										// This is the normal behaviour
 			}
 			else {
-				softDelay(2000);
 				Log.info("Time is up at %s with %li free memory", Time.format((Time.now()+wakeInSeconds), "%T").c_str(), System.freeMemory());
 				state = IDLE_STATE;
 			}
 		} break;
 
-		case LoRA_TRANSMISSION_STATE: {
-			bool result = false;
+		case LoRA_LISTENING_STATE: {																// Timers will take us to transmit and back to sleep
+			static int lastReportingHour = Time.hour();
 
 			if (state != oldState) {
-				publishStateTransition();                   				// We will apply the back-offs before sending to ERROR state - so if we are here we will take action
-				LoRA_Functions::instance().clearBuffer();
-				takeMeasurements();
-
-				// Based on Alert code, determine what message to send
-				if (sysStatus.get_alertCodeNode() == 0) result = LoRA_Functions::instance().composeDataReportNode();
-				else if (sysStatus.get_alertCodeNode() == 1 || sysStatus.get_alertCodeNode() == 2) result = LoRA_Functions::instance().composeJoinRequesttNode();
-				else Log.info("Alert code %d, will handle in ERROR state", sysStatus.get_alertCodeNode());
-
-				if (!result) {
-					retryState++;
-					if (sysStatus.get_frequencyMinutes() == 1) retryState = 0;	// When we are in recovery mode, we don't need retries as we are sending every minute
-					Log.info("Failed in data send, retryState = %d",retryState);
-					state = SLEEPING_STATE;
+				if (oldState != LoRA_TRANSMISSION_STATE) {
+					if (!listeningDurationTimer.isActive()) listeningDurationTimer.start();				// Don't reset timer if it is already running
+					if (sysStatus.get_nodeNumber() < 11) transmitDelayTimer.changePeriod(sysStatus.get_nodeNumber()*NODENUMBEROFFSET);		// Wait a beat before transmitting
+					else state = LoRA_TRANSMISSION_STATE;
 				}
-				else {
-					retryState = 0;
-					state = LoRA_LISTENING_STATE;
+				publishStateTransition();                   										// Publish state transition
+			}
+
+			if (LoRA_Functions::instance().listenForLoRAMessageNode()) {							// Listen for LoRA signals - could be an acknowledgement or a message to relay to another node
+				sysStatus.set_lastConnection(Time.now());											// Came back as true - message was for our node
+				randomSeed(sysStatus.get_lastConnection() * sysStatus.get_nodeNumber());			// Done so we can genrate rando numbers later
+				ab1805.setRtcFromTime(Time.now());
+				if (Time.hour() != lastReportingHour) {
+					current.set_hourlyCount(0);					    								// Zero the hourly count
+					lastReportingHour = Time.hour();
 				}
+				else if (sysStatus.get_alertCodeNode() != 0) state = ERROR_STATE;					// Need to resolve alert before listening for others
 			}
 		} break;
 
-		case LoRA_LISTENING_STATE: {
-			static system_tick_t startListening = 0;
-			bool messageReceived = false;
+		case LoRA_TRANSMISSION_STATE: {
+			bool result = false;
+			static int retryCount = 0;
 
-			if (state != oldState) {
-				publishStateTransition();                   				// We will apply the back-offs before sending to ERROR state - so if we are here we will take action
-				startListening = millis();
-				state = SLEEPING_STATE;
+			publishStateTransition();                   					// We will apply the back-offs before sending to ERROR state - so if we are here we will take action
+			takeMeasurements();												// Taking measurements now should allow for accurate battery measurements
+			LoRA_Functions::instance().clearBuffer();
+			// Based on Alert code, determine what message to send
+			if (sysStatus.get_alertCodeNode() == 0) result = LoRA_Functions::instance().composeDataReportNode();
+			else if (sysStatus.get_alertCodeNode() == 1 || sysStatus.get_alertCodeNode() == 2) result = LoRA_Functions::instance().composeJoinRequesttNode();
+			else result = true;												// Should not happen but just in case an active alert code comes this far
+
+			if (result) {
+				retryCount = 0;												// Successful transmission - go listen for response
+				state = LoRA_LISTENING_STATE;
 			}
-
-			while (millis() - startListening < 5000) {
-				// The big difference between a node and a gateway - the Node initiates a LoRA exchange by sending data
-				if (LoRA_Functions::instance().listenForLoRAMessageNode()) {// Listen for acknowledgement
-					messageReceived = true;
-					sysStatus.set_lastConnection(Time.now());
-					randomSeed(sysStatus.get_lastConnection());				// Done so we can genrate rando numbers later
-					ab1805.setRtcFromTime(Time.now());
-					if (sysStatus.get_alertCodeNode() > 0) {				// If we are reporting an alert we will also report data
-						state = IDLE_STATE;									// This is enable us to send the data now that alert is reported
-					}
-					else {
-						static int lastReportingHour = Time.hour();
-						if (Time.hour() != lastReportingHour) {
-							current.set_hourlyCount(0);					    // Zero the hourly count
-							lastReportingHour = Time.hour();
-						}
-					}
-					LoRA_Functions::instance().sleepLoRaRadio();			// Done with LoRA - put radio to sleep
+			else if (retryCount >= 3) {
+				Log.info("Too many retries - giving up for this period");
+				retryCount = 0;
+				if ((Time.now() - sysStatus.get_lastConnection() > 2 * sysStatus.get_frequencyMinutes() * 60UL)) { 	// Device has not connected for two reporting periods
+					Log.info("Nothing for two reporting periods - power cycle after current cycle");
+					sysStatus.set_alertCodeNode(3);							// This will trigger a power cycle reset
+					sysStatus.set_alertTimestampNode(Time.now());		
+					sysStatus.set_lastConnection(Time.now());				// Prevents cyclical resets
+					state = ERROR_STATE;									// Likely radio is locked up - reset the device and radio
 					break;
 				}
+				state = LoRA_LISTENING_STATE;
 			}
-			if (!messageReceived) Log.info("Did not receive a response");
+			else {
+				Log.info("Transmission failed - retry number %d",retryCount++);
+				state = LoRA_RETRY_WAIT_STATE;
+			}
+		} break;
+
+		case LoRA_RETRY_WAIT_STATE: {										// In this state we introduce a random delay and then retransmit
+			static unsigned long variableDelay = 0;
+			static unsigned long startDelay = 0;
+
+			if (state != oldState) {
+				publishStateTransition();                   				// Publish state transition
+				variableDelay = random(20000);								// a random delay up to 20 seconds
+				startDelay = millis();
+				Log.info("Going to retry in %lu seconds", variableDelay/1000UL);
+			}
+
+			if (millis() >= startDelay + variableDelay) state = LoRA_TRANSMISSION_STATE;
+
 		} break;
 
 		case ERROR_STATE: {													// Where we go if things are not quite right
 			if (state != oldState) publishStateTransition();                // We will apply the back-offs before sending to ERROR state - so if we are here we will take action
 
-			switch (sysStatus.get_alertCodeNode())
-			{
+			switch (sysStatus.get_alertCodeNode()) {
 			case 1:															// Case 1 is an unconfigured node - needs to send join request
-				Log.info("Alert 1 - Join Request Required");
-				state = LoRA_TRANSMISSION_STATE;							// Sends the alert and clears alert code
+				sysStatus.set_nodeNumber(11);
+				Log.info("LoRA Radio initialized as an unconfigured node %i and a deviceID of %s", sysStatus.get_nodeNumber(), System.deviceID().c_str());
+				state = LoRA_LISTENING_STATE;							// Sends the alert and clears alert code
 			break;
 			case 2:															// Case 2 is for Time not synced
-				Log.info("Alert 2- New Day Alert");
-				state = LoRA_TRANSMISSION_STATE;							// Sends the alert and clears alert code
+				Log.info("Alert 2- Time is not valid going to join again");
+				state = LoRA_LISTENING_STATE;							// Sends the alert and clears alert code
 			break;
 			case 3: {														// Case 3 is generic - power cycle device to recover from errors
 				static system_tick_t enteredState = millis();
@@ -287,7 +298,7 @@ void loop() {
 				if(LoRA_Functions::instance().initializeRadio()) {
 					Log.info("Initialization successful");	
 					sysStatus.set_alertCodeNode(0);							// Modem reinitialized successfully, going back to retransmit
-					state = LoRA_TRANSMISSION_STATE;						// Sends the alert and clears alert code
+					state = LoRA_LISTENING_STATE;							// Sends the alert and clears alert code
 				}
 				else {
 					Log.info(("Initialization not successful - power cycle"));
@@ -301,17 +312,14 @@ void loop() {
 				current.resetEverything();									// Resets the node counts
 				sysStatus.set_alertCodeNode(1);								// Resetting system values requires we re-join the network
 				sysStatus.set_alertTimestampNode(Time.now());			
-				state = LoRA_TRANSMISSION_STATE;							// Sends the alert and clears alert code
+				Log.info("Full Reset and Re-Join Network");
+				state = LoRA_LISTENING_STATE;							// Sends the alert and clears alert code
+
 			break;
 			case 6: 														// In this state system data is retained but current data is reset
 				current.resetEverything();
 				sysStatus.set_alertCodeNode(0);
-				state = SLEEPING_STATE;										// Once we clear the counts - go to sleep
-			break;
-			case 7:
-				// This alert code is handled in the Data response function - on Data response Gateway type overwrites node type
-				sysStatus.set_alertCodeNode(0);
-				state = SLEEPING_STATE;										// Once we clear the counts - go to sleep
+				state = LoRA_LISTENING_STATE;								// Once we clear the counts we can go back to listening
 			break;
 			default:
 				Log.info("Undefined Error State");
@@ -338,7 +346,15 @@ void loop() {
 		System.reset();
   	}
 
+	if (userSwitchDectected) {
+		userSwitchDectected = false;
+		if (!listeningDurationTimer.isActive()) listeningDurationTimer.start();				// Don't reset timer if it is already running
+		Log.info("Detected button press");
+		state = LoRA_TRANSMISSION_STATE;
+	}
+
 }
+
 
 /**
  * @brief Publishes a state transition to the Log Handler and to the Particle monitoring system.
@@ -362,8 +378,17 @@ void outOfMemoryHandler(system_event_t event, int param) {
     outOfMemory = param;
 }
 
+void transmitDelayTimerISR() {
+	state = LoRA_TRANSMISSION_STATE;										// Time for our node to transmit
+}
+
+void listeningDurationTimerISR() {
+	LoRA_Functions::instance().sleepLoRaRadio();							// Done with the radio - shut it off
+	state = SLEEPING_STATE;													// Go back to sleep
+}
+
 void userSwitchISR() {
-  	userSwitchDectected = true;                                          	// The the flag for the user switch interrupt
+	userSwitchDectected = true;
 }
 
 void sensorISR()
@@ -374,54 +399,6 @@ void sensorISR()
     frontTireFlag = false;
   }
   else frontTireFlag = true;
-}
-
-/**
- * @brief Function to compute time to next scheduled event
- * 
- * @details - Computes seconds and returns 0 if no event is scheduled or time is invalid
- * 
- * 
- */
-int secondsUntilNextEvent() {												// Time till next scheduled event
-	static time_t nextPeriodBegins = 0;
-	// First we will calculate the adjustment to the wakeboundary due to node number and retries
-	if (retryState) {														// We will use an exponential back-off for 3 retries
-		int fiftyFifty = random(2);											// Flip a coin - seed in Setup()
-		unsigned long offset = 10UL + NODENUMBEROFFSET * fiftyFifty * pow(2, retryState); // This is an exponential back-off - adding 10 seconds to increase odds
-		Log.info("Node %d retry state %d dice of %d retry in %lu seconds", sysStatus.get_nodeNumber(), retryState, fiftyFifty, offset);
-		if (retryState >= 3) {
-			retryState = -1;							    				// Going to stop re-trying and wait until the next period
-			sysStatus.set_alertCodeNode(4);									// This will trigger a reinitialization of the radio
-			sysStatus.set_alertTimestampNode(Time.now());					// Alert Time stamp
-		}
-		return offset;
-	}
-	else if (Time.isValid()) {												// The general case - has to handle node-number specific timing
-		unsigned long nodeSpecificOffset = NODENUMBEROFFSET * sysStatus.get_nodeNumber(); // Each node has an offset to avoid collisions
-		unsigned long wakeBoundary = (sysStatus.get_frequencyMinutes() * 60UL);
-		unsigned long secondsToReturn = constrain(wakeBoundary - Time.now() % wakeBoundary, 0UL, wakeBoundary);  // If Time is valid, we can compute time to the start of the next report window	
-		if (sysStatus.get_nodeNumber() >= 11)  {							// We need to test here as the off-set can cause missed reporting if awoken by the sensor at the period boundary
-			Log.info("Unconfigured node - no offset and %lu seconds till next period",secondsToReturn);
-			return secondsToReturn;
-		}	
-
-		if (Time.now() - nextPeriodBegins >= 0) {							// We are in a new period
-			secondsToReturn += nodeSpecificOffset;							// Off-set for configured nodes only
-			nextPeriodBegins = Time.now() + secondsToReturn;	
-			Log.info("Starting a new period %lu sec till %s", secondsToReturn, Time.format(nextPeriodBegins, "%T").c_str());
-		}
-		else if (nextPeriodBegins - Time.now() <= nodeSpecificOffset) {		// Not at new period yet but within the node offset
-			secondsToReturn = nextPeriodBegins - Time.now();
-			Log.info("In terminal phase %lu seconds till %s",secondsToReturn, Time.format(nextPeriodBegins, "%T").c_str() );
-		}
-		else {
-			secondsToReturn += nodeSpecificOffset;							// Off-set for configured nodes only
-			// Log.info("In current period %lu sec till %s", secondsToReturn, Time.format(nextPeriodBegins, "%T").c_str());
-		}
-		return secondsToReturn;
-    }
-	else return 60UL;	// If time is not valid, we need to keep trying to catch the Gateway when it next wakes up.
 }
 
 bool disconnectFromParticle()                      							// Ensures we disconnect cleanly from Particle
@@ -451,14 +428,4 @@ bool disconnectFromParticle()                      							// Ensures we disconne
     Log.info("Turned off the cellular modem in %i seconds", (int)(Time.now() - startTime));
     return true;
   }
-}
-
-/**
- * @brief soft delay let's us process Particle functions and service the sensor interrupts while pausing
- * 
- * @details takes a single unsigned long input in millis
- * 
- */
-inline void softDelay(uint32_t t) {
-  for (uint32_t ms = millis(); millis() - ms < t; Particle.process());  //  safer than a delay()
 }

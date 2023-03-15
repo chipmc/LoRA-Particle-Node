@@ -72,7 +72,8 @@ bool LoRA_Functions::setup(bool gatewayID) {
 	else {																						// Else, we will set as an unconfigured node
 		sysStatus.set_nodeNumber(11);
 		manager.setThisAddress(11);
-		Log.info("LoRA Radio initialized as an unconfigured node %i and a deviceID of %s", manager.thisAddress(), System.deviceID().c_str());
+		sysStatus.set_alertCodeNode(1);															// Join request required
+		Log.info("LoRA Radio initialized as an unconfigured node %i and a deviceID of %s and alert code %d", manager.thisAddress(), System.deviceID().c_str(), sysStatus.get_alertCodeNode());
 	}
 
 	return true;
@@ -111,9 +112,11 @@ bool  LoRA_Functions::initializeRadio() {  			// Set up the Radio Module
 	}
 	driver.setFrequency(RF95_FREQ);					// Frequency is typically 868.0 or 915.0 in the Americas, or 433.0 in the EU - Are there more settings possible here?
 	driver.setTxPower(23, false);                   // If you are using RFM95/96/97/98 modules which uses the PA_BOOST transmitter pin, then you can set transmitter powers from 5 to 23 dBm (13dBm default).  PA_BOOST?
-	driver.setModemConfig(RH_RF95::Bw125Cr48Sf4096);	// This optimized the radio for long range - https://www.airspayce.com/mikem/arduino/RadioHead/classRH__RF95.html
-	manager.setTimeout(2000);						// 200mSec is the default - may need to extend once we play with other settings on the modem - https://www.airspayce.com/mikem/arduino/RadioHead/classRHReliableDatagram.html
 
+	driver.setModemConfig(RH_RF95::Bw125Cr45Sf2048);
+	//driver.setModemConfig(RH_RF95::Bw125Cr48Sf4096);	// This optimized the radio for long range - https://www.airspayce.com/mikem/arduino/RadioHead/classRH__RF95.html
+	driver.setLowDatarate();						// https://www.airspayce.com/mikem/arduino/RadioHead/classRH__RF95.html#a8e2df6a6d2cb192b13bd572a7005da67
+	manager.setTimeout(2000);						// 200mSec is the default - may need to extend once we play with other settings on the modem - https://www.airspayce.com/mikem/arduino/RadioHead/classRHReliableDatagram.html
 return true;
 }
 
@@ -135,8 +138,7 @@ bool LoRA_Functions::listenForLoRAMessageNode() {
 			return false;
 		} 
 		lora_state = (LoRA_State)messageFlag;
-		current.set_RSSI(driver.lastRssi());
-		Log.info("Received from node %d with rssi=%d - a %s message with %d hops", from, current.get_RSSI(), loraStateNames[lora_state], hops);
+		Log.info("Received from node %d with RSSI / SNR of %d / %d - a %s message with %d hops", from, driver.lastRssi(), driver.lastSNR(), loraStateNames[lora_state], hops);
 
 		Time.setTime(((buf[2] << 24) | (buf[3] << 16) | (buf[4] << 8) | buf[5]));  // Set time based on response from gateway
 		sysStatus.set_frequencyMinutes((buf[6] << 8 | buf[7]));			// Frequency of reporting set by Gateway
@@ -152,21 +154,23 @@ bool LoRA_Functions::listenForLoRAMessageNode() {
 		else {Log.info("Invaled LoRA message flag"); return false;}
 
 	}
+	else LoRA_Functions::clearBuffer();
 	return false;
 }
 
 
 bool LoRA_Functions::composeDataReportNode() {
+	float successPercent;
 
-	float percentSuccess = ((current.get_successCount() * 1.0)/ current.get_messageCount())*100.0;
+	if (current.get_messageCount()==0) {		// 8-bit number so need to protect against divide by zero on reset or wrap around
+		successPercent = 0.0;	
+		current.set_messageCount(0);
+		current.set_successCount(0);
+	}
+	else successPercent = ((current.get_successCount()+1.0)/(float)current.get_messageCount()) * 100.0;  // Add one to success because we are receving the message
+	current.set_messageCount(current.get_messageCount()+1);
 
 	digitalWrite(BLUE_LED,HIGH);
-	if (current.get_messageCount() == 255) {		// This should not happen in a day unless we pick a very small reporting freq
-		current.set_messageCount(0);				// Prevent divide by zero
-		current.set_successCount(0);				// Zero as well
-	}
-	else current.set_messageCount(current.get_messageCount()+1);
-	Log.info("Sending data report number %d",current.get_messageCount());
 
 	int deviceIDCheckSum = stringCheckSum(System.deviceID());
 
@@ -185,28 +189,33 @@ bool LoRA_Functions::composeDataReportNode() {
 	buf[12] = sysStatus.get_resetCount();
 	buf[13] = current.get_messageCount();
 	buf[14] = current.get_successCount();
+	buf[15] = highByte(current.get_RSSI());
+	buf[16] = lowByte(current.get_RSSI());
+	buf[17] = highByte(current.get_SNR());
+	buf[18] = lowByte(current.get_SNR());
 
 	// Send a message to manager_server
   	// A route to the destination will be automatically discovered.
-	unsigned char result = manager.sendtoWait(buf, 15, GATEWAY_ADDRESS, DATA_RPT);
+	unsigned char result = manager.sendtoWait(buf, 19, GATEWAY_ADDRESS, DATA_RPT);
 	
 	if ( result == RH_ROUTER_ERROR_NONE) {
 		// It has been reliably delivered to the next node.
 		// Now wait for a reply from the ultimate server 
 		current.set_successCount(current.get_successCount()+1);
-		percentSuccess = ((current.get_successCount() * 1.0)/ current.get_messageCount())*100.0;
-		Log.info("Node %d data report delivered - success rate %4.2f",sysStatus.get_nodeNumber(),percentSuccess);
+		current.set_RSSI(driver.lastRssi());				// Set these here - will send on next data report
+		current.set_SNR(driver.lastSNR());
+		Log.info("Node %d data report delivered - success rate %4.2f and  RSSI/SNR of %d / %d ",sysStatus.get_nodeNumber(),successPercent,current.get_RSSI(), current.get_SNR());
 		digitalWrite(BLUE_LED, LOW);
 		return true;
 	}
 	else if (result == RH_ROUTER_ERROR_NO_ROUTE) {
-        Log.info("Node %d - Data report send to gateway %d failed - No Route - success rate %4.2f", sysStatus.get_nodeNumber(), GATEWAY_ADDRESS, percentSuccess);
+        Log.info("Node %d - Data report send to gateway %d failed - No Route - success rate %4.2f", sysStatus.get_nodeNumber(), GATEWAY_ADDRESS, successPercent);
     }
     else if (result == RH_ROUTER_ERROR_UNABLE_TO_DELIVER) {
-        Log.info("Node %d - Data report send to gateway %d failed - Unable to Deliver - success rate %4.2f", sysStatus.get_nodeNumber(), GATEWAY_ADDRESS,percentSuccess);
+        Log.info("Node %d - Data report send to gateway %d failed - Unable to Deliver - success rate %4.2f", sysStatus.get_nodeNumber(), GATEWAY_ADDRESS,successPercent);
 	}
 	else  {
-		Log.info("Node %d - Data report send to gateway %d failed  - Unknown - success rate %4.2f", sysStatus.get_nodeNumber(), GATEWAY_ADDRESS,percentSuccess);
+		Log.info("Node %d - Data report send to gateway %d failed  - Unknown - success rate %4.2f", sysStatus.get_nodeNumber(), GATEWAY_ADDRESS,successPercent);
 	}
 	digitalWrite(BLUE_LED, LOW);
 	return false;
@@ -216,33 +225,27 @@ bool LoRA_Functions::receiveAcknowledmentDataReportNode() {
 	LEDStatus blinkBlue(RGB_COLOR_BLUE, LED_PATTERN_BLINK, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
 
 	// contents of response for 1-7 handled in common function above
-	byte alertSetByGateway = buf[8];
-	if (alertSetByGateway == 1) {								// Gateway did not recognize our node number, need to re-join
-		sysStatus.set_nodeNumber(11);
-		manager.setThisAddress(11);
-		sysStatus.set_alertCodeNode(alertSetByGateway);	
-		sysStatus.set_alertTimestampNode(Time.now());	
-		Log.info("LoRA Radio initialized as an unconfigured node %i and a deviceID of %s", manager.thisAddress(), System.deviceID().c_str());
-	}
-	else if (alertSetByGateway == 7) {
-		sysStatus.set_sensorType(buf[9]);
-	}
-	else if (alertSetByGateway > 0) {							// the Gateway set an alert
-		Log.info("The gateway set an alert %d", alertSetByGateway);
-		sysStatus.set_alertCodeNode(alertSetByGateway);	
-		sysStatus.set_alertTimestampNode(Time.now());			
-	}
-	else sysStatus.set_alertCodeNode(0);
+	sysStatus.set_alertCodeNode(buf[8]);
 
-	if (buf[10] == 0) {								// Open Hours Processing
-		sysStatus.set_openHours(false);				// Open hours or not - impacts whether we power down the sensor for sleep
-		current.resetEverything();					// Since we are not open anymore and will stop reporting - might as well zero counts
-		sysStatus.set_alertCodeNode(6);				// This will reset the counts and go to sleep
+	if (sysStatus.get_alertCodeNode() == 7) {		// This alert triggers an update to the sensor type on the node - handle it here
+		Log.info("The gatway is updating sensor type from %d to %d", sysStatus.get_sensorType(), buf[9]);
+		sysStatus.set_sensorType(buf[9]);
+		sysStatus.set_alertCodeNode(0);				// Sensor updated - clear alert
+	}
+	else if (sysStatus.get_alertCodeNode()) {
+		Log.info("The gateway set an alert %d", sysStatus.get_alertCodeNode());
+		sysStatus.set_alertTimestampNode(Time.now());	
+	}
+
+	sysStatus.set_openHours(buf[10]);				// The Gateway tells us whether the park is open or closed
+
+	if (sysStatus.get_openHours() == 0) {			// Open Hours Processing
+		current.resetEverything();
 		Log.info("Park is closed - reset everything");
 	}
 	else sysStatus.set_openHours(true);
 
-	Log.info("Data report acknowledged %s alert for message %d park is %s and alert code is %d", (alertSetByGateway > 0) ? "with":"without", buf[11], (buf[10] ==1) ? "open":"closed", sysStatus.get_alertCodeNode());
+	Log.info("Data report acknowledged %s alert for message %d park is %s and alert code is %d", (sysStatus.get_alertCodeNode()) ? "with":"without", buf[11], (buf[10] ==1) ? "open":"closed", sysStatus.get_alertCodeNode());
 	
 	blinkBlue.setActive(true);
 	unsigned long strength = (unsigned long)(map(current.get_RSSI(),-10,-140,3000,100));
@@ -254,13 +257,11 @@ bool LoRA_Functions::receiveAcknowledmentDataReportNode() {
 }
 
 bool LoRA_Functions::composeJoinRequesttNode() {
-
-	digitalWrite(BLUE_LED,HIGH);
-
 	char deviceID[25];
 	System.deviceID().toCharArray(deviceID, 25);					// the deviceID is 24 charcters long
 	int deviceIDCheckSum = stringCheckSum(System.deviceID());
 
+	manager.setThisAddress(sysStatus.get_nodeNumber());				// Join with the right node number
 
 	buf[0] = highByte(sysStatus.get_magicNumber());					// Needs to equal 128
 	buf[1] = lowByte(sysStatus.get_magicNumber());					// Needs to equal 128
@@ -271,23 +272,18 @@ bool LoRA_Functions::composeJoinRequesttNode() {
 	}
 	buf[29] = sysStatus.get_sensorType();
 
-	// Send a message to manager_server
-  	// A route to the destination will be automatically discovered.
-	if (sysStatus.get_nodeNumber() > 10) Log.info("Sending join request for unconfigured node");
-	else if (!Time.isValid()) Log.info("Sending join request as Time is not valid");
-	else Log.info("Sending join request to clear alert code");
+	digitalWrite(BLUE_LED,HIGH);
+	unsigned char result = manager.sendtoWait(buf, 30, GATEWAY_ADDRESS, JOIN_REQ);
+	digitalWrite(BLUE_LED, LOW);
 
-
-	if (manager.sendtoWait(buf, 30, GATEWAY_ADDRESS, JOIN_REQ) == RH_ROUTER_ERROR_NONE) {
-		// It has been reliably delivered to the next node.
-		// Now wait for a reply from the ultimate server 
-		Log.info("Join request sent to gateway successfully");
-		digitalWrite(BLUE_LED, LOW);
+	if (result == RH_ROUTER_ERROR_NONE) {					// It has been reliably delivered to the next node.
+		current.set_RSSI(driver.lastRssi());				// Set these here - will send on next data report
+		current.set_SNR(driver.lastSNR());
+		Log.info("Join request sent to gateway successfully RSSI/SNR of %d / %d ",current.get_RSSI(), current.get_SNR());
 		return true;
 	}
 	else {
 		Log.info("Join request to Gateway failed");
-		digitalWrite(BLUE_LED, LOW);
 		return false;
 	}
 }

@@ -253,11 +253,12 @@ public:
 		// Doing so will cause the data to be corrupted!
 		// You may want to keep a version number in your data.
 		uint8_t internalTempC;                            // Enclosure temperature in degrees C
-		double stateOfCharge;                                // Battery charge level
+		double stateOfCharge;                             // Battery charge level
 		uint8_t batteryState;                             // Stores the current battery state (charging, discharging, etc)
 		time_t lastSampleTime;                            // Timestamp of last data collection
-		int16_t RSSI;                                    // Latest signal strength value
-		uint8_t messageCount;                            // What message are we on
+		int16_t RSSI;                                     // Latest signal strength value (updated adter ack and sent to gateway on next data report)
+		int16_t SNR;									  // Latest Signal to Noise Ratio (updated after ack and send to gatewat on next dara report)
+		uint8_t messageCount;                             // What message are we on
 		uint8_t successCount;							  // How many messages are delivered successfully
 		time_t lastCountTime;                             // When did we last record a count
 		uint16_t hourlyCount;                             // Current Hourly Count
@@ -306,6 +307,9 @@ public:
 	int16_t get_RSSI() const;
 	void set_RSSI(int16_t value);
 
+	int16_t get_SNR() const;
+	void set_SNR(int16_t value);
+
 	uint8_t get_messageCount() const;
 	void set_messageCount(uint8_t value);
 
@@ -353,8 +357,8 @@ protected:
     static currentStatusData *_instance;
 
     //Since these variables are only used internally - They can be private. 
-	static const uint32_t CURRENT_DATA_MAGIC = 0x20a99e74;
-	static const uint16_t CURRENT_DATA_VERSION = 2;
+	static const uint32_t CURRENT_DATA_MAGIC = 0x20a99e80;
+	static const uint16_t CURRENT_DATA_VERSION = 3;
 };
 
 

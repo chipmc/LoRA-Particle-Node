@@ -11,16 +11,18 @@
 // Format of a data report
 /*
 buf[0 - 1] magicNumber                      // Magic number for devices
-buf[2 - 3] nodeID                            // nodeID for verification
+buf[2 - 3] nodeID                           // nodeID for verification
 buf[4 - 5] hourly                           // Hourly count
-buf[6 - 7] = daily                          // Daily Count
+buf[6 - 7] daily                            // Daily Count
 buf[8] sensorType                           // What sensor type is it
 buf[9] temp;                                // Enclosure temp
-buf[10] battChg;                             // State of charge
+buf[10] battChg;                            // State of charge
 buf[11] battState;                          // Battery State
 buf[12] resets                              // Reset count
 buf[13] messageCount;                       // Sequential message number
-buf[14] successCount;
+buf[14] successCount;                       // How Many successful sends
+buf[15-16] RSSI                             // From the Node's perspective
+buf[17-18] SNR                              // From the Node's perspective
 */
 
 // Format of a data acknowledgement
@@ -56,6 +58,8 @@ buf[29] sensorType				            // Identifies sensor type to Gateway
 #define __LORA_FUNCTIONS_H
 
 #include "Particle.h"
+
+extern uint16_t __system_product_version;
 
 /**
  * This class is a singleton; you do not create one as a global, on the stack, or with new.

@@ -278,6 +278,14 @@ void currentStatusData::set_RSSI(int16_t value) {
     setValue<int16_t>(offsetof(CurrentData, RSSI), value);
 }
 
+int16_t currentStatusData::get_SNR() const {
+    return getValue<int16_t>(offsetof(CurrentData, SNR));
+}
+
+void currentStatusData::set_SNR(int16_t value) {
+    setValue<int16_t>(offsetof(CurrentData, SNR), value);
+}
+
 uint8_t currentStatusData::get_messageCount() const {
     return getValue<uint8_t>(offsetof(CurrentData, messageCount));
 }
