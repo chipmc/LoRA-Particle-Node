@@ -252,7 +252,7 @@ public:
 		// (except at the end), insert fields, remove fields, change size of a field.
 		// Doing so will cause the data to be corrupted!
 		// You may want to keep a version number in your data.
-		uint8_t internalTempC;                            // Enclosure temperature in degrees C
+		int8_t internalTempC;                             // Enclosure temperature in degrees C
 		double stateOfCharge;                             // Battery charge level
 		uint8_t batteryState;                             // Stores the current battery state (charging, discharging, etc)
 		time_t lastSampleTime;                            // Timestamp of last data collection
@@ -292,8 +292,8 @@ public:
 	 */
 
 
-	uint8_t get_internalTempC() const ;
-	void set_internalTempC(uint8_t value);
+	int8_t get_internalTempC() const ;
+	void set_internalTempC(int8_t value);
 
 	double get_stateOfCharge() const;
 	void set_stateOfCharge(double value);

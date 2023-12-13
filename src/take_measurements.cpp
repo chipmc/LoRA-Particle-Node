@@ -12,12 +12,18 @@ FuelGauge fuelGauge;                                // Needed to address issue w
 
 bool takeMeasurements() { 
 
+    fuelGauge.quickStart();                           // Start the fuel gauge
+    softDelay(1000);                                  // Give the fuel gauge time to start
+
     // Temperature inside the enclosure
     current.set_internalTempC((int)tmp36TemperatureC(analogRead(TMP36_SENSE_PIN)));
 
     batteryState();
 
-    isItSafeToCharge();
+    if (isItSafeToCharge()) {
+      Log.info("Battery State: %s, SOC: %2.0f%%",batteryContext[current.get_batteryState()],current.get_stateOfCharge());
+    }
+    else Log.error("Power configuration error");
 
     if (sysStatus.get_nodeNumber() == 0 ) getSignalStrength();
 
@@ -48,12 +54,7 @@ float tmp36TemperatureC (int adcValue) {
 
 
 bool batteryState() {
-  fuelGauge.quickStart();                                            // May help us re-establish a baseline for SoC
-  softDelay(1000);
-
   current.set_stateOfCharge(System.batteryCharge());                   // Assign to system value
-  current.set_batteryState(System.batteryState());                      // Call before isItSafeToCharge() as it may overwrite the context
-
   if (current.get_stateOfCharge() > 60) return true;
   else return false;
 }
@@ -61,16 +62,34 @@ bool batteryState() {
 
 bool isItSafeToCharge()                             // Returns a true or false if the battery is in a safe charging range.
 {
-  PMIC pmic(true);
+  // current.set_internalTempC(40);                  // This is a test value for the temperature
+  bool returnVal = false;
+
   if (current.get_internalTempC() < 0 || current.get_internalTempC() > 37 )  {  // Reference: (32 to 113 but with safety)
-    pmic.disableCharging();                         // It is too cold or too hot to safely charge the battery
-    current.set_batteryState(1);                       // Overwrites the values from the batteryState API to reflect that we are "Not Charging"
-    return false;
+
+    if (!initializePowerCfg(false)) {               // Disable charging if the temperature is outside of the safe range
+      current.set_batteryState(1);                    // Overwrites the values from the batteryState API to reflect that we are "Not Charging"
+      Log.info("Charging disabled - temp is %iC",current.get_internalTempC() );
+      returnVal = true;
+    }
+    else  {
+      Log.error("Unable to disable charging");
+      current.set_batteryState(0);                    // Unknown battery state
+    }
+
   }
   else {
-    pmic.enableCharging();                          // It is safe to charge the battery
-    return true;
+    if (!initializePowerCfg(true)) {                                      // Enable charging if the temperature is within the safe range
+      current.set_batteryState(System.batteryState());                      // Call before isItSafeToCharge() as it may overwrite the context
+      Log.info("Charging enabled - inside temp range");
+      returnVal = true;
+    }
+    else  {
+      current.set_batteryState(0);                    // Unknown battery state
+      Log.error("Unable to enable charging");
+    }
   }
+  return returnVal;
 }
 
 

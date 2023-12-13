@@ -238,12 +238,12 @@ void currentStatusData::initialize() {
 }
 
 
-uint8_t currentStatusData::get_internalTempC() const {
-    return getValue<uint8_t>(offsetof(CurrentData, internalTempC));
+int8_t currentStatusData::get_internalTempC() const {
+    return getValue<int8_t>(offsetof(CurrentData, internalTempC));
 }
 
-void currentStatusData::set_internalTempC(uint8_t value) {
-    setValue<uint8_t>(offsetof(CurrentData, internalTempC), value);
+void currentStatusData::set_internalTempC(int8_t value) {
+    setValue<int8_t>(offsetof(CurrentData, internalTempC), value);
 }
 
 double currentStatusData::get_stateOfCharge() const {
@@ -325,5 +325,4 @@ uint16_t currentStatusData::get_dailyCount() const {
 void currentStatusData::set_dailyCount(uint16_t value) {
     setValue<uint16_t>(offsetof(CurrentData, dailyCount), value);
 }
-
 

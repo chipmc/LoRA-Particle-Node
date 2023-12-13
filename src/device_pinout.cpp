@@ -92,13 +92,17 @@ void sensorControl(int sensorType, bool enableSensor) { // What is the sensor ty
 }
 
 
-bool initializePowerCfg() {
+bool initializePowerCfg(bool enableCharging) {
     Log.info("Initializing Power Config");
     const int maxCurrentFromPanel = 900;            // Not currently used (100,150,500,900,1200,2000 - will pick closest) (550mA for 3.5W Panel, 340 for 2W panel)
     SystemPowerConfiguration conf;
     System.setPowerConfiguration(SystemPowerConfiguration());  // To restore the default configuration
 
-    conf.powerSourceMaxCurrent(maxCurrentFromPanel) // Set maximum current the power source can provide  3.5W Panel (applies only when powered through VIN)
+    if (!enableCharging) {
+        conf.feature(SystemPowerFeature::DISABLE_CHARGING);
+    }
+    else {
+        conf.powerSourceMaxCurrent(maxCurrentFromPanel) // Set maximum current the power source can provide  3.5W Panel (applies only when powered through VIN)
         .powerSourceMinVoltage(5080) // Set minimum voltage the power source can provide (applies only when powered through VIN)
         .batteryChargeCurrent(maxCurrentFromPanel) // Set battery charge current
         .batteryChargeVoltage(4208) // Set battery termination voltage
@@ -106,6 +110,7 @@ bool initializePowerCfg() {
                                                                      // but the USB cable is connected to a USB host, this feature flag
                                                                      // enforces the voltage/current limits specified in the configuration
                                                                      // (where by default the device would be thinking that it's powered by the USB Host)
+    }
     int res = System.setPowerConfiguration(conf); // returns SYSTEM_ERROR_NONE (0) in case of success
     return res;
 }

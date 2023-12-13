@@ -32,6 +32,8 @@
 // v5.00 - Updates to improve reliability
 // v8.00 - Fixed issue with unconstrained blinking - need to get to Pilot mountain - changed battery montiroing / center freq for stick antenna (v8 Node / v7 Gateway)
 // v10.00 - Breaking Change - v9 Gateway required - Node reports RSSI / SNR to Gateway - Listening / repeating mode, Simplified error handling
+// v12.00 - Debounce for button press-to transmit
+// v13.00 - Adding code to ensure the device charges reliably - Removed PMIC - Fixed the internal temp to int8_t
 
 
 #define NODENUMBEROFFSET 10000UL					// By how much do we off set each node by node number
@@ -55,7 +57,7 @@ STARTUP(System.enableFeature(FEATURE_RESET_INFO));
 // For monitoring / debugging, you have some options on the next few lines - uncomment one
 SerialLogHandler logHandler(LOG_LEVEL_INFO);     // Easier to see the program flow
 
-PRODUCT_VERSION(10);									// For now, we are putting nodes and gateways in the same product group - need to deconflict #
+PRODUCT_VERSION(13);									// For now, we are putting nodes and gateways in the same product group - need to deconflict #
 
 // Prototype functions
 void publishStateTransition(void);                  // Keeps track of state machine changes - for debugging
@@ -92,10 +94,10 @@ void setup() {
 
     initializePinModes();                           // Sets the pinModes
 
-    initializePowerCfg();                           // Sets the power configuration for solar
-
 	sysStatus.setup();								// Initialize persistent storage
 	current.setup();
+
+	takeMeasurements();                             // Populates values so you can read them before the hour
 
 	if (!digitalRead(BUTTON_PIN)) {											// We will use this to connect in order to get an update only
 		Log.info("User button pressed at startup - attempt to connect");
@@ -135,7 +137,7 @@ void setup() {
   	takeMeasurements();                                                  	// Populates values so you can read them before the hour
   
     attachInterrupt(INT_PIN, sensorISR, RISING);                     		// PIR or Pressure Sensor interrupt from low to high
-	attachInterrupt(BUTTON_PIN,userSwitchISR,CHANGE); 						// We may need to monitor the user switch to change behaviours / modes
+	attachInterrupt(BUTTON_PIN,userSwitchISR,FALLING); 						// We may need to monitor the user switch to change behaviours / modes
 
 	if (sysStatus.get_openHours()) sensorControl(sysStatus.get_sensorType(),true); // Turn the sensor on during open hours
 
@@ -223,13 +225,17 @@ void loop() {
 			bool result = false;
 			static int retryCount = 0;
 
-			publishStateTransition();                   					// We will apply the back-offs before sending to ERROR state - so if we are here we will take action
+			publishStateTransition();                   					// Let everyone know we are changing state
 			takeMeasurements();												// Taking measurements now should allow for accurate battery measurements
 			LoRA_Functions::instance().clearBuffer();
 			// Based on Alert code, determine what message to send
 			if (sysStatus.get_alertCodeNode() == 0) result = LoRA_Functions::instance().composeDataReportNode();
 			else if (sysStatus.get_alertCodeNode() == 1 || sysStatus.get_alertCodeNode() == 2) result = LoRA_Functions::instance().composeJoinRequesttNode();
-			else result = true;												// Should not happen but just in case an active alert code comes this far
+			else {
+				Log.info("Alert code = %d",sysStatus.get_alertCodeNode());
+				state = ERROR_STATE;
+				break;														// Resolve the alert code in ERROR_STATE
+			}		
 
 			if (result) {
 				retryCount = 0;												// Successful transmission - go listen for response
@@ -347,7 +353,8 @@ void loop() {
   	}
 
 	if (userSwitchDectected) {
-		userSwitchDectected = false;
+		delay(100);									// Debounce the button press
+		userSwitchDectected = false;				// Clear the interrupt flag
 		if (!listeningDurationTimer.isActive()) listeningDurationTimer.start();				// Don't reset timer if it is already running
 		Log.info("Detected button press");
 		state = LoRA_TRANSMISSION_STATE;

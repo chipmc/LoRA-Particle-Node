@@ -5,6 +5,6 @@
         "*.ino": "cpp"
     },
     "particle.targetPlatform": "boron",
-    "particle.targetDevice": "NCParks192-SRA-JORD-Ebenezer-Relay",
-    "particle.firmwareVersion": "4.0.2"
+    "particle.targetDevice": "e00fce681478295187e9e91a",
+    "particle.firmwareVersion": "4.2.0"
 }

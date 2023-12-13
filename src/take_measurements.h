@@ -38,6 +38,7 @@ bool takeMeasurements();                               // Function that calls th
  */
 float tmp36TemperatureC (int adcValue);                // Temperature from the tmp36 - inside the enclosure
 
+
 /**
  * @brief In this function, we will measure the battery state of charge and the current functional state
  * 
