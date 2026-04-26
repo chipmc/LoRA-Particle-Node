@@ -7,8 +7,13 @@ const char* batteryContext[7] = {"Unknown","Not Charging","Charging","Charged","
 #include "take_measurements.h"
 #include "device_pinout.h"
 #include "MyPersistentData.h"
+#include "power_management.h"
 
 FuelGauge fuelGauge;                                // Needed to address issue with updates in low battery state 
+
+bool hasExternalPowerSource();
+void updatePowerManagementFromObservation();
+void refreshBatteryTelemetry();
 
 bool takeMeasurements() { 
 
@@ -18,12 +23,10 @@ bool takeMeasurements() {
     // Temperature inside the enclosure
     current.set_internalTempC((int)tmp36TemperatureC(analogRead(TMP36_SENSE_PIN)));
 
-    batteryState();
-
-    if (isItSafeToCharge()) {
-      Log.info("Battery State: %s, SOC: %2.0f%%",batteryContext[current.get_batteryState()],current.get_stateOfCharge());
-    }
-    else Log.error("Power configuration error");
+    refreshBatteryTelemetry();
+	updatePowerManagementFromObservation();
+    refreshBatteryTelemetry();
+	Log.info("Battery State: %s, SOC: %2.0f%%",batteryContext[current.get_batteryState()],current.get_stateOfCharge());
 
     if (sysStatus.get_nodeNumber() == 0 ) getSignalStrength();
 
@@ -51,45 +54,25 @@ float tmp36TemperatureC (int adcValue) {
     // inaccurate values!
     return (mV - 500) / 10;
 }
-
-
-bool batteryState() {
-  current.set_stateOfCharge(System.batteryCharge());                   // Assign to system value
-  if (current.get_stateOfCharge() > 60) return true;
-  else return false;
+void refreshBatteryTelemetry() {
+	current.set_stateOfCharge(System.batteryCharge());
+	current.set_batteryState(System.batteryState());
 }
 
 
-bool isItSafeToCharge()                             // Returns a true or false if the battery is in a safe charging range.
-{
-  // current.set_internalTempC(40);                  // This is a test value for the temperature
-  bool returnVal = false;
+void updatePowerManagementFromObservation() {
+  PowerObservation obs = {};
+  int batteryStateCode = current.get_batteryState();
 
-  if (current.get_internalTempC() < 0 || current.get_internalTempC() > 37 )  {  // Reference: (32 to 113 but with safety)
+  obs.batterySoc = current.get_stateOfCharge();
+  obs.batteryVoltage = fuelGauge.getVCell();
+  obs.temperatureF = (current.get_internalTempC() * 9.0f / 5.0f) + 32.0f;
+  obs.inputPowerPresent = hasExternalPowerSource();
+  obs.batteryIsCharging = batteryStateCode == 2;
+  obs.batteryNotCharging = batteryStateCode == 1;
+  obs.batteryFault = batteryStateCode == 5;
 
-    if (!initializePowerCfg(false)) {               // Disable charging if the temperature is outside of the safe range
-      current.set_batteryState(1);                    // Overwrites the values from the batteryState API to reflect that we are "Not Charging"
-      Log.info("Charging disabled - temp is %iC",current.get_internalTempC() );
-      returnVal = true;
-    }
-    else  {
-      Log.error("Unable to disable charging");
-      current.set_batteryState(0);                    // Unknown battery state
-    }
-
-  }
-  else {
-    if (!initializePowerCfg(true)) {                                      // Enable charging if the temperature is within the safe range
-      current.set_batteryState(System.batteryState());                      // Call before isItSafeToCharge() as it may overwrite the context
-      Log.info("Charging enabled - inside temp range");
-      returnVal = true;
-    }
-    else  {
-      current.set_batteryState(0);                    // Unknown battery state
-      Log.error("Unable to enable charging");
-    }
-  }
-  return returnVal;
+  updatePowerManagementObservation(obs);
 }
 
 
@@ -133,6 +116,11 @@ bool recordCount() // This is where we check to see if an interrupt is set when 
  * @details takes a single unsigned long input in millis
  * 
  */
-inline void softDelay(uint32_t t) {
+void softDelay(uint32_t t) {
   for (uint32_t ms = millis(); millis() - ms < t; Particle.process());  //  safer than a delay()
+}
+
+bool hasExternalPowerSource() {
+  int powerSource = System.powerSource();
+  return powerSource == POWER_SOURCE_VIN || powerSource == POWER_SOURCE_USB_HOST;
 }

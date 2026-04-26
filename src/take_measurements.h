@@ -40,27 +40,6 @@ float tmp36TemperatureC (int adcValue);                // Temperature from the t
 
 
 /**
- * @brief In this function, we will measure the battery state of charge and the current functional state
- * 
- * @details One factor that is an issue today is the accurace of the state of charge if the device is waking
- * from sleep.  In order to help with this, there is a test for enable sleep and an additional delay.
- * 
- * @return true  - If the battery has a charge over 60%
- * @return false - Less than 60% indicates a low battery condition
- */
-bool batteryState();                                   // Data on state of charge and battery status. Returns true if SOC over 60%
-
-/**
- * @brief Checks to see if the temperature is in the range to support charging
- * 
- * @details Will enable or disable charging based on the current temperature
- * 
- * @link https://batteryuniversity.com/learn/article/charging_at_high_and_low_temperatures @endlink
- * 
- */
-bool isItSafeToCharge();                               // See if it is safe to charge based on the temperature
-
-/**
  * @brief Get the Signal Strength values and make up a string for use in the console
  * 
  * @details Provides data on the signal strength and quality

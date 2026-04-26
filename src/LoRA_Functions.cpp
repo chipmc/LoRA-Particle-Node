@@ -57,7 +57,9 @@ uint8_t buf[RH_MESH_MAX_MESSAGE_LEN];               // Related to max message si
 
 bool LoRA_Functions::setup(bool gatewayID) {
     // Set up the Radio Module
-	LoRA_Functions::initializeRadio();
+	if (!LoRA_Functions::initializeRadio()) {
+		return false;
+	}
 
 	Log.info("in LoRA setup - node number %d",sysStatus.get_nodeNumber());
 
@@ -91,9 +93,11 @@ void LoRA_Functions::loop() {
 
 void LoRA_Functions::clearBuffer() {
 	uint8_t bufT[RH_RF95_MAX_MESSAGE_LEN];
-	uint8_t lenT;
+	uint8_t lenT = sizeof(bufT);
 
-	while(driver.recv(bufT, &lenT)) {};
+	while(driver.recv(bufT, &lenT)) {
+		lenT = sizeof(bufT);
+	}
 }
 
 void LoRA_Functions::sleepLoRaRadio() {
@@ -132,7 +136,10 @@ bool LoRA_Functions::listenForLoRAMessageNode() {
 	uint8_t messageFlag;
 	uint8_t hops;
 	if (manager.recvfromAck(buf, &len, &from, &dest, &id, &messageFlag, &hops))	{	// We have received a message
-		buf[len] = 0;
+		if (len < 9) {
+			Log.info("LoRA message too short - length %u", len);
+			return false;
+		}
 		if ((buf[0] << 8 | buf[1]) != sysStatus.get_magicNumber()) {
 			Log.info("Magic Number mismatch - ignoring message");
 			return false;
@@ -149,8 +156,20 @@ bool LoRA_Functions::listenForLoRAMessageNode() {
 
 		Log.info("Set clock to %s and report frequency to %d minutes", Time.timeStr().c_str(),sysStatus.get_frequencyMinutes());
 
-		if (lora_state == DATA_ACK) { if(LoRA_Functions::instance().receiveAcknowledmentDataReportNode()) return true;}
-		else if (lora_state == JOIN_ACK) { if(LoRA_Functions::instance().receiveAcknowledmentJoinRequestNode()) return true;}
+		if (lora_state == DATA_ACK) {
+			if (len < 12) {
+				Log.info("Data acknowledgement too short - length %u", len);
+				return false;
+			}
+			if(LoRA_Functions::instance().receiveAcknowledmentDataReportNode()) return true;
+		}
+		else if (lora_state == JOIN_ACK) {
+			if (len < 11) {
+				Log.info("Join acknowledgement too short - length %u", len);
+				return false;
+			}
+			if(LoRA_Functions::instance().receiveAcknowledmentJoinRequestNode()) return true;
+		}
 		else {Log.info("Invaled LoRA message flag"); return false;}
 
 	}

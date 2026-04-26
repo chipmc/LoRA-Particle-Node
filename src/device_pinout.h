@@ -24,7 +24,6 @@ extern const pin_t INT_PIN;
 extern const pin_t MODULE_POWER_PIN;
 
 bool initializePinModes();
-bool initializePowerCfg(bool enableCharging);
 void sensorControl(int sensorType, bool enableSensor);
 
 #endif

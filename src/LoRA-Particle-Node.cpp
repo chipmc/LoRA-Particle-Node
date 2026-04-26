@@ -34,9 +34,16 @@
 // v10.00 - Breaking Change - v9 Gateway required - Node reports RSSI / SNR to Gateway - Listening / repeating mode, Simplified error handling
 // v12.00 - Debounce for button press-to transmit
 // v13.00 - Adding code to ensure the device charges reliably - Removed PMIC - Fixed the internal temp to int8_t
+// v14.00 - Added reusable time-agnostic power management, low-battery listening and retry limits, PMIC charge-toggle recovery, and LoRa buffer safety fixes
 
 
 #define NODENUMBEROFFSET 10000UL					// By how much do we off set each node by node number
+
+const unsigned long NORMAL_LISTENING_DURATION_MS = 300000UL;
+const unsigned long LOW_BATTERY_LISTENING_DURATION_MS = 60000UL;
+const double LOW_BATTERY_SOC_THRESHOLD = 20.0;
+const int MAX_TRANSMIT_RETRIES = 3;
+const int MAX_TRANSMIT_RETRIES_LOW_BATTERY = 1;
 
 // Particle Libraries
 #include "AB1805_RK.h"                              // Watchdog and Real Time Clock - https://github.com/rickkas7/AB1805_RK
@@ -45,6 +52,7 @@
 // Application Libraries / Class Files
 #include "LoRA_Functions.h"							// Where we store all the information on our LoRA implementation - application specific not a general library
 #include "device_pinout.h"							// Define pinouts and initialize them
+#include "power_management.h"
 #include "take_measurements.h"						// Manages interactions with the sensors (default is temp for charging)
 #include "MyPersistentData.h"						// Persistent Storage
 
@@ -57,7 +65,7 @@ STARTUP(System.enableFeature(FEATURE_RESET_INFO));
 // For monitoring / debugging, you have some options on the next few lines - uncomment one
 SerialLogHandler logHandler(LOG_LEVEL_INFO);     // Easier to see the program flow
 
-PRODUCT_VERSION(13);									// For now, we are putting nodes and gateways in the same product group - need to deconflict #
+PRODUCT_VERSION(14);									// For now, we are putting nodes and gateways in the same product group - need to deconflict #
 
 // Prototype functions
 void publishStateTransition(void);                  // Keeps track of state machine changes - for debugging
@@ -80,13 +88,17 @@ AB1805 ab1805(Wire);                                // Rickkas' RTC / Watchdog l
 void outOfMemoryHandler(system_event_t event, int param);
 void transmitDelayTimerISR();
 void listeningDurationTimerISR();
+bool isLowBatteryMode();
+unsigned long getListeningDurationMs();
+int getMaxTransmitRetries();
+bool isSafeToRunPowerManagementRemediation();
 
 // Program Variables
 volatile bool userSwitchDectected = false;		
 volatile bool sensorDetect = false;
 
 Timer transmitDelayTimer(10000,transmitDelayTimerISR,true);
-Timer listeningDurationTimer(300000,listeningDurationTimerISR,true);
+Timer listeningDurationTimer(NORMAL_LISTENING_DURATION_MS,listeningDurationTimerISR,true);
 
 void setup() {
 
@@ -96,6 +108,9 @@ void setup() {
 
 	sysStatus.setup();								// Initialize persistent storage
 	current.setup();
+	if (!initializePowerManagement()) {
+		Log.error("Failed to initialize power management");
+	}
 
 	takeMeasurements();                             // Populates values so you can read them before the hour
 
@@ -171,8 +186,25 @@ void loop() {
 				wakeInSeconds = 60UL;
 				Log.info("Time not valid, sleeping for 60 seconds");
 			}
+
+			if (isSafeToRunPowerManagementRemediation()) {
+				PowerManagementAlertCode powerAlert = runPowerManagementRemediation();
+				switch (powerAlert) {
+				case PowerManagementAlertCode::CHARGE_TOGGLE_DONE:
+					Log.info("Power management toggled charging to recover from a charging anomaly");
+				break;
+				case PowerManagementAlertCode::REQUEST_POWER_CYCLE:
+					Log.info("Power management requested a power cycle after recovery failed");
+				break;
+				case PowerManagementAlertCode::SERVICE_REQUIRED:
+					Log.info("Power management anomaly persists after the allowed recovery attempts");
+				break;
+				default:
+				break;
+				}
+			}
 			// Turn things off to save power
-			if (!sysStatus.get_openHours()) if (sysStatus.get_openHours()) sensorControl(sysStatus.get_sensorType(),false);
+			if (!sysStatus.get_openHours()) sensorControl(sysStatus.get_sensorType(),false);
 			// Configure Sleep
 			config.mode(SystemSleepMode::ULTRA_LOW_POWER)
 				.gpio(BUTTON_PIN,CHANGE)
@@ -181,7 +213,7 @@ void loop() {
 			ab1805.stopWDT();  												// No watchdogs interrupting our slumber
 			SystemSleepResult result = System.sleep(config);              	// Put the device to sleep device continues operations from here
 			ab1805.resumeWDT();                                             // Wakey Wakey - WDT can resume
-			sensorControl(sysStatus.get_sensorType(),true);					// Enable the sensor
+			if (sysStatus.get_openHours()) sensorControl(sysStatus.get_sensorType(),true);	// Enable the sensor
 			if (result.wakeupPin() == BUTTON_PIN) {                         // If the user woke the device we need to get up - device was sleeping so we need to reset opening hours
 				waitFor(Serial.isConnected, 10000);							// Wait for serial connection if we are using the button - we may want to monito serial 
 				Log.info("Woke with user button");
@@ -202,7 +234,7 @@ void loop() {
 
 			if (state != oldState) {
 				if (oldState != LoRA_TRANSMISSION_STATE) {
-					if (!listeningDurationTimer.isActive()) listeningDurationTimer.start();				// Don't reset timer if it is already running
+					listeningDurationTimer.changePeriod(getListeningDurationMs());
 					if (sysStatus.get_nodeNumber() < 11) transmitDelayTimer.changePeriod(sysStatus.get_nodeNumber()*NODENUMBEROFFSET);		// Wait a beat before transmitting
 					else state = LoRA_TRANSMISSION_STATE;
 				}
@@ -224,6 +256,7 @@ void loop() {
 		case LoRA_TRANSMISSION_STATE: {
 			bool result = false;
 			static int retryCount = 0;
+			int maxTransmitRetries = getMaxTransmitRetries();
 
 			publishStateTransition();                   					// Let everyone know we are changing state
 			takeMeasurements();												// Taking measurements now should allow for accurate battery measurements
@@ -241,7 +274,7 @@ void loop() {
 				retryCount = 0;												// Successful transmission - go listen for response
 				state = LoRA_LISTENING_STATE;
 			}
-			else if (retryCount >= 3) {
+			else if (retryCount >= maxTransmitRetries) {
 				Log.info("Too many retries - giving up for this period");
 				retryCount = 0;
 				if ((Time.now() - sysStatus.get_lastConnection() > 2 * sysStatus.get_frequencyMinutes() * 60UL)) { 	// Device has not connected for two reporting periods
@@ -343,7 +376,7 @@ void loop() {
 	sysStatus.loop();
 
 	if (sensorDetect) {														// Count the pulse and reset for next
-		if (recordCount()) sensorDetect = false;
+		if (!sysStatus.get_openHours() || recordCount()) sensorDetect = false;
 	}
 
 	if (outOfMemory >= 0) {                         // In this function we are going to reset the system if there is an out of memory error
@@ -355,7 +388,7 @@ void loop() {
 	if (userSwitchDectected) {
 		delay(100);									// Debounce the button press
 		userSwitchDectected = false;				// Clear the interrupt flag
-		if (!listeningDurationTimer.isActive()) listeningDurationTimer.start();				// Don't reset timer if it is already running
+		if (!listeningDurationTimer.isActive()) listeningDurationTimer.changePeriod(getListeningDurationMs());
 		Log.info("Detected button press");
 		state = LoRA_TRANSMISSION_STATE;
 	}
@@ -392,6 +425,23 @@ void transmitDelayTimerISR() {
 void listeningDurationTimerISR() {
 	LoRA_Functions::instance().sleepLoRaRadio();							// Done with the radio - shut it off
 	state = SLEEPING_STATE;													// Go back to sleep
+}
+
+bool isLowBatteryMode() {
+	double stateOfCharge = current.get_stateOfCharge();
+	return !isnan(stateOfCharge) && stateOfCharge <= LOW_BATTERY_SOC_THRESHOLD;
+}
+
+unsigned long getListeningDurationMs() {
+	return (isLowBatteryMode()) ? LOW_BATTERY_LISTENING_DURATION_MS : NORMAL_LISTENING_DURATION_MS;
+}
+
+int getMaxTransmitRetries() {
+	return (isLowBatteryMode()) ? MAX_TRANSMIT_RETRIES_LOW_BATTERY : MAX_TRANSMIT_RETRIES;
+}
+
+bool isSafeToRunPowerManagementRemediation() {
+	return !sensorDetect && !userSwitchDectected;
 }
 
 void userSwitchISR() {
