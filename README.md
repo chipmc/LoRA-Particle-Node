@@ -8,7 +8,7 @@ In this system, every communication is initiated by the node. The gateway receiv
 
 ## Current Release
 
-- Firmware release: `v14.00`
+- Firmware release: `v14.1`
 - Particle product version: `14`
 - Target Device OS in the current workspace: `6.3.5`
 

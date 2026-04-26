@@ -37,6 +37,8 @@ uint16_t totalPowerRecoveryAttempts = 0;
 uint8_t recoveryAttemptsThisCycle = 0;
 PowerManagementAlertCode lastPowerAlertCode = PowerManagementAlertCode::NONE;
 bool loggedUnsupportedChargingControl = false;
+bool chargingSafetyStateInitialized = false;
+bool chargingSafetyEnabled = true;
 
 bool isValidBatterySoc(float batterySoc) {
 	return !isnan(batterySoc) && batterySoc >= MIN_VALID_BATTERY_SOC && batterySoc <= MAX_VALID_BATTERY_SOC;
@@ -107,33 +109,58 @@ bool applySolarPowerConfiguration(bool enableCharging) {
 	return false;
 }
 
-bool applyChargingSafetyPolicy(const PowerObservation& obs) {
+bool applyChargingSafetyTransition(const PowerObservation& obs) {
 	if (!supportsChargingControl()) {
 		logUnsupportedChargingControlOnce();
 		return true;
 	}
 
+	if (isnan(obs.temperatureF)) {
+		return true;
+	}
+
 	bool enableCharging = isTemperatureSafeForCharging(obs.temperatureF);
+	if (chargingSafetyStateInitialized && chargingSafetyEnabled == enableCharging) {
+		return true;
+	}
+
 	bool result = applySolarPowerConfiguration(enableCharging);
-	if (result && !enableCharging) {
-		Log.info("Charging disabled by temperature safety policy at %.1fF", obs.temperatureF);
+	if (result) {
+		chargingSafetyStateInitialized = true;
+		chargingSafetyEnabled = enableCharging;
+		if (!enableCharging) {
+			Log.info("Charging disabled by temperature safety policy at %.1fF", obs.temperatureF);
+		}
 	}
 	return result;
 }
 
-void resetObservationCycle() {
+void resetAnomalyCounters() {
 	consecutiveChargingExpectedNotChargingSamples = 0;
 	consecutiveChargeFaultSamples = 0;
+}
+
+void resetRecoveryCycleState() {
 	recoveryAttemptsThisCycle = 0;
 }
 
-bool performChargingToggle() {
-	if (!applySolarPowerConfiguration(false)) {
-		return false;
-	}
 
-	delay(CHARGING_TOGGLE_DELAY_MS);
-	return applyChargingSafetyPolicy(lastObservation);
+bool performChargingToggle() {
+    if (!applySolarPowerConfiguration(false)) {
+        return false;
+    }
+
+    delay(CHARGING_TOGGLE_DELAY_MS);
+
+    if (!hasObservation || !areReadingsValid(lastObservation)) {
+		// Fail safe to avoid leaving charging disabled if the observation goes stale mid-toggle.
+        chargingSafetyStateInitialized = false;
+        applySolarPowerConfiguration(true);  // fail-safe: do not leave charging disabled
+        return false;
+    }
+
+    chargingSafetyStateInitialized = false;
+    return applyChargingSafetyTransition(lastObservation);
 }
 
 }
@@ -141,35 +168,55 @@ bool performChargingToggle() {
 bool initializePowerManagement() {
 	hasObservation = false;
 	lastObservation = {};
-	resetObservationCycle();
+	resetAnomalyCounters();
+	resetRecoveryCycleState();
 	lastPowerAlertCode = PowerManagementAlertCode::NONE;
+	chargingSafetyStateInitialized = false;
+	chargingSafetyEnabled = true;
 
 	if (!supportsChargingControl()) {
 		logUnsupportedChargingControlOnce();
 		return true;
 	}
 
-	Log.info("Initializing power management with charging disabled until the first observation");
-	return applySolarPowerConfiguration(false);
+	Log.info("Initializing power management with charging enabled solar configuration");
+	bool result = applySolarPowerConfiguration(true);
+	if (result) {
+		chargingSafetyStateInitialized = true;
+		chargingSafetyEnabled = true;
+	}
+	return result;
+}
+
+bool applyPowerManagementSafetyPolicy() {
+	if (!hasObservation || !areReadingsValid(lastObservation)) {
+		return true;
+	}
+
+	if (!supportsChargingControl()) {
+		logUnsupportedChargingControlOnce();
+		return true;
+	}
+
+	return applyChargingSafetyTransition(lastObservation);
+}
+
+void resetPowerManagementRecoveryCycle() {
+	resetRecoveryCycleState();
 }
 
 void updatePowerManagementObservation(const PowerObservation& obs) {
 	lastObservation = obs;
 	hasObservation = true;
 
-	if (!applyChargingSafetyPolicy(obs)) {
-		lastPowerAlertCode = PowerManagementAlertCode::SERVICE_REQUIRED;
-		return;
-	}
-
 	if (!areReadingsValid(obs)) {
-		resetObservationCycle();
+		resetAnomalyCounters();
 		lastPowerAlertCode = PowerManagementAlertCode::NONE;
 		return;
 	}
 
 	if (!isChargingExpected(obs) || obs.batteryIsCharging) {
-		resetObservationCycle();
+		resetAnomalyCounters();
 		lastPowerAlertCode = PowerManagementAlertCode::NONE;
 		return;
 	}
@@ -192,7 +239,7 @@ void updatePowerManagementObservation(const PowerObservation& obs) {
 		return;
 	}
 
-	resetObservationCycle();
+	resetAnomalyCounters();
 	lastPowerAlertCode = PowerManagementAlertCode::NONE;
 }
 
@@ -202,8 +249,13 @@ PowerManagementAlertCode runPowerManagementRemediation() {
 		return lastPowerAlertCode;
 	}
 
+	if (!isTemperatureSafeForCharging(lastObservation.temperatureF)) {
+		lastPowerAlertCode = PowerManagementAlertCode::NONE;
+		return lastPowerAlertCode;
+	}
+
 	if (!isChargingExpected(lastObservation) || lastObservation.batteryIsCharging) {
-		resetObservationCycle();
+		resetAnomalyCounters();
 		lastPowerAlertCode = PowerManagementAlertCode::NONE;
 		return lastPowerAlertCode;
 	}
@@ -239,8 +291,7 @@ PowerManagementAlertCode runPowerManagementRemediation() {
 		return lastPowerAlertCode;
 	}
 
-	consecutiveChargingExpectedNotChargingSamples = 0;
-	consecutiveChargeFaultSamples = 0;
+	resetAnomalyCounters();
 	lastPowerAlertCode = PowerManagementAlertCode::CHARGE_TOGGLE_DONE;
 	return lastPowerAlertCode;
 }

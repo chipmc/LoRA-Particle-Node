@@ -35,6 +35,7 @@
 // v12.00 - Debounce for button press-to transmit
 // v13.00 - Adding code to ensure the device charges reliably - Removed PMIC - Fixed the internal temp to int8_t
 // v14.00 - Added reusable time-agnostic power management, low-battery listening and retry limits, PMIC charge-toggle recovery, and LoRa buffer safety fixes
+// v14.1 - Hardened reusable power management by separating observation updates from PMIC actions and adding defensive toggle guards
 
 
 #define NODENUMBEROFFSET 10000UL					// By how much do we off set each node by node number

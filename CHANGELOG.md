@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## v14.1 - 2026-04-26
+
+### Changed
+- Split power-management observation updates from explicit charger safety-policy application.
+- Added defensive remediation guards so charging toggle recovery is skipped when temperature is unsafe.
+- Added fail-safe handling to avoid leaving charging disabled if the observation goes stale during a toggle.
+
 ## v14.00 - 2026-04-26
 
 ### Added
