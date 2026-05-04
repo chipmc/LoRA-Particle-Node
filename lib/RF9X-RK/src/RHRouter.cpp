@@ -189,12 +189,36 @@ uint8_t RHRouter::route(RoutedMessage* message, uint8_t messageLen)
     {
 	RoutingTableEntry* route = getRouteTo(message->header.dest);
 	if (!route)
+	{
+	    Log.info("RHRouter route miss: node=%u src=%u dest=%u hops=%u",
+		_thisAddress,
+		message->header.source,
+		message->header.dest,
+		message->header.hops);
 	    return RH_ROUTER_ERROR_NO_ROUTE;
+	}
 	next_hop = route->next_hop;
     }
 
-    if (!RHReliableDatagram::sendtoWait((uint8_t*)message, messageLen, next_hop))
+	Log.info("RHRouter route send: node=%u src=%u dest=%u nextHop=%u hops=%u e2eId=%u flags=%u",
+	    _thisAddress,
+	    message->header.source,
+	    message->header.dest,
+	    next_hop,
+	    message->header.hops,
+	    message->header.id,
+	    message->header.flags);
+
+	if (!RHReliableDatagram::sendtoWait((uint8_t*)message, messageLen, next_hop))
+	{
+	    Log.info("RHRouter next-hop failure: node=%u src=%u dest=%u nextHop=%u hops=%u",
+		_thisAddress,
+		message->header.source,
+		message->header.dest,
+		next_hop,
+		message->header.hops);
 	return RH_ROUTER_ERROR_UNABLE_TO_DELIVER;
+	}
 
     return RH_ROUTER_ERROR_NONE;
 }

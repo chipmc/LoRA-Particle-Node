@@ -57,6 +57,14 @@ buf[29] sensorType				            // Identifies sensor type to Gateway
 #ifndef __LORA_FUNCTIONS_H
 #define __LORA_FUNCTIONS_H
 
+#ifndef LORA_RAW_TEST
+#define LORA_RAW_TEST 0
+#endif
+
+#ifndef FIELD_DEBUG_BUILD
+#define FIELD_DEBUG_BUILD 0
+#endif
+
 #include "Particle.h"
 
 extern uint16_t __system_product_version;
@@ -132,7 +140,7 @@ public:
      * @return true 
      * @return false 
      */
-    bool composeDataReportNode();                  // Node - Composes data report
+    bool composeDataReportNode(uint8_t attemptNumber = 1);                  // Node - Composes data report
     /**
      * @brief Acknowledges the response from the Gateway that acknowledges receipt of a data report
      * 
@@ -146,7 +154,8 @@ public:
      * @return true 
      * @return false 
      */
-    bool composeJoinRequesttNode();                // Node - Composes Join request
+    bool composeJoinRequesttNode(uint8_t attemptNumber = 1);                // Node - Composes Join request
+    bool sendRawTestNode();                   // Node - Direct RF95 test send without RHMesh
     /**
      * @brief Acknowledges the response from the Gateway that acknowledges receipt of a Join Request
      * 

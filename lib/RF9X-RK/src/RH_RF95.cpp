@@ -5,6 +5,33 @@
 
 #include <RH_RF95.h>
 
+#ifndef FIELD_DEBUG_BUILD
+#define FIELD_DEBUG_BUILD 0
+#endif
+
+namespace {
+const char *rf95ModeName(RHGenericDriver::RHMode mode)
+{
+    switch (mode)
+    {
+    case RHGenericDriver::RHModeInitialising:
+        return "init";
+    case RHGenericDriver::RHModeSleep:
+        return "sleep";
+    case RHGenericDriver::RHModeIdle:
+        return "idle";
+    case RHGenericDriver::RHModeTx:
+        return "tx";
+    case RHGenericDriver::RHModeRx:
+        return "rx";
+    case RHGenericDriver::RHModeCad:
+        return "cad";
+    default:
+        return "unknown";
+    }
+}
+}
+
 // Maybe a mutex for multithreading on Raspberry Pi?
 #ifdef RH_USE_MUTEX
 RH_DECLARE_MUTEX(lock);
@@ -184,6 +211,16 @@ void RH_RF95::handleInterrupt()
 //    if (_mode == RHModeRx && irq_flags & (RH_RF95_RX_TIMEOUT | RH_RF95_PAYLOAD_CRC_ERROR))
     {
 //	Serial.println("E");
+	#if FIELD_DEBUG_BUILD
+    Log.info("RH_RF95 rx drop: mode=%s irq=0x%02x hop=0x%02x timeout=%u crcError=%u crcMissing=%u bad=%u",
+        rf95ModeName(_mode),
+        irq_flags,
+        hop_channel,
+        (irq_flags & RH_RF95_RX_TIMEOUT) ? 1 : 0,
+        (irq_flags & RH_RF95_PAYLOAD_CRC_ERROR) ? 1 : 0,
+        (_enableCRC && !(hop_channel & RH_RF95_RX_PAYLOAD_CRC_IS_ON)) ? 1 : 0,
+        _rxBad + 1);
+	#endif
 	_rxBad++;
         clearRxBuf();
     }
@@ -218,6 +255,29 @@ void RH_RF95::handleInterrupt()
 	    _lastRssi -= 157;
 	else
 	    _lastRssi -= 164;
+
+	#if FIELD_DEBUG_BUILD
+    if (_bufLen >= 4)
+    {
+        Log.info("RH_RF95 rx raw: len=%u rssi=%d snr=%d to=%u from=%u id=%u flags=%u irq=0x%02x",
+        _bufLen,
+        _lastRssi,
+        _lastSNR,
+        _buf[0],
+        _buf[1],
+        _buf[2],
+        _buf[3],
+        irq_flags);
+    }
+    else
+    {
+        Log.info("RH_RF95 rx raw short: len=%u rssi=%d snr=%d irq=0x%02x",
+        _bufLen,
+        _lastRssi,
+        _lastSNR,
+        irq_flags);
+    }
+	#endif
 	    
 	// We have received a message.
 	validateRxBuf(); 
@@ -271,7 +331,12 @@ void RH_INTERRUPT_ATTR RH_RF95::isr2()
 void RH_RF95::validateRxBuf()
 {
     if (_bufLen < 4)
-	return; // Too short to be a real message
+    {
+        #if FIELD_DEBUG_BUILD
+        Log.info("RH_RF95 rx reject: short len=%u", _bufLen);
+        #endif
+    return; // Too short to be a real message
+    }
     // Extract the 4 headers
     _rxHeaderTo    = _buf[0];
     _rxHeaderFrom  = _buf[1];
@@ -283,6 +348,18 @@ void RH_RF95::validateRxBuf()
     {
 	_rxGood++;
 	_rxBufValid = true;
+    }
+    else
+    {
+	#if FIELD_DEBUG_BUILD
+        Log.info("RH_RF95 rx reject: to=%u from=%u id=%u flags=%u this=%u promiscuous=%u",
+        _rxHeaderTo,
+        _rxHeaderFrom,
+        _rxHeaderId,
+        _rxHeaderFlags,
+        _thisAddress,
+        _promiscuous ? 1 : 0);
+	#endif
     }
 }
 

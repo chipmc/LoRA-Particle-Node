@@ -85,6 +85,7 @@ State oldState = INITIALIZATION_STATE;
 
 // Initialize Functions
 SystemSleepConfiguration config;                    // Initialize new Sleep 2.0 Api
+const unsigned long SERIAL_SLEEP_SETTLE_MS = 50UL;
 AB1805 ab1805(Wire);                                // Rickkas' RTC / Watchdog library
 void outOfMemoryHandler(system_event_t event, int param);
 void transmitDelayTimerISR();
@@ -97,6 +98,9 @@ bool isSafeToRunPowerManagementRemediation();
 // Program Variables
 volatile bool userSwitchDectected = false;		
 volatile bool sensorDetect = false;
+#if LORA_RAW_TEST
+volatile bool rawTestRequested = false;
+#endif
 
 Timer transmitDelayTimer(10000,transmitDelayTimerISR,true);
 Timer listeningDurationTimer(NORMAL_LISTENING_DURATION_MS,listeningDurationTimerISR,true);
@@ -185,6 +189,7 @@ void loop() {
 			}
 			else {
 				wakeInSeconds = 60UL;
+				delay(SERIAL_SLEEP_SETTLE_MS);
 				Log.info("Time not valid, sleeping for 60 seconds");
 			}
 
@@ -211,6 +216,9 @@ void loop() {
 				.gpio(BUTTON_PIN,CHANGE)
 				.gpio(INT_PIN,RISING)
 				.duration((wakeInSeconds) * 1000L);							// Configuring sleep
+			if (Serial.isConnected()) {
+				Serial.flush();
+			}
 			ab1805.stopWDT();  												// No watchdogs interrupting our slumber
 			SystemSleepResult result = System.sleep(config);              	// Put the device to sleep device continues operations from here
 			ab1805.resumeWDT();                                             // Wakey Wakey - WDT can resume
@@ -263,8 +271,19 @@ void loop() {
 			takeMeasurements();												// Taking measurements now should allow for accurate battery measurements
 			LoRA_Functions::instance().clearBuffer();
 			// Based on Alert code, determine what message to send
-			if (sysStatus.get_alertCodeNode() == 0) result = LoRA_Functions::instance().composeDataReportNode();
-			else if (sysStatus.get_alertCodeNode() == 1 || sysStatus.get_alertCodeNode() == 2) result = LoRA_Functions::instance().composeJoinRequesttNode();
+			#if LORA_RAW_TEST
+			if (rawTestRequested) {
+				rawTestRequested = false;
+				result = LoRA_Functions::instance().sendRawTestNode();
+			}
+			else
+			#endif
+			if (sysStatus.get_alertCodeNode() == 0) {
+				Log.info("LoRa TX state: begin DATA_RPT send state=%s attempt=%d", stateNames[state], retryCount + 1);
+				result = LoRA_Functions::instance().composeDataReportNode(retryCount + 1);
+				Log.info("LoRa TX state: DATA_RPT send finished state=%s result=%s", stateNames[state], result ? "success" : "failure");
+			}
+			else if (sysStatus.get_alertCodeNode() == 1 || sysStatus.get_alertCodeNode() == 2) result = LoRA_Functions::instance().composeJoinRequesttNode(retryCount + 1);
 			else {
 				Log.info("Alert code = %d",sysStatus.get_alertCodeNode());
 				state = ERROR_STATE;
@@ -391,6 +410,9 @@ void loop() {
 		userSwitchDectected = false;				// Clear the interrupt flag
 		if (!listeningDurationTimer.isActive()) listeningDurationTimer.changePeriod(getListeningDurationMs());
 		Log.info("Detected button press");
+		#if LORA_RAW_TEST
+		rawTestRequested = true;
+		#endif
 		state = LoRA_TRANSMISSION_STATE;
 	}
 

@@ -69,8 +69,38 @@ bool RHReliableDatagram::sendtoWait(uint8_t* buf, uint8_t len, uint8_t address)
         }
         setHeaderFlags(headerFlagsToSet, headerFlagsToClear);
 
+	uint8_t routeDest = len > 0 ? buf[0] : RH_BROADCAST_ADDRESS;
+	uint8_t routeSource = len > 1 ? buf[1] : _thisAddress;
+	uint8_t routeHops = len > 2 ? buf[2] : 0;
+	uint8_t routeId = len > 3 ? buf[3] : 0;
+	uint8_t routeFlags = len > 4 ? buf[4] : 0;
+	uint16_t txGoodBefore = _driver.txGood();
+	Log.info("RHDatagram send attempt: try=%u/%u rfTo=%u rfFrom=%u rfId=%u rfFlags=%u routeSrc=%u routeDest=%u nextHop=%u hops=%u e2eId=%u routeFlags=%u txGoodBefore=%u",
+	    retries,
+	    _retries + 1,
+	    address,
+	    headerFrom(),
+	    thisSequenceNumber,
+	    headerFlags(),
+	    routeSource,
+	    routeDest,
+	    address,
+	    routeHops,
+	    routeId,
+	    routeFlags,
+	    txGoodBefore);
+
 	sendto(buf, len, address);
 	waitPacketSent();
+	Log.info("RHDatagram send complete: try=%u/%u rfTo=%u rfFrom=%u rfId=%u rfFlags=%u txGoodAfter=%u txGoodDelta=%u ackReceived=no",
+	    retries,
+	    _retries + 1,
+	    headerTo(),
+	    headerFrom(),
+	    headerId(),
+	    headerFlags(),
+	    _driver.txGood(),
+	    (uint16_t)(_driver.txGood() - txGoodBefore));
 
 	// Never wait for ACKS to broadcasts:
 	if (address == RH_BROADCAST_ADDRESS)
@@ -103,13 +133,37 @@ bool RHReliableDatagram::sendtoWait(uint8_t* buf, uint8_t len, uint8_t address)
 			   && (id == thisSequenceNumber))
 		    {
 			// Its the ACK we are waiting for
+			Log.info("RHDatagram ack received: try=%u/%u from=%u to=%u id=%u flags=%u ackReceived=yes",
+			    retries,
+			    _retries + 1,
+			    from,
+			    to,
+			    id,
+			    flags);
 			return true;
 		    }
 		    else if (   !(flags & RH_FLAGS_ACK)
 				&& (id == _seenIds[from]))
 		    {
 			// This is a request we have already received. ACK it again
+			Log.info("RHDatagram wait saw non-ack: try=%u/%u from=%u to=%u id=%u flags=%u ackReceived=no",
+			    retries,
+			    _retries + 1,
+			    from,
+			    to,
+			    id,
+			    flags);
 			acknowledge(id, from);
+		    }
+		    else
+		    {
+			Log.info("RHDatagram wait saw other frame: try=%u/%u from=%u to=%u id=%u flags=%u ackReceived=no",
+			    retries,
+			    _retries + 1,
+			    from,
+			    to,
+			    id,
+			    flags);
 		    }
 		    // Else discard it
 		}
@@ -117,10 +171,21 @@ bool RHReliableDatagram::sendtoWait(uint8_t* buf, uint8_t len, uint8_t address)
 	    // Not the one we are waiting for, maybe keep waiting until timeout exhausted
 	    YIELD;
 	}
+	Log.info("RHDatagram ack missed: try=%u/%u to=%u id=%u ackReceived=no",
+	    retries,
+	    _retries + 1,
+	    address,
+	    thisSequenceNumber);
 	// Timeout exhausted, maybe retry
 	YIELD;
     }
     // Retries exhausted
+    Log.info("RHDatagram ack timeout: from=%u to=%u id=%u retries=%u timeout=%u",
+	_thisAddress,
+	address,
+	thisSequenceNumber,
+	_retries,
+	_timeout);
     return false;
 }
 

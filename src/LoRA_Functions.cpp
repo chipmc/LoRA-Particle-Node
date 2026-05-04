@@ -43,6 +43,201 @@ RH_RF95 driver(RFM95_CS, RFM95_INT);
 // Class to manage message delivery and receipt, using the driver declared above
 RHMesh manager(driver, GATEWAY_ADDRESS);
 
+namespace {
+const RH_RF95::ModemConfigChoice RF95_MODEM_CONFIG = RH_RF95::Bw125Cr48Sf4096;
+const uint16_t RH_MESH_TIMEOUT_MS = 2000;
+const uint8_t RH_MESH_RETRIES = RH_DEFAULT_RETRIES;
+const bool RH_LOW_DATARATE_ENABLED = true;
+const int8_t RH_TX_POWER_REQUEST_DBM = 20;
+const uint16_t RH_PREAMBLE_BYTES = 8;
+const bool RH_PAYLOAD_CRC_ENABLED = true;
+const char RAW_TEST_PAYLOAD[] = "RAW_NODE_1_TEST";
+const char *const RH_SPI_INSTANCE_NAME = "SPI";
+const char *const RH_SYNC_WORD_STATE = "not-used-lora-default";
+
+const char *radioModeName(RHGenericDriver::RHMode mode) {
+	switch(mode) {
+	case RHGenericDriver::RHModeInitialising:
+		return "init";
+	case RHGenericDriver::RHModeSleep:
+		return "sleep";
+	case RHGenericDriver::RHModeIdle:
+		return "idle";
+	case RHGenericDriver::RHModeTx:
+		return "tx";
+	case RHGenericDriver::RHModeRx:
+		return "rx";
+	case RHGenericDriver::RHModeCad:
+		return "cad";
+	default:
+		return "unknown";
+	}
+}
+
+const char *loraPacketTypeName(uint8_t packetType) {
+	switch(packetType) {
+	case JOIN_REQ:
+		return "JOIN_REQ";
+	case JOIN_ACK:
+		return "JOIN_ACK";
+	case DATA_RPT:
+		return "DATA_RPT";
+	case DATA_ACK:
+		return "DATA_ACK";
+	case ALERT_RPT:
+		return "ALERT_RPT";
+	case ALERT_ACK:
+		return "ALERT_ACK";
+	default:
+		return "UNKNOWN";
+	}
+}
+
+const char *meshResultName(uint8_t result) {
+	switch(result) {
+	case RH_ROUTER_ERROR_NONE:
+		return "success";
+	case RH_ROUTER_ERROR_INVALID_LENGTH:
+		return "invalid length";
+	case RH_ROUTER_ERROR_NO_ROUTE:
+		return "no route";
+	case RH_ROUTER_ERROR_TIMEOUT:
+		return "timeout";
+	case RH_ROUTER_ERROR_NO_REPLY:
+		return "no reply";
+	case RH_ROUTER_ERROR_UNABLE_TO_DELIVER:
+		return "unable to deliver";
+	default:
+		return "other";
+	}
+}
+
+const char *modemConfigName(RH_RF95::ModemConfigChoice config) {
+	switch(config) {
+	case RH_RF95::Bw125Cr45Sf128:
+		return "Bw125Cr45Sf128";
+	case RH_RF95::Bw500Cr45Sf128:
+		return "Bw500Cr45Sf128";
+	case RH_RF95::Bw31_25Cr48Sf512:
+		return "Bw31_25Cr48Sf512";
+	case RH_RF95::Bw125Cr48Sf4096:
+		return "Bw125Cr48Sf4096";
+	case RH_RF95::Bw125Cr45Sf2048:
+		return "Bw125Cr45Sf2048";
+	default:
+		return "unknown";
+	}
+}
+
+void modemConfigDetails(RH_RF95::ModemConfigChoice config, const char *&bandwidth, uint8_t &spreadingFactor, const char *&codingRate) {
+	switch(config) {
+	case RH_RF95::Bw125Cr45Sf128:
+		bandwidth = "125kHz";
+		spreadingFactor = 7;
+		codingRate = "4/5";
+		break;
+	case RH_RF95::Bw500Cr45Sf128:
+		bandwidth = "500kHz";
+		spreadingFactor = 7;
+		codingRate = "4/5";
+		break;
+	case RH_RF95::Bw31_25Cr48Sf512:
+		bandwidth = "31.25kHz";
+		spreadingFactor = 9;
+		codingRate = "4/8";
+		break;
+	case RH_RF95::Bw125Cr48Sf4096:
+		bandwidth = "125kHz";
+		spreadingFactor = 12;
+		codingRate = "4/8";
+		break;
+	case RH_RF95::Bw125Cr45Sf2048:
+		bandwidth = "125kHz";
+		spreadingFactor = 11;
+		codingRate = "4/5";
+		break;
+	default:
+		bandwidth = "unknown";
+		spreadingFactor = 0;
+		codingRate = "unknown";
+		break;
+	}
+}
+
+void ensureRadioReadyForTransmit() {
+	RHGenericDriver::RHMode modeBefore = driver.mode();
+	driver.setModeIdle();
+	manager.setThisAddress(sysStatus.get_nodeNumber());
+	Log.info("LoRa TX prep: mode=%s node=%u dest=%u", radioModeName(modeBefore), manager.thisAddress(), GATEWAY_ADDRESS);
+}
+
+int8_t appliedTxPowerDbm() {
+	if (RH_TX_POWER_REQUEST_DBM < 2) {
+		return 2;
+	}
+	if (RH_TX_POWER_REQUEST_DBM > 20) {
+		return 20;
+	}
+	return RH_TX_POWER_REQUEST_DBM;
+}
+
+void logRadioInitConfig() {
+	Log.info("LoRa init rf: freq=%.2f modem=%d/%s timeout=%u",
+		RF95_FREQ,
+		(int)RF95_MODEM_CONFIG,
+		modemConfigName(RF95_MODEM_CONFIG),
+		RH_MESH_TIMEOUT_MS,
+		RH_MESH_TIMEOUT_MS);
+	Log.info("LoRa init net: node=%u dest=%u txPower=%ddBm",
+		manager.thisAddress(),
+		GATEWAY_ADDRESS,
+		appliedTxPowerDbm());
+	#if FIELD_DEBUG_BUILD
+	Log.info("LoRa pin map: cs=%u rst=%u irq=%u spi=%s",
+		(unsigned)RFM95_CS,
+		(unsigned)RFM95_RST,
+		(unsigned)RFM95_INT,
+		RH_SPI_INSTANCE_NAME);
+	#endif
+}
+
+void logNodeSendStart(const char *packetType, uint8_t payloadLen, uint8_t attemptNumber) {
+	RHRouter::RoutingTableEntry* route = manager.getRouteTo(GATEWAY_ADDRESS);
+	const char *bandwidth;
+	const char *codingRate;
+	uint8_t spreadingFactor;
+	modemConfigDetails(RF95_MODEM_CONFIG, bandwidth, spreadingFactor, codingRate);
+	Log.info("LoRa TX start: type=%s dest=%u len=%u node=%u attempt=%u",
+		packetType,
+		GATEWAY_ADDRESS,
+		payloadLen,
+		manager.thisAddress(),
+		attemptNumber);
+	Log.info("LoRa TX rf: freq=%.2f modem=%d/%s bw=%s sf=%u cr=%s txPower=%ddBm",
+		RF95_FREQ,
+		(int)RF95_MODEM_CONFIG,
+		modemConfigName(RF95_MODEM_CONFIG),
+		bandwidth,
+		spreadingFactor,
+		codingRate,
+		RH_TX_POWER_REQUEST_DBM);
+	Log.info("LoRa TX route: route=%s nextHop=%u cs=%u int=%u rst=%u",
+		route ? "known" : "missing",
+		route ? route->next_hop : RH_BROADCAST_ADDRESS,
+		(unsigned)RFM95_CS,
+		(unsigned)RFM95_INT,
+		(unsigned)RFM95_RST);
+}
+
+void logNodeSendResult(const char *packetType, uint8_t result) {
+	Log.info("LoRa TX result: type=%s dest=%u rc=%u (%s)",
+		packetType,
+		GATEWAY_ADDRESS,
+		result,
+		meshResultName(result));
+}
+}
+
 // Mesh has much greater memory requirements, and you may need to limit the
 // max message length to prevent wierd crashes
 #ifndef RH_MAX_MESSAGE_LEN
@@ -78,6 +273,8 @@ bool LoRA_Functions::setup(bool gatewayID) {
 		Log.info("LoRA Radio initialized as an unconfigured node %i and a deviceID of %s and alert code %d", manager.thisAddress(), System.deviceID().c_str(), sysStatus.get_alertCodeNode());
 	}
 
+	logRadioInitConfig();
+
 	return true;
 }
 
@@ -110,17 +307,40 @@ bool  LoRA_Functions::initializeRadio() {  			// Set up the Radio Module
 	digitalWrite(RFM95_RST,HIGH);
 	delay(10);
 
-	if (!manager.init()) {
+	bool managerInitResult = manager.init();
+	#if FIELD_DEBUG_BUILD
+	Log.info("LoRa radio init: manager.init()=%s regVersion=0x%02x", managerInitResult ? "true" : "false", driver.getDeviceVersion());
+	#endif
+	if (!managerInitResult) {
 		Log.info("init failed");					// Defaults after init are 434.0MHz, 0.05MHz AFC pull-in, modulation FSK_Rb2_4Fd36
 		return false;
 	}
-	driver.setFrequency(RF95_FREQ);					// Frequency is typically 868.0 or 915.0 in the Americas, or 433.0 in the EU - Are there more settings possible here?
-	driver.setTxPower(23, false);                   // If you are using RFM95/96/97/98 modules which uses the PA_BOOST transmitter pin, then you can set transmitter powers from 5 to 23 dBm (13dBm default).  PA_BOOST?
+	bool setFrequencyResult = driver.setFrequency(RF95_FREQ);			// Frequency is typically 868.0 or 915.0 in the Americas, or 433.0 in the EU - Are there more settings possible here?
+	driver.setTxPower(RH_TX_POWER_REQUEST_DBM, false); // PA_BOOST path on the RFM95.
 
-	driver.setModemConfig(RH_RF95::Bw125Cr45Sf2048);
+	bool setModemConfigResult = driver.setModemConfig(RF95_MODEM_CONFIG);
 	// driver.setModemConfig(RH_RF95::Bw125Cr48Sf4096);	// This optimized the radio for long range - https://www.airspayce.com/mikem/arduino/RadioHead/classRH__RF95.html
+	driver.setPreambleLength(RH_PREAMBLE_BYTES);
+	driver.setPayloadCRC(RH_PAYLOAD_CRC_ENABLED);
 	driver.setLowDatarate();						// https://www.airspayce.com/mikem/arduino/RadioHead/classRH__RF95.html#a8e2df6a6d2cb192b13bd572a7005da67
-	manager.setTimeout(1000);						// 200mSec is the default - may need to extend once we play with other settings on the modem - https://www.airspayce.com/mikem/arduino/RadioHead/classRHReliableDatagram.html
+	manager.setTimeout(RH_MESH_TIMEOUT_MS);			// 200mSec is the default - may need to extend once we play with other settings on the modem - https://www.airspayce.com/mikem/arduino/RadioHead/classRHReliableDatagram.html
+	manager.setRetries(RH_MESH_RETRIES);
+	#if FIELD_DEBUG_BUILD
+	Log.info("LoRa radio cfg: init=%s ver=0x%02x freq=%s %.2f modem=%s %d/%s",
+		managerInitResult ? "ok" : "fail",
+		driver.getDeviceVersion(),
+		setFrequencyResult ? "ok" : "fail",
+		RF95_FREQ,
+		setModemConfigResult ? "ok" : "fail",
+		(int)RF95_MODEM_CONFIG,
+		modemConfigName(RF95_MODEM_CONFIG));
+	Log.info("LoRa radio tx: req=%ddBm applied=%ddBm preamble=%u crc=%s sync=%s",
+		RH_TX_POWER_REQUEST_DBM,
+		appliedTxPowerDbm(),
+		RH_PREAMBLE_BYTES,
+		RH_PAYLOAD_CRC_ENABLED ? "on" : "off",
+		RH_SYNC_WORD_STATE);
+	#endif
 return true;
 }
 
@@ -136,6 +356,8 @@ bool LoRA_Functions::listenForLoRAMessageNode() {
 	uint8_t messageFlag;
 	uint8_t hops;
 	if (manager.recvfromAck(buf, &len, &from, &dest, &id, &messageFlag, &hops))	{	// We have received a message
+		Log.info("LoRa RX node: type=%s src=%u dest=%u id=%u flags=%u hops=%u len=%u",
+			loraPacketTypeName(messageFlag), from, dest, id, messageFlag, hops, len);
 		if (len < 9) {
 			Log.info("LoRA message too short - length %u", len);
 			return false;
@@ -178,7 +400,7 @@ bool LoRA_Functions::listenForLoRAMessageNode() {
 }
 
 
-bool LoRA_Functions::composeDataReportNode() {
+bool LoRA_Functions::composeDataReportNode(uint8_t attemptNumber) {
 	float successPercent;
 
 	if (current.get_messageCount()==0) {		// 8-bit number so need to protect against divide by zero on reset or wrap around
@@ -215,7 +437,10 @@ bool LoRA_Functions::composeDataReportNode() {
 
 	// Send a message to manager_server
   	// A route to the destination will be automatically discovered.
+	ensureRadioReadyForTransmit();
+	logNodeSendStart("DATA_RPT", 19, attemptNumber);
 	unsigned char result = manager.sendtoWait(buf, 19, GATEWAY_ADDRESS, DATA_RPT);
+	logNodeSendResult("DATA_RPT", result);
 	
 	if ( result == RH_ROUTER_ERROR_NONE) {
 		// It has been reliably delivered to the next node.
@@ -275,7 +500,7 @@ bool LoRA_Functions::receiveAcknowledmentDataReportNode() {
 	return true;
 }
 
-bool LoRA_Functions::composeJoinRequesttNode() {
+bool LoRA_Functions::composeJoinRequesttNode(uint8_t attemptNumber) {
 	char deviceID[25];
 	System.deviceID().toCharArray(deviceID, 25);					// the deviceID is 24 charcters long
 	int deviceIDCheckSum = stringCheckSum(System.deviceID());
@@ -292,7 +517,10 @@ bool LoRA_Functions::composeJoinRequesttNode() {
 	buf[29] = sysStatus.get_sensorType();
 
 	digitalWrite(BLUE_LED,HIGH);
+	ensureRadioReadyForTransmit();
+	logNodeSendStart("JOIN_REQ", 30, attemptNumber);
 	unsigned char result = manager.sendtoWait(buf, 30, GATEWAY_ADDRESS, JOIN_REQ);
+	logNodeSendResult("JOIN_REQ", result);
 	digitalWrite(BLUE_LED, LOW);
 
 	if (result == RH_ROUTER_ERROR_NONE) {					// It has been reliably delivered to the next node.
@@ -305,6 +533,35 @@ bool LoRA_Functions::composeJoinRequesttNode() {
 		Log.info("Join request to Gateway failed");
 		return false;
 	}
+}
+
+bool LoRA_Functions::sendRawTestNode() {
+	ensureRadioReadyForTransmit();
+	driver.setHeaderTo(GATEWAY_ADDRESS);
+	driver.setHeaderFrom(sysStatus.get_nodeNumber());
+	driver.setHeaderId(0);
+	driver.setHeaderFlags(0, 0xff);
+
+	uint16_t txGoodBefore = driver.txGood();
+	Log.info("LoRa raw TX start: node=%u dest=%u payload=%s txGoodBefore=%u",
+		sysStatus.get_nodeNumber(),
+		GATEWAY_ADDRESS,
+		RAW_TEST_PAYLOAD,
+		txGoodBefore);
+
+	bool sendResult = driver.send((const uint8_t *)RAW_TEST_PAYLOAD, sizeof(RAW_TEST_PAYLOAD) - 1);
+	Log.info("LoRa raw TX send()=%s", sendResult ? "true" : "false");
+
+	bool waitResult = false;
+	if (sendResult) {
+		waitResult = driver.waitPacketSent();
+	}
+
+	Log.info("LoRa raw TX waitPacketSent()=%s txGoodAfter=%u",
+		waitResult ? "true" : "false",
+		driver.txGood());
+
+	return sendResult && waitResult;
 }
 
 bool LoRA_Functions::receiveAcknowledmentJoinRequestNode() {
