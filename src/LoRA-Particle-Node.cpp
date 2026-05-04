@@ -34,6 +34,7 @@
 // v10.00 - Breaking Change - v9 Gateway required - Node reports RSSI / SNR to Gateway - Listening / repeating mode, Simplified error handling
 // v12.00 - Debounce for button press-to transmit
 // v13.00 - Adding code to ensure the device charges reliably - Removed PMIC - Fixed the internal temp to int8_t
+// v15.00 - Recovery build branched from the known-good v13 LoRa behavior for clean production deployment ordering
 
 
 #define NODENUMBEROFFSET 10000UL					// By how much do we off set each node by node number
@@ -57,7 +58,7 @@ STARTUP(System.enableFeature(FEATURE_RESET_INFO));
 // For monitoring / debugging, you have some options on the next few lines - uncomment one
 SerialLogHandler logHandler(LOG_LEVEL_INFO);     // Easier to see the program flow
 
-PRODUCT_VERSION(13);									// For now, we are putting nodes and gateways in the same product group - need to deconflict #
+PRODUCT_VERSION(15);									// For now, we are putting nodes and gateways in the same product group - need to deconflict #
 
 // Prototype functions
 void publishStateTransition(void);                  // Keeps track of state machine changes - for debugging
