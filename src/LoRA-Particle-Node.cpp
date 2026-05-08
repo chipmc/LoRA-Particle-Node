@@ -34,17 +34,11 @@
 // v10.00 - Breaking Change - v9 Gateway required - Node reports RSSI / SNR to Gateway - Listening / repeating mode, Simplified error handling
 // v12.00 - Debounce for button press-to transmit
 // v13.00 - Adding code to ensure the device charges reliably - Removed PMIC - Fixed the internal temp to int8_t
-// v14.00 - Added reusable time-agnostic power management, low-battery listening and retry limits, PMIC charge-toggle recovery, and LoRa buffer safety fixes
-// v14.1 - Hardened reusable power management by separating observation updates from PMIC actions and adding defensive toggle guards
+// v15.00 - Recovery build branched from the known-good v13 LoRa behavior for clean production deployment ordering
+// v18.00 - Node resiliency, persistent schedule repair, and Boron PowerManager PMIC profile control for bench and solar deployments
 
 
 #define NODENUMBEROFFSET 10000UL					// By how much do we off set each node by node number
-
-const unsigned long NORMAL_LISTENING_DURATION_MS = 300000UL;
-const unsigned long LOW_BATTERY_LISTENING_DURATION_MS = 60000UL;
-const double LOW_BATTERY_SOC_THRESHOLD = 20.0;
-const int MAX_TRANSMIT_RETRIES = 3;
-const int MAX_TRANSMIT_RETRIES_LOW_BATTERY = 1;
 
 // Particle Libraries
 #include "AB1805_RK.h"                              // Watchdog and Real Time Clock - https://github.com/rickkas7/AB1805_RK
@@ -57,16 +51,18 @@ const int MAX_TRANSMIT_RETRIES_LOW_BATTERY = 1;
 #include "take_measurements.h"						// Manages interactions with the sensors (default is temp for charging)
 #include "MyPersistentData.h"						// Persistent Storage
 
-
 // Prototypes and System Mode calls
 SYSTEM_MODE(MANUAL);                        // This will enable user code to start executing automatically.
-SYSTEM_THREAD(ENABLED);                             // Means my code will not be held up by Particle processes.
 STARTUP(System.enableFeature(FEATURE_RESET_INFO));
 
 // For monitoring / debugging, you have some options on the next few lines - uncomment one
 SerialLogHandler logHandler(LOG_LEVEL_INFO);     // Easier to see the program flow
 
-PRODUCT_VERSION(14);									// For now, we are putting nodes and gateways in the same product group - need to deconflict #
+PRODUCT_VERSION(18);									// For now, we are putting nodes and gateways in the same product group - need to deconflict #
+
+#ifndef ENABLE_MESH_RELAY_LISTEN_WINDOW
+#define ENABLE_MESH_RELAY_LISTEN_WINDOW 0
+#endif
 
 // Prototype functions
 void publishStateTransition(void);                  // Keeps track of state machine changes - for debugging
@@ -83,35 +79,98 @@ char stateNames[10][16] = {"Initialize", "Error", "Idle", "Sleeping", "LoRA Tran
 volatile State state = INITIALIZATION_STATE;
 State oldState = INITIALIZATION_STATE;
 
+bool isSupportedSensorType(uint8_t sensorType);
+bool shouldSensorBePowered();
+bool isLoRaWindowState(State candidateState);
+void updateSensorPowerState(bool enableSensor, const char *reason);
+void stopLoRaWindowTimers();
+void prepareForGatewayAckSleep();
+
 // Initialize Functions
 SystemSleepConfiguration config;                    // Initialize new Sleep 2.0 Api
 AB1805 ab1805(Wire);                                // Rickkas' RTC / Watchdog library
 void outOfMemoryHandler(system_event_t event, int param);
 void transmitDelayTimerISR();
 void listeningDurationTimerISR();
-bool isLowBatteryMode();
-unsigned long getListeningDurationMs();
-int getMaxTransmitRetries();
-bool isSafeToRunPowerManagementRemediation();
 
 // Program Variables
 volatile bool userSwitchDectected = false;		
 volatile bool sensorDetect = false;
+volatile bool transmitDelayPending = false;
+volatile bool listeningWindowExpired = false;
+bool sensorPowerEnabled = false;
+bool sensorPowerStateKnown = false;
+uint8_t consecutiveFailedReportCycles = 0;
+bool discoveryModeActive = false;
+uint16_t discoverySleepCycles = 0;
+bool sustainedFailureAlert3Pending = false;
+bool deepPowerDownAttemptedThisBoot = false;
+system_tick_t errorStateEnteredAt = 0;
+uint8_t errorStateAlertCode = 0;
+
+const unsigned long DISCOVERY_SLEEP_SECONDS = 7UL * 60UL;
+const unsigned long DISCOVERY_STALE_ACK_SECONDS = 3UL * 60UL * 60UL;
+const uint8_t LORA_REINIT_AFTER_FAILED_CYCLES = 2;
+const uint8_t LORA_DEEP_POWERDOWN_AFTER_FAILED_CYCLES = 4;
 
 Timer transmitDelayTimer(10000,transmitDelayTimerISR,true);
-Timer listeningDurationTimer(NORMAL_LISTENING_DURATION_MS,listeningDurationTimerISR,true);
+Timer listeningDurationTimer(300000,listeningDurationTimerISR,true);
+
+bool isSupportedSensorType(uint8_t sensorType) {
+	return sensorType == 0 || sensorType == 1;
+}
+
+bool shouldSensorBePowered() {
+	return sysStatus.get_openHours() && isSupportedSensorType(sysStatus.get_sensorType());
+}
+
+bool isLoRaWindowState(State candidateState) {
+	return candidateState == LoRA_LISTENING_STATE || candidateState == LoRA_TRANSMISSION_STATE || candidateState == LoRA_RETRY_WAIT_STATE;
+}
+
+void updateSensorPowerState(bool enableSensor, const char *reason) {
+	if (!sensorPowerStateKnown || sensorPowerEnabled != enableSensor) {
+		Log.info(
+			"Sensor power %s (%s): openHours=%s sensorType=%u",
+			enableSensor ? "enabled" : "disabled",
+			reason,
+			sysStatus.get_openHours() ? "true" : "false",
+			sysStatus.get_sensorType());
+		sensorPowerEnabled = enableSensor;
+		sensorPowerStateKnown = true;
+	}
+	sensorControl(sysStatus.get_sensorType(), enableSensor);
+}
+
+void stopLoRaWindowTimers() {
+	transmitDelayTimer.stop();
+	listeningDurationTimer.stop();
+	transmitDelayPending = false;
+	listeningWindowExpired = false;
+}
+
+void stopListeningDurationTimer() {
+	listeningDurationTimer.stop();
+	listeningWindowExpired = false;
+}
+
+void prepareForGatewayAckSleep() {
+	current.flush(true);
+	sysStatus.flush(true);
+	LoRA_Functions::instance().sleepLoRaRadio();
+	stopLoRaWindowTimers();
+	state = SLEEPING_STATE;
+}
 
 void setup() {
-
 	waitFor(Serial.isConnected, 10000);				// Wait for serial connection
 
     initializePinModes();                           // Sets the pinModes
 
 	sysStatus.setup();								// Initialize persistent storage
 	current.setup();
-	if (!initializePowerManagement()) {
-		Log.error("Failed to initialize power management");
-	}
+	PowerManager::instance().setup();
+	PowerManager::instance().beginWakeCycle(false);
 
 	takeMeasurements();                             // Populates values so you can read them before the hour
 
@@ -141,21 +200,22 @@ void setup() {
 
 	// In this section we test for issues and set alert codes as needed
 	if (! LoRA_Functions::instance().setup(false)) 	{						// Start the LoRA radio - Node
-		sysStatus.set_alertCodeNode(3);										// Initialization failure
+		sysStatus.set_alertCodeNode(3);									// Initialization failure
 		sysStatus.set_alertTimestampNode(Time.now());
 		Log.info("LoRA Initialization failure alert code %d - power cycle in 30", sysStatus.get_alertCodeNode());
 	}
 	else if (sysStatus.get_nodeNumber() > 10 || !Time.isValid()) {			// If the node number indicates this node is uninitialized or the clock needs to be set, initiate a join request
-		sysStatus.set_alertCodeNode(1); 									// Will initiate a join request
-		Log.info("Node number indicated unconfigured node of %d setting alert code to %d", sysStatus.get_nodeNumber(), sysStatus.get_alertCodeNode());
+		sysStatus.set_alertCodeNode(1); 								// Will initiate a join request
+		if (!Time.isValid()) Log.info("Startup detected invalid time - setting alert code to %d for join request", sysStatus.get_alertCodeNode());
+		if (sysStatus.get_nodeNumber() > 10) Log.info("Startup detected unconfigured node number %d - setting alert code to %d", sysStatus.get_nodeNumber(), sysStatus.get_alertCodeNode());
 	}
 
   	takeMeasurements();                                                  	// Populates values so you can read them before the hour
-  
+ 
     attachInterrupt(INT_PIN, sensorISR, RISING);                     		// PIR or Pressure Sensor interrupt from low to high
 	attachInterrupt(BUTTON_PIN,userSwitchISR,FALLING); 						// We may need to monitor the user switch to change behaviours / modes
 
-	if (sysStatus.get_openHours()) sensorControl(sysStatus.get_sensorType(),true); // Turn the sensor on during open hours
+	updateSensorPowerState(shouldSensorBePowered(), "startup");
 
 	if (state == INITIALIZATION_STATE) state = SLEEPING_STATE;               	// Sleep unless otherwise from above code
   	Log.info("Startup complete for the Node with alert code %d and last connect %s", sysStatus.get_alertCodeNode(), Time.format(sysStatus.get_lastConnection(), "%T").c_str());
@@ -163,6 +223,44 @@ void setup() {
 }
 
 void loop() {
+	static State timerManagedState = INITIALIZATION_STATE;
+	static bool loggedStaleListeningWindowExpired = false;
+
+	if (state != timerManagedState) {
+		if (timerManagedState == LoRA_LISTENING_STATE && state != LoRA_LISTENING_STATE) {
+			stopListeningDurationTimer();
+		}
+		if (isLoRaWindowState(timerManagedState) && !isLoRaWindowState(state)) {
+			stopLoRaWindowTimers();
+		}
+		timerManagedState = state;
+	}
+
+	if (listeningWindowExpired && state == LoRA_LISTENING_STATE) {
+		LoRA_Functions::instance().sleepLoRaRadio();
+		stopLoRaWindowTimers();
+		state = SLEEPING_STATE;
+	}
+	else if (listeningWindowExpired) {
+		if (!loggedStaleListeningWindowExpired) {
+			Log.warn("Ignoring stale listening window expiry while in %s", stateNames[state]);
+			loggedStaleListeningWindowExpired = true;
+		}
+		listeningWindowExpired = false;
+	}
+	else if (transmitDelayPending && state == LoRA_LISTENING_STATE) {
+		transmitDelayPending = false;
+		stopListeningDurationTimer();
+		state = LoRA_TRANSMISSION_STATE;
+	}
+	else if (transmitDelayPending) {
+		transmitDelayPending = false;
+	}
+
+	if (!listeningWindowExpired) {
+		loggedStaleListeningWindowExpired = false;
+	}
+
 	switch (state) {
 		case IDLE_STATE: {													// Unlike most sketches - nodes spend most time in sleep and only transit IDLE once or twice each period
 			if (state != oldState) publishStateTransition();              	// We will apply the back-offs before sending to ERROR state - so if we are here we will take action
@@ -174,38 +272,64 @@ void loop() {
 		case SLEEPING_STATE: {
 			unsigned long wakeInSeconds, wakeBoundary;
 			time_t time;
+			bool usingDiscoverySleep = false;
+			const char *discoveryReason = nullptr;
+			time_t lastConnection = sysStatus.get_lastConnection();
+			time_t ackAgeSeconds = 0;
 
 			publishStateTransition();              							// Publish state transition
-			// How long to sleep
-			if (Time.isValid()) {
-				wakeBoundary = (sysStatus.get_frequencyMinutes() * 60UL);
-				wakeInSeconds = constrain(wakeBoundary - Time.now() % wakeBoundary, 0UL, wakeBoundary);  // If Time is valid, we can compute time to the start of the next report window	
-				time = Time.now() + wakeInSeconds;
-				Log.info("Sleep for %lu seconds until next event at %s with sensor %s", wakeInSeconds, Time.format(time, "%T").c_str(), (sysStatus.get_openHours()) ? "on" : "off");
-			}
+			if (!Time.isValid()) discoveryReason = "time invalid";
+			else if (lastConnection <= 0) discoveryReason = "no successful gateway ACK";
 			else {
+				ackAgeSeconds = Time.now() - lastConnection;
+				if (ackAgeSeconds >= (time_t) DISCOVERY_STALE_ACK_SECONDS) discoveryReason = "stale gateway ACK";
+			}
+
+			if (discoveryReason) {
+				const PowerReport &powerReport = PowerManager::instance().lastReport();
+				double stateOfCharge = current.get_stateOfCharge();
+				if (!powerReport.policy.shouldAllowDiscoveryMode) {
+					discoveryModeActive = false;
+					discoverySleepCycles = 0;
+					if (powerReport.reading.socStatus != PowerAvailability::Valid) Log.info("Discovery mode skipped - SOC %s, using normal sleep", PowerManager::availabilityLabel(powerReport.reading.socStatus));
+					else Log.info("Discovery mode skipped - SOC %.2f below policy threshold, using normal sleep", stateOfCharge);
+				}
+				else {
+					unsigned long ackAgeMinutes = (unsigned long)(ackAgeSeconds / 60);
+					if (!discoveryModeActive) {
+						if (ackAgeSeconds > 0) Log.info("Discovery mode entered - %s (%lu minutes since ACK), SOC %.2f", discoveryReason, ackAgeMinutes, stateOfCharge);
+						else Log.info("Discovery mode entered - %s, SOC %.2f", discoveryReason, stateOfCharge);
+					}
+					discoveryModeActive = true;
+					discoverySleepCycles++;
+					wakeInSeconds = DISCOVERY_SLEEP_SECONDS;
+					usingDiscoverySleep = true;
+					Log.info("Discovery sleep interval %u - sleeping for %lu seconds", discoverySleepCycles, wakeInSeconds);
+				}
+			}
+			// How long to sleep
+			if (!usingDiscoverySleep && Time.isValid()) {
+				wakeBoundary = (sysStatus.get_frequencyMinutes() * 60UL);
+				if (sysStatus.get_openHours()) {
+					wakeInSeconds = constrain(wakeBoundary - Time.now() % wakeBoundary, 0UL, wakeBoundary);  // If Time is valid, we can compute time to the start of the next report window
+				}
+				else {
+					wakeInSeconds = wakeBoundary;
+				}
+				time = Time.now() + wakeInSeconds;
+				if (sysStatus.get_openHours()) {
+					Log.info("Sleep for %lu seconds until next event at %s with sensor %s", wakeInSeconds, Time.format(time, "%T").c_str(), "on");
+				}
+				else {
+					Log.info("Closed-hours sleep for %u minutes until %s", sysStatus.get_frequencyMinutes(), Time.format(time, "%T").c_str());
+				}
+			}
+			else if (!usingDiscoverySleep) {
 				wakeInSeconds = 60UL;
 				Log.info("Time not valid, sleeping for 60 seconds");
 			}
-
-			if (isSafeToRunPowerManagementRemediation()) {
-				PowerManagementAlertCode powerAlert = runPowerManagementRemediation();
-				switch (powerAlert) {
-				case PowerManagementAlertCode::CHARGE_TOGGLE_DONE:
-					Log.info("Power management toggled charging to recover from a charging anomaly");
-				break;
-				case PowerManagementAlertCode::REQUEST_POWER_CYCLE:
-					Log.info("Power management requested a power cycle after recovery failed");
-				break;
-				case PowerManagementAlertCode::SERVICE_REQUIRED:
-					Log.info("Power management anomaly persists after the allowed recovery attempts");
-				break;
-				default:
-				break;
-				}
-			}
 			// Turn things off to save power
-			if (!sysStatus.get_openHours()) sensorControl(sysStatus.get_sensorType(),false);
+			updateSensorPowerState(shouldSensorBePowered(), "pre-sleep");
 			// Configure Sleep
 			config.mode(SystemSleepMode::ULTRA_LOW_POWER)
 				.gpio(BUTTON_PIN,CHANGE)
@@ -214,7 +338,8 @@ void loop() {
 			ab1805.stopWDT();  												// No watchdogs interrupting our slumber
 			SystemSleepResult result = System.sleep(config);              	// Put the device to sleep device continues operations from here
 			ab1805.resumeWDT();                                             // Wakey Wakey - WDT can resume
-			if (sysStatus.get_openHours()) sensorControl(sysStatus.get_sensorType(),true);	// Enable the sensor
+			PowerManager::instance().beginWakeCycle(true);
+			updateSensorPowerState(shouldSensorBePowered(), "post-wake");
 			if (result.wakeupPin() == BUTTON_PIN) {                         // If the user woke the device we need to get up - device was sleeping so we need to reset opening hours
 				waitFor(Serial.isConnected, 10000);							// Wait for serial connection if we are using the button - we may want to monito serial 
 				Log.info("Woke with user button");
@@ -234,8 +359,9 @@ void loop() {
 			static int lastReportingHour = Time.hour();
 
 			if (state != oldState) {
+				LoRA_Functions::instance().logListeningStateEntry();
+				if (!listeningDurationTimer.isActive()) listeningDurationTimer.start();				// Bound the direct-to-gateway ACK wait window
 				if (oldState != LoRA_TRANSMISSION_STATE) {
-					listeningDurationTimer.changePeriod(getListeningDurationMs());
 					if (sysStatus.get_nodeNumber() < 11) transmitDelayTimer.changePeriod(sysStatus.get_nodeNumber()*NODENUMBEROFFSET);		// Wait a beat before transmitting
 					else state = LoRA_TRANSMISSION_STATE;
 				}
@@ -244,20 +370,27 @@ void loop() {
 
 			if (LoRA_Functions::instance().listenForLoRAMessageNode()) {							// Listen for LoRA signals - could be an acknowledgement or a message to relay to another node
 				sysStatus.set_lastConnection(Time.now());											// Came back as true - message was for our node
+				if (discoveryModeActive || discoverySleepCycles != 0) Log.info("Discovery mode exit after ACK after %u discovery sleeps", discoverySleepCycles);
+				discoveryModeActive = false;
+				discoverySleepCycles = 0;
+				consecutiveFailedReportCycles = 0;
+				sustainedFailureAlert3Pending = false;
 				randomSeed(sysStatus.get_lastConnection() * sysStatus.get_nodeNumber());			// Done so we can genrate rando numbers later
 				ab1805.setRtcFromTime(Time.now());
 				if (Time.hour() != lastReportingHour) {
 					current.set_hourlyCount(0);					    								// Zero the hourly count
 					lastReportingHour = Time.hour();
 				}
-				else if (sysStatus.get_alertCodeNode() != 0) state = ERROR_STATE;					// Need to resolve alert before listening for others
+				if (sysStatus.get_alertCodeNode() != 0) state = ERROR_STATE;						// Need to resolve alert before sleeping or listening for others
+				#if !ENABLE_MESH_RELAY_LISTEN_WINDOW
+				else prepareForGatewayAckSleep();
+				#endif
 			}
 		} break;
 
 		case LoRA_TRANSMISSION_STATE: {
 			bool result = false;
 			static int retryCount = 0;
-			int maxTransmitRetries = getMaxTransmitRetries();
 
 			publishStateTransition();                   					// Let everyone know we are changing state
 			takeMeasurements();												// Taking measurements now should allow for accurate battery measurements
@@ -275,18 +408,35 @@ void loop() {
 				retryCount = 0;												// Successful transmission - go listen for response
 				state = LoRA_LISTENING_STATE;
 			}
-			else if (retryCount >= maxTransmitRetries) {
-				Log.info("Too many retries - giving up for this period");
+			else if (retryCount >= 3) {
+				Log.info("Too many retries - gateway unavailable, sleeping until next window");
 				retryCount = 0;
-				if ((Time.now() - sysStatus.get_lastConnection() > 2 * sysStatus.get_frequencyMinutes() * 60UL)) { 	// Device has not connected for two reporting periods
-					Log.info("Nothing for two reporting periods - power cycle after current cycle");
-					sysStatus.set_alertCodeNode(3);							// This will trigger a power cycle reset
-					sysStatus.set_alertTimestampNode(Time.now());		
-					sysStatus.set_lastConnection(Time.now());				// Prevents cyclical resets
-					state = ERROR_STATE;									// Likely radio is locked up - reset the device and radio
-					break;
+				consecutiveFailedReportCycles++;
+				Log.info("Sustained failure counter %u, reinit at %u, recovery powerdown at %u", consecutiveFailedReportCycles, LORA_REINIT_AFTER_FAILED_CYCLES, LORA_DEEP_POWERDOWN_AFTER_FAILED_CYCLES);
+				if (consecutiveFailedReportCycles >= LORA_DEEP_POWERDOWN_AFTER_FAILED_CYCLES) {
+					if (deepPowerDownAttemptedThisBoot) {
+						Log.info("Sustained failure threshold reached again, but recovery powerdown already attempted this boot");
+					}
+					else {
+						deepPowerDownAttemptedThisBoot = true;
+						sustainedFailureAlert3Pending = true;
+						Log.info("Sustained failure reached %u cycles - escalating to Alert 3 recovery", consecutiveFailedReportCycles);
+						sysStatus.set_alertCodeNode(3);
+						sysStatus.set_alertTimestampNode(Time.now());
+						state = ERROR_STATE;
+						break;
+					}
 				}
-				state = LoRA_LISTENING_STATE;
+				else if (consecutiveFailedReportCycles >= LORA_REINIT_AFTER_FAILED_CYCLES) {
+					Log.info("Sustained failure reached %u cycles - reinitializing LoRa radio before sleep", consecutiveFailedReportCycles);
+					if (LoRA_Functions::instance().initializeRadio()) Log.info("LoRa radio reinitialized after sustained failure");
+					else Log.info("LoRa radio reinitialization failed after sustained failure");
+				}
+				current.flush(true);
+				sysStatus.flush(true);
+				LoRA_Functions::instance().sleepLoRaRadio();
+				stopLoRaWindowTimers();
+				state = SLEEPING_STATE;
 			}
 			else {
 				Log.info("Transmission failed - retry number %d",retryCount++);
@@ -300,7 +450,7 @@ void loop() {
 
 			if (state != oldState) {
 				publishStateTransition();                   				// Publish state transition
-				variableDelay = random(20000);								// a random delay up to 20 seconds
+				variableDelay = 2000 + random(18000);						// a random delay from 2 to 20 seconds
 				startDelay = millis();
 				Log.info("Going to retry in %lu seconds", variableDelay/1000UL);
 			}
@@ -310,7 +460,15 @@ void loop() {
 		} break;
 
 		case ERROR_STATE: {													// Where we go if things are not quite right
-			if (state != oldState) publishStateTransition();                // We will apply the back-offs before sending to ERROR state - so if we are here we will take action
+			if (state != oldState) {
+				publishStateTransition();                // We will apply the back-offs before sending to ERROR state - so if we are here we will take action
+				errorStateEnteredAt = millis();
+				errorStateAlertCode = sysStatus.get_alertCodeNode();
+			}
+			else if (errorStateAlertCode != sysStatus.get_alertCodeNode()) {
+				errorStateEnteredAt = millis();
+				errorStateAlertCode = sysStatus.get_alertCodeNode();
+			}
 
 			switch (sysStatus.get_alertCodeNode()) {
 			case 1:															// Case 1 is an unconfigured node - needs to send join request
@@ -323,9 +481,27 @@ void loop() {
 				state = LoRA_LISTENING_STATE;							// Sends the alert and clears alert code
 			break;
 			case 3: {														// Case 3 is generic - power cycle device to recover from errors
-				static system_tick_t enteredState = millis();
-				if (millis() - enteredState > 30000L) {
-					Log.info("Alert 3 - Resetting device");
+				if (millis() - errorStateEnteredAt > 30000L) {
+					if (sustainedFailureAlert3Pending) {
+						const PowerReport &powerReport = PowerManager::instance().lastReport();
+						double stateOfCharge = current.get_stateOfCharge();
+						if (!powerReport.policy.shouldAllowRecoveryPowerdown) {
+							if (powerReport.reading.socStatus != PowerAvailability::Valid) Log.info("Sustained failure recovery powerdown skipped - SOC %s", PowerManager::availabilityLabel(powerReport.reading.socStatus));
+							else Log.info("Sustained failure recovery powerdown skipped - SOC %.2f below policy threshold", stateOfCharge);
+							sustainedFailureAlert3Pending = false;
+							sysStatus.set_alertCodeNode(0);
+							sysStatus.set_alertTimestampNode(Time.now());
+							current.flush(true);
+							sysStatus.flush(true);
+							LoRA_Functions::instance().sleepLoRaRadio();
+							stopLoRaWindowTimers();
+							state = SLEEPING_STATE;
+							break;
+						}
+						Log.info("Alert 3 - Sustained LoRa failure recovery powerdown, SOC %.2f", stateOfCharge);
+						sustainedFailureAlert3Pending = false;
+					}
+					else Log.info("Alert 3 - Resetting device");
 					sysStatus.set_alertCodeNode(0);							// Need to clear so we don't get in a retry cycle
 					sysStatus.set_alertTimestampNode(Time.now());
 					sysStatus.flush(true);									// All this is required as we are done trainsiting loop
@@ -377,7 +553,7 @@ void loop() {
 	sysStatus.loop();
 
 	if (sensorDetect) {														// Count the pulse and reset for next
-		if (!sysStatus.get_openHours() || recordCount()) sensorDetect = false;
+		if (recordCount()) sensorDetect = false;
 	}
 
 	if (outOfMemory >= 0) {                         // In this function we are going to reset the system if there is an out of memory error
@@ -389,7 +565,7 @@ void loop() {
 	if (userSwitchDectected) {
 		delay(100);									// Debounce the button press
 		userSwitchDectected = false;				// Clear the interrupt flag
-		if (!listeningDurationTimer.isActive()) listeningDurationTimer.changePeriod(getListeningDurationMs());
+		if (!listeningDurationTimer.isActive()) listeningDurationTimer.start();				// Don't reset timer if it is already running
 		Log.info("Detected button press");
 		state = LoRA_TRANSMISSION_STATE;
 	}
@@ -420,29 +596,15 @@ void outOfMemoryHandler(system_event_t event, int param) {
 }
 
 void transmitDelayTimerISR() {
-	state = LoRA_TRANSMISSION_STATE;										// Time for our node to transmit
+	if (state == LoRA_LISTENING_STATE) {
+		transmitDelayPending = true;
+	}
 }
 
 void listeningDurationTimerISR() {
-	LoRA_Functions::instance().sleepLoRaRadio();							// Done with the radio - shut it off
-	state = SLEEPING_STATE;													// Go back to sleep
-}
-
-bool isLowBatteryMode() {
-	double stateOfCharge = current.get_stateOfCharge();
-	return !isnan(stateOfCharge) && stateOfCharge <= LOW_BATTERY_SOC_THRESHOLD;
-}
-
-unsigned long getListeningDurationMs() {
-	return (isLowBatteryMode()) ? LOW_BATTERY_LISTENING_DURATION_MS : NORMAL_LISTENING_DURATION_MS;
-}
-
-int getMaxTransmitRetries() {
-	return (isLowBatteryMode()) ? MAX_TRANSMIT_RETRIES_LOW_BATTERY : MAX_TRANSMIT_RETRIES;
-}
-
-bool isSafeToRunPowerManagementRemediation() {
-	return !sensorDetect && !userSwitchDectected;
+	if (isLoRaWindowState(state)) {
+		listeningWindowExpired = true;
+	}
 }
 
 void userSwitchISR() {

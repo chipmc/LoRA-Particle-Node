@@ -4,6 +4,10 @@
 #include "device_pinout.h"
 #include "MyPersistentData.h"
 
+#ifndef LORA_VERBOSE_DIAGNOSTICS
+#define LORA_VERBOSE_DIAGNOSTICS 0
+#endif
+
 
 // Singleton instantiation - from template
 LoRA_Functions *LoRA_Functions::_instance;
@@ -31,6 +35,13 @@ LoRA_Functions::~LoRA_Functions() {
 const uint8_t GATEWAY_ADDRESS = 0;
 // const double RF95_FREQ = 915.0;				 	// Frequency - ISM
 const double RF95_FREQ = 926.84;				// Center frequency for the omni-directional antenna I am using
+const RH_RF95::ModemConfigChoice RF95_MODEM_CONFIG = RH_RF95::Bw125Cr45Sf2048;
+const uint16_t LORA_MANAGER_TIMEOUT_MS = 2000;
+const int8_t RF95_TX_POWER_DBM = 23;
+const bool RF95_USE_RFO = false;
+const uint8_t MAX_GATEWAY_ALERT_CODE = 7;
+const uint8_t MIN_ASSIGNED_NODE_ADDRESS = 1;
+const uint8_t MAX_ASSIGNED_NODE_ADDRESS = 10;
 
 // Define the message flags
 typedef enum { NULL_STATE, JOIN_REQ, JOIN_ACK, DATA_RPT, DATA_ACK, ALERT_RPT, ALERT_ACK} LoRA_State;
@@ -54,12 +65,74 @@ RHMesh manager(driver, GATEWAY_ADDRESS);
 // #define RH_MESH_MAX_MESSAGE_LEN 50
 uint8_t buf[RH_MESH_MAX_MESSAGE_LEN];               // Related to max message size - RadioHead example note: dont put this on the stack:
 
+namespace {
+
+const char *radioModeName(RHGenericDriver::RHMode mode) {
+	switch (mode) {
+		case RHGenericDriver::RHModeInitialising: return "Initialising";
+		case RHGenericDriver::RHModeSleep: return "Sleep";
+		case RHGenericDriver::RHModeIdle: return "Idle";
+		case RHGenericDriver::RHModeTx: return "Tx";
+		case RHGenericDriver::RHModeRx: return "Rx";
+		case RHGenericDriver::RHModeCad: return "Cad";
+		default: return "Unknown";
+	}
+}
+
+const char *modemConfigName(RH_RF95::ModemConfigChoice config) {
+	switch (config) {
+		case RH_RF95::Bw125Cr45Sf128: return "Bw125Cr45Sf128";
+		case RH_RF95::Bw500Cr45Sf128: return "Bw500Cr45Sf128";
+		case RH_RF95::Bw31_25Cr48Sf512: return "Bw31_25Cr48Sf512";
+		case RH_RF95::Bw125Cr48Sf4096: return "Bw125Cr48Sf4096";
+		case RH_RF95::Bw125Cr45Sf2048: return "Bw125Cr45Sf2048";
+		default: return "Unknown";
+	}
+}
+
+void logLoRaSetupDiagnostics() {
+	Log.info(
+		"LoRa setup diag: RH=%d.%d libStatus=runtime-unavailable gateway=%u freq=%.2f modem=%d/%s timeout=%u txPower=%d useRFO=%s pins(cs=%d irq=%d rst=%d) regVersion=0x%02x",
+		RH_VERSION_MAJOR,
+		RH_VERSION_MINOR,
+		GATEWAY_ADDRESS,
+		RF95_FREQ,
+		(int) RF95_MODEM_CONFIG,
+		modemConfigName(RF95_MODEM_CONFIG),
+		LORA_MANAGER_TIMEOUT_MS,
+		RF95_TX_POWER_DBM,
+		RF95_USE_RFO ? "true" : "false",
+		RFM95_CS,
+		RFM95_INT,
+		RFM95_RST,
+		driver.getDeviceVersion());
+}
+
+bool isValidGatewayAlertCode(uint8_t alertCode) {
+	return alertCode <= MAX_GATEWAY_ALERT_CODE;
+}
+
+bool isValidAssignedNodeNumber(uint8_t nodeNumber) {
+	return nodeNumber >= MIN_ASSIGNED_NODE_ADDRESS && nodeNumber <= MAX_ASSIGNED_NODE_ADDRESS;
+}
+
+void logRejectedGatewayValue(const char *fieldName, uint8_t value, const char *context) {
+	Log.warn("Rejecting invalid gateway %s %u in %s", fieldName, value, context);
+}
+
+void applyGatewayAckTiming() {
+	Time.setTime(((buf[2] << 24) | (buf[3] << 16) | (buf[4] << 8) | buf[5]));
+	sysStatus.set_frequencyMinutes((buf[6] << 8 | buf[7]));
+	Log.info("Set clock to %s and report frequency to %d minutes", Time.timeStr().c_str(),sysStatus.get_frequencyMinutes());
+}
+
+}
+
 
 bool LoRA_Functions::setup(bool gatewayID) {
     // Set up the Radio Module
-	if (!LoRA_Functions::initializeRadio()) {
-		return false;
-	}
+	LoRA_Functions::initializeRadio();
+	logLoRaSetupDiagnostics();
 
 	Log.info("in LoRA setup - node number %d",sysStatus.get_nodeNumber());
 
@@ -93,15 +166,31 @@ void LoRA_Functions::loop() {
 
 void LoRA_Functions::clearBuffer() {
 	uint8_t bufT[RH_RF95_MAX_MESSAGE_LEN];
-	uint8_t lenT = sizeof(bufT);
+	uint8_t lenT;
 
-	while(driver.recv(bufT, &lenT)) {
+	while (true) {
 		lenT = sizeof(bufT);
+		if (!driver.recv(bufT, &lenT)) {
+			break;
+		}
 	}
 }
 
 void LoRA_Functions::sleepLoRaRadio() {
 	driver.sleep();                             	// Here is where we will power down the LoRA radio module
+}
+
+void LoRA_Functions::logListeningStateEntry() {
+	const RHGenericDriver::RHMode mode = driver.mode();
+	Log.info(
+		"LoRa listen diag: rxArmed=%s mode=%s gateway=%u freq=%.2f modem=%d/%s timeout=%u",
+		(mode == RHGenericDriver::RHModeRx) ? "true" : "false",
+		radioModeName(mode),
+		GATEWAY_ADDRESS,
+		RF95_FREQ,
+		(int) RF95_MODEM_CONFIG,
+		modemConfigName(RF95_MODEM_CONFIG),
+		LORA_MANAGER_TIMEOUT_MS);
 }
 
 bool  LoRA_Functions::initializeRadio() {  			// Set up the Radio Module
@@ -115,12 +204,12 @@ bool  LoRA_Functions::initializeRadio() {  			// Set up the Radio Module
 		return false;
 	}
 	driver.setFrequency(RF95_FREQ);					// Frequency is typically 868.0 or 915.0 in the Americas, or 433.0 in the EU - Are there more settings possible here?
-	driver.setTxPower(23, false);                   // If you are using RFM95/96/97/98 modules which uses the PA_BOOST transmitter pin, then you can set transmitter powers from 5 to 23 dBm (13dBm default).  PA_BOOST?
+	driver.setTxPower(RF95_TX_POWER_DBM, RF95_USE_RFO);                   // If you are using RFM95/96/97/98 modules which uses the PA_BOOST transmitter pin, then you can set transmitter powers from 5 to 23 dBm (13dBm default).  PA_BOOST?
 
-	driver.setModemConfig(RH_RF95::Bw125Cr45Sf2048);
+	driver.setModemConfig(RF95_MODEM_CONFIG);
 	// driver.setModemConfig(RH_RF95::Bw125Cr48Sf4096);	// This optimized the radio for long range - https://www.airspayce.com/mikem/arduino/RadioHead/classRH__RF95.html
 	driver.setLowDatarate();						// https://www.airspayce.com/mikem/arduino/RadioHead/classRH__RF95.html#a8e2df6a6d2cb192b13bd572a7005da67
-	manager.setTimeout(1000);						// 200mSec is the default - may need to extend once we play with other settings on the modem - https://www.airspayce.com/mikem/arduino/RadioHead/classRHReliableDatagram.html
+	manager.setTimeout(LORA_MANAGER_TIMEOUT_MS);						// 200mSec is the default - may need to extend once we play with other settings on the modem - https://www.airspayce.com/mikem/arduino/RadioHead/classRHReliableDatagram.html
 return true;
 }
 
@@ -136,44 +225,32 @@ bool LoRA_Functions::listenForLoRAMessageNode() {
 	uint8_t messageFlag;
 	uint8_t hops;
 	if (manager.recvfromAck(buf, &len, &from, &dest, &id, &messageFlag, &hops))	{	// We have received a message
-		if (len < 9) {
-			Log.info("LoRA message too short - length %u", len);
-			return false;
-		}
+		(void) len;
+		#if LORA_VERBOSE_DIAGNOSTICS
+		Log.info("recvfromAck ok: from=%u dest=%u id=%u flag=%u/%s hops=%u RSSI/SNR=%d/%d", from, dest, id, messageFlag, loraStateNames[(messageFlag <= ALERT_ACK) ? messageFlag : 0], hops, driver.lastRssi(), driver.lastSNR());
+		#endif
 		if ((buf[0] << 8 | buf[1]) != sysStatus.get_magicNumber()) {
-			Log.info("Magic Number mismatch - ignoring message");
+			#if LORA_VERBOSE_DIAGNOSTICS
+			Log.info("Magic Number mismatch - ignoring message from=%u dest=%u id=%u RSSI/SNR=%d/%d", from, dest, id, driver.lastRssi(), driver.lastSNR());
+			#endif
 			return false;
 		} 
 		lora_state = (LoRA_State)messageFlag;
+		#if LORA_VERBOSE_DIAGNOSTICS
 		Log.info("Received from node %d with RSSI / SNR of %d / %d - a %s message with %d hops", from, driver.lastRssi(), driver.lastSNR(), loraStateNames[lora_state], hops);
+		#endif
 
-		Time.setTime(((buf[2] << 24) | (buf[3] << 16) | (buf[4] << 8) | buf[5]));  // Set time based on response from gateway
-		sysStatus.set_frequencyMinutes((buf[6] << 8 | buf[7]));			// Frequency of reporting set by Gateway
-
-		// The gateway may set an alert code for the node
-		sysStatus.set_alertCodeNode(buf[8]);
-		sysStatus.set_alertTimestampNode(Time.now());
-
-		Log.info("Set clock to %s and report frequency to %d minutes", Time.timeStr().c_str(),sysStatus.get_frequencyMinutes());
-
-		if (lora_state == DATA_ACK) {
-			if (len < 12) {
-				Log.info("Data acknowledgement too short - length %u", len);
-				return false;
-			}
-			if(LoRA_Functions::instance().receiveAcknowledmentDataReportNode()) return true;
-		}
-		else if (lora_state == JOIN_ACK) {
-			if (len < 11) {
-				Log.info("Join acknowledgement too short - length %u", len);
-				return false;
-			}
-			if(LoRA_Functions::instance().receiveAcknowledmentJoinRequestNode()) return true;
-		}
+		if (lora_state == DATA_ACK) { if(LoRA_Functions::instance().receiveAcknowledmentDataReportNode()) return true;}
+		else if (lora_state == JOIN_ACK) { if(LoRA_Functions::instance().receiveAcknowledmentJoinRequestNode()) return true;}
 		else {Log.info("Invaled LoRA message flag"); return false;}
 
 	}
-	else LoRA_Functions::clearBuffer();
+	else {
+		#if LORA_VERBOSE_DIAGNOSTICS
+		Log.info("recvfromAck false: mode=%s rxGood=%u rxBad=%u RSSI/SNR=%d/%d", radioModeName(driver.mode()), driver.rxGood(), driver.rxBad(), driver.lastRssi(), driver.lastSNR());
+		#endif
+		LoRA_Functions::clearBuffer();
+	}
 	return false;
 }
 
@@ -243,6 +320,13 @@ bool LoRA_Functions::composeDataReportNode() {
 bool LoRA_Functions::receiveAcknowledmentDataReportNode() {
 	LEDStatus blinkBlue(RGB_COLOR_BLUE, LED_PATTERN_BLINK, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
 
+	if (!isValidGatewayAlertCode(buf[8])) {
+		logRejectedGatewayValue("alert code", buf[8], "DATA_ACK");
+		return false;
+	}
+
+	applyGatewayAckTiming();
+
 	// contents of response for 1-7 handled in common function above
 	sysStatus.set_alertCodeNode(buf[8]);
 
@@ -309,6 +393,21 @@ bool LoRA_Functions::composeJoinRequesttNode() {
 
 bool LoRA_Functions::receiveAcknowledmentJoinRequestNode() {
 	LEDStatus blinkOrange(RGB_COLOR_ORANGE, LED_PATTERN_BLINK, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
+
+	if (!isValidGatewayAlertCode(buf[8])) {
+		logRejectedGatewayValue("alert code", buf[8], "JOIN_ACK");
+		return false;
+	}
+	if (sysStatus.get_nodeNumber() > 10 && !isValidAssignedNodeNumber(buf[9])) {
+		logRejectedGatewayValue("node number", buf[9], "JOIN_ACK");
+		return false;
+	}
+
+	applyGatewayAckTiming();
+	sysStatus.set_alertCodeNode(buf[8]);
+	if (sysStatus.get_alertCodeNode() != 0) {
+		sysStatus.set_alertTimestampNode(Time.now());
+	}
 
 	if (sysStatus.get_nodeNumber() > 10) sysStatus.set_nodeNumber(buf[9]);
 	sysStatus.set_sensorType(buf[10]);

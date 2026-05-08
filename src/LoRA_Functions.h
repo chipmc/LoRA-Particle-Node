@@ -112,6 +112,11 @@ public:
     void sleepLoRaRadio();
 
     /**
+     * @brief Log the current LoRa listening configuration and radio mode.
+     */
+    void logListeningStateEntry();
+
+    /**
      * @brief Initialize the LoRA radio
      * 
      */

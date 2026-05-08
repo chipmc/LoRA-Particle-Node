@@ -44,3 +44,12 @@ The public API is documented in `src/power_management.h`, including a Doxygen us
 
 See `CHANGELOG.md` for release history.
 
+## Release Notes
+
+### v18
+
+- Added node resiliency hardening for LoRa retry, direct-to-gateway post-ACK sleep, and closed-hours scheduling behavior.
+- Preserved node identity and last known schedule across firmware updates by repairing invalid persisted frequency values in place instead of reinitializing sysStatus.
+- Added reusable node PowerManager support for normalized battery telemetry, conservative fallback SOC handling, and Boron PMIC input profile selection for UsbBench, Solar35W, and Auto modes.
+- Reduced PMIC log noise by caching the last applied profile and only reapplying SystemPowerConfiguration on cold boot or profile changes.
+

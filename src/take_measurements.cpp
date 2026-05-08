@@ -1,32 +1,27 @@
 
-// Battery conect information - https://docs.particle.io/reference/device-os/firmware/boron/#batterystate-
-const char* batteryContext[7] = {"Unknown","Not Charging","Charging","Charged","Discharging","Fault","Diconnected"};
-
 //Particle Functions
 #include "Particle.h"
+#include "power_management.h"
 #include "take_measurements.h"
 #include "device_pinout.h"
 #include "MyPersistentData.h"
-#include "power_management.h"
-
-FuelGauge fuelGauge;                                // Needed to address issue with updates in low battery state 
-
-bool hasExternalPowerSource();
-void updatePowerManagementFromObservation();
-void refreshBatteryTelemetry();
 
 bool takeMeasurements() { 
-
-    fuelGauge.quickStart();                           // Start the fuel gauge
-    softDelay(1000);                                  // Give the fuel gauge time to start
-
     // Temperature inside the enclosure
     current.set_internalTempC((int)tmp36TemperatureC(analogRead(TMP36_SENSE_PIN)));
 
-    refreshBatteryTelemetry();
-	updatePowerManagementFromObservation();
-    refreshBatteryTelemetry();
-	Log.info("Battery State: %s, SOC: %2.0f%%",batteryContext[current.get_batteryState()],current.get_stateOfCharge());
+    const PowerReport &powerReport = PowerManager::instance().sample(current.get_internalTempC());
+    double telemetrySoc = powerReport.reading.soc;
+    if (!(telemetrySoc == telemetrySoc)) telemetrySoc = current.get_stateOfCharge();
+    if (!(telemetrySoc == telemetrySoc)) telemetrySoc = 0.0;
+    current.set_stateOfCharge(telemetrySoc);
+    current.set_batteryState(PowerManager::encodeBatteryContext(powerReport.reading.batteryContext));
+    current.set_lastSampleTime(Time.now());
+
+    if (isItSafeToCharge()) {
+      Log.info("Battery State: %s, SOC: %.0f%% (%s), VBAT=%.2f, profile=%s", PowerManager::batteryContextLabel(current.get_batteryState()), current.get_stateOfCharge(), PowerManager::availabilityLabel(powerReport.reading.socStatus), powerReport.reading.batteryVoltage, PowerManager::powerInputProfileLabel(powerReport.activeInputProfile));
+    }
+    else Log.error("Power configuration error");
 
     if (sysStatus.get_nodeNumber() == 0 ) getSignalStrength();
 
@@ -54,25 +49,17 @@ float tmp36TemperatureC (int adcValue) {
     // inaccurate values!
     return (mV - 500) / 10;
 }
-void refreshBatteryTelemetry() {
-	current.set_stateOfCharge(System.batteryCharge());
-	current.set_batteryState(System.batteryState());
+
+
+bool batteryState() {
+  if (current.get_stateOfCharge() > 60) return true;
+  else return false;
 }
 
 
-void updatePowerManagementFromObservation() {
-  PowerObservation obs = {};
-  int batteryStateCode = current.get_batteryState();
-
-  obs.batterySoc = current.get_stateOfCharge();
-  obs.batteryVoltage = fuelGauge.getVCell();
-  obs.temperatureF = (current.get_internalTempC() * 9.0f / 5.0f) + 32.0f;
-  obs.inputPowerPresent = hasExternalPowerSource();
-  obs.batteryIsCharging = batteryStateCode == 2;
-  obs.batteryNotCharging = batteryStateCode == 1;
-  obs.batteryFault = batteryStateCode == 5;
-
-  updatePowerManagementObservation(obs);
+bool isItSafeToCharge()                             // Returns a true or false if the battery is in a safe charging range.
+{
+  return PowerManager::instance().applyRecommendedAction();
 }
 
 
@@ -116,11 +103,6 @@ bool recordCount() // This is where we check to see if an interrupt is set when 
  * @details takes a single unsigned long input in millis
  * 
  */
-void softDelay(uint32_t t) {
+inline void softDelay(uint32_t t) {
   for (uint32_t ms = millis(); millis() - ms < t; Particle.process());  //  safer than a delay()
-}
-
-bool hasExternalPowerSource() {
-  int powerSource = System.powerSource();
-  return powerSource == POWER_SOURCE_VIN || powerSource == POWER_SOURCE_USB_HOST;
 }

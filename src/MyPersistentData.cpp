@@ -29,10 +29,24 @@ sysStatusData::~sysStatusData() {
 void sysStatusData::setup() {
     fram.begin();
 
+    repairedFrequencyMinutes_ = false;
+
     sysStatus
     //    .withLogData(true)
         .withSaveDelayMs(100)
         .load();
+
+    if (repairedFrequencyMinutes_) {
+        sysStatus.flush(true);
+        repairedFrequencyMinutes_ = false;
+    }
+
+    Log.info(
+        "sysStatus valid: node=%u frequency=%u openHours=%d lastConnection=%lu",
+        sysStatus.get_nodeNumber(),
+        sysStatus.get_frequencyMinutes(),
+        sysStatus.get_openHours() ? 1 : 0,
+        (unsigned long)sysStatus.get_lastConnection());
 
     // Log.info("sizeof(SysData): %u", sizeof(SysData));
 }
@@ -44,13 +58,13 @@ void sysStatusData::loop() {
 bool sysStatusData::validate(size_t dataSize) {
     bool valid = PersistentDataFRAM::validate(dataSize);
     if (valid) {
-        // If test1 < 0 or test1 > 100, then the data is invalid
-
-        if (sysStatus.get_frequencyMinutes() <=0 || sysStatus.get_frequencyMinutes() > 60) {
-            Log.info("data not valid frequency minutes =%d", sysStatus.get_frequencyMinutes());
-            valid = false;
+        uint16_t frequencyMinutes = sysStatus.get_frequencyMinutes();
+        if (frequencyMinutes < MIN_REPORT_FREQUENCY_MINUTES || frequencyMinutes > MAX_REPORT_FREQUENCY_MINUTES) {
+            Log.info("sysStatus repaired frequencyMinutes from %u to 60", frequencyMinutes);
+            sysStatus.set_frequencyMinutes(DEFAULT_REPORT_FREQUENCY_MINUTES);
+            repairedFrequencyMinutes_ = true;
         }
-        else if (sysStatus.get_nodeNumber() < 1 || sysStatus.get_nodeNumber() > 11) {
+        if (sysStatus.get_nodeNumber() < 1 || sysStatus.get_nodeNumber() > 11) {
             Log.info("data not valid node number =%d", sysStatus.get_nodeNumber());
             valid = false;
         }
@@ -74,7 +88,7 @@ void sysStatusData::initialize() {
     sysStatus.set_magicNumber(27617);
     // sysStatus.set_firmwareRelease(1);
     sysStatus.set_resetCount(0);
-    sysStatus.set_frequencyMinutes(60);
+    sysStatus.set_frequencyMinutes(DEFAULT_REPORT_FREQUENCY_MINUTES);
     sysStatus.set_alertCodeNode(1);
     sysStatus.set_alertTimestampNode(0);
     sysStatus.set_openHours(true);

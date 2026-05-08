@@ -1,179 +1,170 @@
-/**
- * @file power_management.h
- * @author Chip McClelland
- * @brief Reusable, time-agnostic power management API for Particle devices.
- *
- * @details
- * This module accepts raw power observations from the application, tracks
- * charging anomalies using event-based counters, exposes an explicit charging
- * safety-policy entry point, and performs bounded remediation when the
- * application decides it is safe to do so. The public API is intentionally
- * compact so the same module can be reused across LoRa, cellular, and Wi-Fi
- * firmware.
- *
- * @par Example Usage
- * @code{.cpp}
- * void setup() {
- *     initializePowerManagement();
- * }
- *
- * void collectPowerData() {
- *     PowerObservation obs = {};
- *     obs.batterySoc = System.batteryCharge();
- *     obs.batteryVoltage = fuelGauge.getVCell();
- *     obs.temperatureF = measuredTemperatureF;
- *     obs.inputPowerPresent = externalPowerPresent;
- *     obs.batteryIsCharging = System.batteryState() == 2;
- *     obs.batteryNotCharging = System.batteryState() == 1;
- *     obs.batteryFault = System.batteryState() == 5;
- *
- *     updatePowerManagementObservation(obs);
- * }
- *
- * void loop() {
- *     if (safeToApplySafetyPolicy) {
- *         applyPowerManagementSafetyPolicy();
- *     }
- *
- *     if (newRecoveryWindow) {
- *         resetPowerManagementRecoveryCycle();
- *     }
- *
- *     if (safeToRemediate) {
- *         PowerManagementAlertCode alert = runPowerManagementRemediation();
- *         if (alert == PowerManagementAlertCode::REQUEST_POWER_CYCLE) {
- *             // Escalate using application-specific recovery.
- *         }
- *     }
- * }
- * @endcode
- */
 #ifndef POWER_MANAGEMENT_H
 #define POWER_MANAGEMENT_H
 
 #include "Particle.h"
+#include "config.h"
 
-/**
- * @brief Snapshot of raw battery and power inputs for one measurement cycle.
- */
-struct PowerObservation {
-	/** Battery state of charge in percent from 0 to 100. */
-	float batterySoc;
-	/** Battery terminal voltage in volts. */
-	float batteryVoltage;
-	/** Measured battery or enclosure temperature in degrees Fahrenheit. */
-	float temperatureF;
-	/** True when external input power such as VIN or USB host power is present. */
-	bool inputPowerPresent;
-	/** True when the platform reports that the battery is actively charging. */
-	bool batteryIsCharging;
-	/** True when the platform reports that the battery is not charging. */
-	bool batteryNotCharging;
-	/** True when the platform reports a battery or charger fault. */
-	bool batteryFault;
+enum class PowerAvailability : uint8_t {
+	Valid,
+	Unknown,
+	NotAvailable,
+	Fallback,
 };
 
-/**
- * @brief Compact power-management outcomes exposed to the application.
- */
-enum class PowerManagementAlertCode : uint8_t {
-	NONE = 0,
-	OBSERVING = 1,
-	CHARGE_TOGGLE_DONE = 2,
-	REQUEST_POWER_CYCLE = 3,
-	SERVICE_REQUIRED = 4
+enum class PowerBatteryContext : uint8_t {
+	Unknown = 0,
+	NotCharging = 1,
+	Charging = 2,
+	Charged = 3,
+	Discharging = 4,
+	Fault = 5,
+	Disconnected = 6,
+	NotApplicable = 7,
 };
 
-/**
- * @brief Initializes module state and applies the normal startup charging configuration.
- *
- * @details
- * On platforms with supported PMIC charge control, this initializes the power
- * configuration with the normal charging-enabled solar settings.
- * On unsupported platforms, this resets internal state and returns success
- * without attempting hardware charge control.
- *
- * @return `true` if initialization completed successfully for the current
- * platform, otherwise `false`.
- */
-bool initializePowerManagement();
+enum class LowPowerMode : uint8_t {
+	Normal,
+	Conserve,
+	Critical,
+	Survival,
+};
 
-/**
- * @brief Applies the current charging safety policy using the latest observation.
- *
- * @details
- * This function may change charging enable or disable state based on the last
- * observation, typically for temperature-based charging safety. It should only
- * be called by the main application when it is safe to change PMIC or charger
- * configuration. If no valid observation is available, this function does
- * nothing and returns success. Observation updates themselves do not apply
- * this policy automatically.
- *
- * @return `true` if no action was needed or the safety policy applied
- * successfully, otherwise `false`.
- */
-bool applyPowerManagementSafetyPolicy();
+enum class ChargingCommand : uint8_t {
+	NoAction,
+	Enable,
+	Disable,
+	NotAvailable,
+};
 
-/**
- * @brief Resets the caller-defined remediation cycle state.
- *
- * @details
- * This clears the per-cycle recovery attempt counter without affecting the
- * anomaly counters or the last observation. The application should call this
- * when it decides a new recovery window or operational cycle has begun.
- */
-void resetPowerManagementRecoveryCycle();
+enum class PowerInputProfile : uint8_t {
+	UsbBench,
+	Solar35W,
+	Auto,
+	NotApplicable,
+};
 
-/**
- * @brief Updates the module with the latest raw power observation.
- *
- * @details
- * This function updates only internal state, charging expectation evaluation,
- * anomaly counters, and alert state. It does not change PMIC or charger
- * configuration and is safe to call during normal measurement handling.
- *
- * @param obs Raw battery and power inputs for the current cycle.
- */
-void updatePowerManagementObservation(const PowerObservation& obs);
+#if POWER_MANAGER_INPUT_PROFILE == POWER_MANAGER_INPUT_PROFILE_USB_BENCH
+constexpr PowerInputProfile POWER_MANAGER_DEFAULT_INPUT_PROFILE = PowerInputProfile::UsbBench;
+#elif POWER_MANAGER_INPUT_PROFILE == POWER_MANAGER_INPUT_PROFILE_SOLAR35W
+constexpr PowerInputProfile POWER_MANAGER_DEFAULT_INPUT_PROFILE = PowerInputProfile::Solar35W;
+#elif POWER_MANAGER_INPUT_PROFILE == POWER_MANAGER_INPUT_PROFILE_AUTO
+constexpr PowerInputProfile POWER_MANAGER_DEFAULT_INPUT_PROFILE = PowerInputProfile::Auto;
+#else
+#error "Unsupported POWER_MANAGER_INPUT_PROFILE selection"
+#endif
 
-/**
- * @brief Performs bounded remediation for a sustained charging anomaly.
- *
- * @details
- * The caller is responsible for deciding when it is safe to run remediation.
- * If thresholds are exceeded, the module may perform a short bounded charging
- * toggle and returns a compact alert describing the outcome. Remediation is
- * skipped when the latest observation indicates charging temperature is unsafe.
- * This function never resets the MCU or directly power cycles hardware.
- *
- * @return The most recent remediation outcome.
- */
-PowerManagementAlertCode runPowerManagementRemediation();
+#if POWER_MANAGER_INPUT_PROFILE == POWER_MANAGER_INPUT_PROFILE_SOLAR35W
+constexpr PowerInputProfile POWER_MANAGER_CONFIGURED_FALLBACK_INPUT_PROFILE = PowerInputProfile::Solar35W;
+#else
+constexpr PowerInputProfile POWER_MANAGER_CONFIGURED_FALLBACK_INPUT_PROFILE = PowerInputProfile::UsbBench;
+#endif
 
-/**
- * @brief Returns the most recent power-management alert.
- *
- * @return The last alert code produced by observation or remediation logic.
- */
-PowerManagementAlertCode getLastPowerManagementAlert();
+struct PowerCapabilities {
+	bool hasSoc = false;
+	bool hasBatteryVoltage = false;
+	bool hasBatteryContext = false;
+	bool hasChargingControl = false;
+	bool hasPmicPowerConfiguration = false;
+	bool hasPmicRemediation = false;
+};
 
-/**
- * @brief Clears the stored power-management alert.
- */
-void clearPowerManagementAlert();
+struct PowerReading {
+	float soc = NAN;
+	PowerAvailability socStatus = PowerAvailability::Unknown;
+	float batteryVoltage = NAN;
+	PowerAvailability batteryVoltageStatus = PowerAvailability::Unknown;
+	PowerBatteryContext batteryContext = PowerBatteryContext::Unknown;
+	PowerAvailability batteryContextStatus = PowerAvailability::Unknown;
+	bool quickStartUsed = false;
+	bool usedSocFallback = false;
+	bool usedVoltageFallback = false;
+	uint8_t stabilizationAttempts = 0;
+};
 
-/**
- * @brief Returns the current count of consecutive expected-but-not-charging samples.
- *
- * @return The number of consecutive samples where charging was expected but not observed.
- */
-uint8_t getConsecutiveChargingExpectedNotChargingSamples();
+struct PowerPolicy {
+	LowPowerMode mode = LowPowerMode::Survival;
+	bool shouldAllowDiscoveryMode = false;
+	bool shouldAllowRecoveryPowerdown = false;
+	bool shouldUseReducedRetry = true;
+	bool shouldUseLongSleep = true;
+};
 
-/**
- * @brief Returns the total number of remediation attempts performed.
- *
- * @return The cumulative count of charging recovery attempts since startup.
- */
-uint16_t getTotalPowerRecoveryAttempts();
+struct PowerAction {
+	ChargingCommand chargingCommand = ChargingCommand::NoAction;
+	PowerAvailability chargingControlStatus = PowerAvailability::NotAvailable;
+	PowerAvailability pmicRemediationStatus = PowerAvailability::NotAvailable;
+};
+
+struct PowerReport {
+	PowerCapabilities capabilities;
+	PowerReading reading;
+	PowerPolicy policy;
+	PowerAction action;
+	PowerInputProfile activeInputProfile = PowerInputProfile::NotApplicable;
+};
+
+struct PowerManagerConfig {
+	float minSafeChargeTempC = 0.0f;
+	float maxSafeChargeTempC = 37.0f;
+	float minSocForDiscoveryMode = 30.0f;
+	float minSocForRecoveryPowerdown = 40.0f;
+	float fullBatteryVoltageValidSoc100 = 4.15f;
+	float normalMinSoc = 50.0f;
+	float conserveMinSoc = 35.0f;
+	float criticalMinSoc = 20.0f;
+	uint8_t maxStabilizationAttempts = 3;
+	uint16_t stabilizationDelayMs[3] = {100, 300, 600};
+	uint16_t stabilizationBudgetMs = 1000;
+	PowerInputProfile inputProfile = POWER_MANAGER_DEFAULT_INPUT_PROFILE;
+};
+
+class PowerManager {
+public:
+	static PowerManager &instance();
+
+	bool setup(const PowerManagerConfig &config = PowerManagerConfig());
+	void beginWakeCycle(bool wokeFromSleep = true);
+	const PowerReport &sample(float enclosureTempC);
+	bool applyRecommendedAction();
+	const PowerReport &lastReport() const;
+	const PowerPolicy &lastPolicy() const;
+
+	static uint8_t encodeBatteryContext(PowerBatteryContext context);
+	static const char *batteryContextLabel(PowerBatteryContext context);
+	static const char *batteryContextLabel(uint8_t encodedContext);
+	static const char *availabilityLabel(PowerAvailability availability);
+	static const char *powerInputProfileLabel(PowerInputProfile profile);
+
+private:
+	PowerManager() = default;
+
+	PowerCapabilities detectCapabilities() const;
+	PowerReading collectReading(float enclosureTempC);
+	PowerReading collectRawReading(float enclosureTempC);
+	PowerPolicy buildPolicy(const PowerReading &reading) const;
+	PowerAction buildAction(const PowerReading &reading, float enclosureTempC) const;
+	bool shouldStabilize(const PowerReading &reading) const;
+	bool isSocSuspicious(const PowerReading &reading, bool logIt = false) const;
+	float estimateConservativeFallbackSocFromVoltage(float batteryVoltage) const;
+	bool applyBasePowerProfile();
+	PowerInputProfile configuredFallbackInputProfile() const;
+	PowerInputProfile resolvePowerInputProfile(int &powerSource, const char *&reason) const;
+	bool setChargingEnabled(bool enableCharging);
+	void updateLastKnownGood(const PowerReading &reading);
+	void applyFallback(PowerReading &reading) const;
+
+	PowerManagerConfig config_;
+	PowerReport lastReport_;
+	ChargingCommand lastAppliedChargingCommand_ = ChargingCommand::NoAction;
+	uint32_t wakeCycleStartedAtMs_ = 0;
+	bool wokeFromSleep_ = false;
+	bool configured_ = false;
+	float lastKnownGoodSoc_ = NAN;
+	float lastKnownGoodVoltage_ = NAN;
+	PowerBatteryContext lastKnownGoodContext_ = PowerBatteryContext::Unknown;
+	PowerInputProfile activeInputProfile_ = PowerInputProfile::NotApplicable;
+	PowerInputProfile lastAppliedInputProfile_ = PowerInputProfile::NotApplicable;
+	bool pmicProfileAppliedThisBoot_ = false;
+};
 
 #endif
