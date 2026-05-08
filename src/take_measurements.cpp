@@ -1,27 +1,25 @@
 
-// Battery conect information - https://docs.particle.io/reference/device-os/firmware/boron/#batterystate-
-const char* batteryContext[7] = {"Unknown","Not Charging","Charging","Charged","Discharging","Fault","Diconnected"};
-
 //Particle Functions
 #include "Particle.h"
+#include "power_management.h"
 #include "take_measurements.h"
 #include "device_pinout.h"
 #include "MyPersistentData.h"
 
-FuelGauge fuelGauge;                                // Needed to address issue with updates in low battery state 
-
 bool takeMeasurements() { 
-
-    fuelGauge.quickStart();                           // Start the fuel gauge
-    softDelay(1000);                                  // Give the fuel gauge time to start
-
     // Temperature inside the enclosure
     current.set_internalTempC((int)tmp36TemperatureC(analogRead(TMP36_SENSE_PIN)));
 
-    batteryState();
+    const PowerReport &powerReport = PowerManager::instance().sample(current.get_internalTempC());
+    double telemetrySoc = powerReport.reading.soc;
+    if (!(telemetrySoc == telemetrySoc)) telemetrySoc = current.get_stateOfCharge();
+    if (!(telemetrySoc == telemetrySoc)) telemetrySoc = 0.0;
+    current.set_stateOfCharge(telemetrySoc);
+    current.set_batteryState(PowerManager::encodeBatteryContext(powerReport.reading.batteryContext));
+    current.set_lastSampleTime(Time.now());
 
     if (isItSafeToCharge()) {
-      Log.info("Battery State: %s, SOC: %2.0f%%",batteryContext[current.get_batteryState()],current.get_stateOfCharge());
+      Log.info("Battery State: %s, SOC: %.0f%% (%s), VBAT=%.2f, profile=%s", PowerManager::batteryContextLabel(current.get_batteryState()), current.get_stateOfCharge(), PowerManager::availabilityLabel(powerReport.reading.socStatus), powerReport.reading.batteryVoltage, PowerManager::powerInputProfileLabel(powerReport.activeInputProfile));
     }
     else Log.error("Power configuration error");
 
@@ -54,7 +52,6 @@ float tmp36TemperatureC (int adcValue) {
 
 
 bool batteryState() {
-  current.set_stateOfCharge(System.batteryCharge());                   // Assign to system value
   if (current.get_stateOfCharge() > 60) return true;
   else return false;
 }
@@ -62,34 +59,7 @@ bool batteryState() {
 
 bool isItSafeToCharge()                             // Returns a true or false if the battery is in a safe charging range.
 {
-  // current.set_internalTempC(40);                  // This is a test value for the temperature
-  bool returnVal = false;
-
-  if (current.get_internalTempC() < 0 || current.get_internalTempC() > 37 )  {  // Reference: (32 to 113 but with safety)
-
-    if (!initializePowerCfg(false)) {               // Disable charging if the temperature is outside of the safe range
-      current.set_batteryState(1);                    // Overwrites the values from the batteryState API to reflect that we are "Not Charging"
-      Log.info("Charging disabled - temp is %iC",current.get_internalTempC() );
-      returnVal = true;
-    }
-    else  {
-      Log.error("Unable to disable charging");
-      current.set_batteryState(0);                    // Unknown battery state
-    }
-
-  }
-  else {
-    if (!initializePowerCfg(true)) {                                      // Enable charging if the temperature is within the safe range
-      current.set_batteryState(System.batteryState());                      // Call before isItSafeToCharge() as it may overwrite the context
-      Log.info("Charging enabled - inside temp range");
-      returnVal = true;
-    }
-    else  {
-      current.set_batteryState(0);                    // Unknown battery state
-      Log.error("Unable to enable charging");
-    }
-  }
-  return returnVal;
+  return PowerManager::instance().applyRecommendedAction();
 }
 
 

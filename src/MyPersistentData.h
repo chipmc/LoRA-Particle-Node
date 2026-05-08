@@ -27,6 +27,10 @@
 //
 // ********************************************************************
 
+static const uint16_t MIN_REPORT_FREQUENCY_MINUTES = 1;
+static const uint16_t MAX_REPORT_FREQUENCY_MINUTES = 1440;
+static const uint16_t DEFAULT_REPORT_FREQUENCY_MINUTES = 60;
+
 class sysStatusData : public StorageHelperRK::PersistentDataFRAM {
 public:
 
@@ -182,6 +186,7 @@ protected:
     //Since these variables are only used internally - They can be private. 
 	static const uint32_t SYS_DATA_MAGIC = 0x20a99e75;
 	static const uint16_t SYS_DATA_VERSION = 2;
+	bool repairedFrequencyMinutes_ = false;
 
 };
 
