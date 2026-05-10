@@ -8,9 +8,9 @@ In this system, every communication is initiated by the node. The gateway receiv
 
 ## Current Release
 
-- Firmware release: `v14.1`
-- Particle product version: `14`
-- Target Device OS in the current workspace: `6.3.5`
+- Firmware release: `v20`
+- Particle product version: `20`
+- Target Device OS in the current workspace: `6.4.0`
 
 ## v14 Highlights
 
@@ -45,6 +45,12 @@ The public API is documented in `src/power_management.h`, including a Doxygen us
 See `CHANGELOG.md` for release history.
 
 ## Release Notes
+
+### v20
+
+- Hardened node success-rate reporting so logged delivery percentages are zero-safe, bounded to `0.00`-`100.00`, and no longer exceed 100 after resets or low-sample startup windows.
+- Normalized runtime firmware logging to the centralized `Log.*` handler in app code and active runtime support libraries, reducing partial-line output that could interleave with system logs on Boron-class devices.
+- Added production-safe debug gates for field-only diagnostics using `FIELD_DEBUG_BUILD` and the existing `VERBOSE_SYSTEM_LOGS` controls.
 
 ### v18
 

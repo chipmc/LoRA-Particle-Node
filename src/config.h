@@ -13,4 +13,8 @@
 #define VERBOSE_SYSTEM_LOGS 0
 #endif
 
+#ifndef FIELD_DEBUG_BUILD
+#define FIELD_DEBUG_BUILD 0
+#endif
+
 #endif

@@ -1,6 +1,33 @@
 #include "AB1805_RK.h"
 
 
+namespace {
+
+#if (defined(FIELD_DEBUG_BUILD) && FIELD_DEBUG_BUILD) || (defined(VERBOSE_SYSTEM_LOGS) && VERBOSE_SYSTEM_LOGS)
+void logRegisterPreview(const uint8_t *data, size_t size, const char *label) {
+    const size_t maxPreviewBytes = 8;
+    const size_t previewBytes = (size < maxPreviewBytes) ? size : maxPreviewBytes;
+    char preview[(maxPreviewBytes * 3) + 1] = {0};
+    size_t offset = 0;
+
+    for (size_t ii = 0; ii < previewBytes && offset < sizeof(preview); ii++) {
+        int written = snprintf(&preview[offset], sizeof(preview) - offset, (ii + 1 < previewBytes) ? "%02x " : "%02x", data[ii]);
+        if (written <= 0) {
+            break;
+        }
+        offset += (size_t)written;
+        if (offset >= sizeof(preview)) {
+            preview[sizeof(preview) - 1] = '\0';
+            break;
+        }
+    }
+
+    _log.trace("%s size=%u bytes=%s%s", label, (unsigned)size, preview, (size > previewBytes) ? " ..." : "");
+}
+#endif
+
+}
+
 
 static Logger _log("app.ab1805");
 
@@ -392,20 +419,21 @@ bool AB1805::repeatingInterrupt(struct tm *timeptr, uint8_t rptValue) {
         return false;
     }
 
-#if 1
+#if (defined(FIELD_DEBUG_BUILD) && FIELD_DEBUG_BUILD) || (defined(VERBOSE_SYSTEM_LOGS) && VERBOSE_SYSTEM_LOGS)
     {
         // TESTING
         uint8_t array2[7];
 
         bResult = readRegisters(REG_HUNDREDTH_ALARM, array2, sizeof(array2));
-        _log.info("alarm (first) current (second)");
-        _log.dump(array2, sizeof(array2));
-        _log.print("\n");
+        if (bResult) {
+            logRegisterPreview(array2, sizeof(array2), "alarm/current snapshot A");
+        }
 
         uint8_t array3[8];
         bResult = readRegisters(REG_HUNDREDTH, array3, sizeof(array3));
-        _log.dump(array3, sizeof(array3));
-        _log.print("\n");
+        if (bResult) {
+            logRegisterPreview(array3, sizeof(array3), "alarm/current snapshot B");
+        }
     }
 #endif
 

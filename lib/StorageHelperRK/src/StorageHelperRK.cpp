@@ -1,5 +1,36 @@
 #include "StorageHelperRK.h"
 
+namespace {
+
+void logDataPreview(const char *prefix, const uint8_t *data, size_t size) {
+#if (defined(FIELD_DEBUG_BUILD) && FIELD_DEBUG_BUILD) || (defined(VERBOSE_SYSTEM_LOGS) && VERBOSE_SYSTEM_LOGS)
+    const size_t maxPreviewBytes = 16;
+    const size_t previewBytes = (size < maxPreviewBytes) ? size : maxPreviewBytes;
+    char preview[(maxPreviewBytes * 3) + 1] = {0};
+    size_t offset = 0;
+
+    for (size_t ii = 0; ii < previewBytes && offset < sizeof(preview); ii++) {
+        int written = snprintf(&preview[offset], sizeof(preview) - offset, (ii + 1 < previewBytes) ? "%02x " : "%02x", data[ii]);
+        if (written <= 0) {
+            break;
+        }
+        offset += (size_t)written;
+        if (offset >= sizeof(preview)) {
+            preview[sizeof(preview) - 1] = '\0';
+            break;
+        }
+    }
+
+    Log.trace("%s size=%u bytes=%s%s", prefix, (unsigned)size, preview, (size > previewBytes) ? " ..." : "");
+#else
+    (void)prefix;
+    (void)data;
+    (void)size;
+#endif
+}
+
+}
+
 
 
 //
@@ -109,8 +140,7 @@ bool StorageHelperRK::PersistentDataBase::validate(size_t dataSize) {
 
     if (logData) {
         Log.info("validating data size=%d", (int)dataSize);
-        Log.dump((const uint8_t *)savedDataHeader, dataSize);
-        Log.print("\n");
+        logDataPreview("persistent data validate", (const uint8_t *)savedDataHeader, dataSize);
     }
 
     if (dataSize >= 12 && 
@@ -149,8 +179,7 @@ void StorageHelperRK::PersistentDataBase::initialize() {
 void StorageHelperRK::PersistentDataBase::save() {
     if (logData) {
         Log.info("saving data size=%d", (int)savedDataHeader->size);
-        Log.dump((const uint8_t *)savedDataHeader, savedDataHeader->size);
-        Log.print("\n");
+        logDataPreview("persistent data save", (const uint8_t *)savedDataHeader, savedDataHeader->size);
     }
 }
 
@@ -230,8 +259,8 @@ bool StorageHelperRK::PersistentDataFileSystem::load() {
 void StorageHelperRK::PersistentDataFileSystem::save() {
     WITH_LOCK(*this) {
         int fd = fs->open(filename, O_RDWR | O_CREAT | O_TRUNC);
-        if (fd != -1) {            
-            size_t count = fs->write((const uint8_t *)savedDataHeader, savedDataSize);
+        if (fd != -1) {
+            fs->write((const uint8_t *)savedDataHeader, savedDataSize);
 
             // Log.info("request to write %d, wrote %d bytes", (int)savedDataSize, (int) count);
             // Log.dump((const uint8_t *)savedDataHeader, savedDataSize);

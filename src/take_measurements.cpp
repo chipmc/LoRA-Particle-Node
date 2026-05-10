@@ -6,6 +6,10 @@
 #include "device_pinout.h"
 #include "MyPersistentData.h"
 
+static bool isItSafeToCharge() {                    // Returns true when PowerManager accepts the current charging policy.
+  return PowerManager::instance().applyRecommendedAction();
+}
+
 bool takeMeasurements() { 
     // Temperature inside the enclosure
     current.set_internalTempC((int)tmp36TemperatureC(analogRead(TMP36_SENSE_PIN)));
@@ -57,12 +61,6 @@ bool batteryState() {
 }
 
 
-bool isItSafeToCharge()                             // Returns a true or false if the battery is in a safe charging range.
-{
-  return PowerManager::instance().applyRecommendedAction();
-}
-
-
 void getSignalStrength() {
   char signalStr[16];
   const char* radioTech[10] = {"Unknown","None","WiFi","GSM","UMTS","CDMA","LTE","IEEE802154","LTE_CAT_M1","LTE_CAT_NB1"};
@@ -78,7 +76,7 @@ void getSignalStrength() {
   float qualityPercentage = sig.getQuality();
 
   snprintf(signalStr,sizeof(signalStr), "%s S:%2.0f%%, Q:%2.0f%% ", radioTech[rat], strengthPercentage, qualityPercentage);
-  Log.info(signalStr);
+  Log.info("%s", signalStr);
 }
 
 

@@ -36,6 +36,7 @@
 // v13.00 - Adding code to ensure the device charges reliably - Removed PMIC - Fixed the internal temp to int8_t
 // v15.00 - Recovery build branched from the known-good v13 LoRa behavior for clean production deployment ordering
 // v18.00 - Node resiliency, persistent schedule repair, and Boron PowerManager PMIC profile control for bench and solar deployments
+// v20.00 - Success-rate math hardening, centralized logging normalization, and debug-log gating cleanup for production field builds
 
 
 #define NODENUMBEROFFSET 10000UL					// By how much do we off set each node by node number
@@ -58,7 +59,7 @@ STARTUP(System.enableFeature(FEATURE_RESET_INFO));
 // For monitoring / debugging, you have some options on the next few lines - uncomment one
 SerialLogHandler logHandler(LOG_LEVEL_INFO);     // Easier to see the program flow
 
-PRODUCT_VERSION(18);									// For now, we are putting nodes and gateways in the same product group - need to deconflict #
+PRODUCT_VERSION(20);									// For now, we are putting nodes and gateways in the same product group - need to deconflict #
 
 #ifndef ENABLE_MESH_RELAY_LISTEN_WINDOW
 #define ENABLE_MESH_RELAY_LISTEN_WINDOW 0

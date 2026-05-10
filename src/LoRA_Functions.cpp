@@ -1,6 +1,7 @@
 #include "LoRA_Functions.h"
 #include <RHMesh.h>
 #include <RH_RF95.h>						        // https://docs.particle.io/reference/device-os/libraries/r/RH_RF95/
+#include "config.h"
 #include "device_pinout.h"
 #include "MyPersistentData.h"
 
@@ -126,6 +127,27 @@ void applyGatewayAckTiming() {
 	Log.info("Set clock to %s and report frequency to %d minutes", Time.timeStr().c_str(),sysStatus.get_frequencyMinutes());
 }
 
+
+float computeSuccessPercent(uint8_t attemptCount, uint8_t successCount) {
+	const float safeAttemptCount = (attemptCount == 0) ? 1.0f : (float)attemptCount;
+	const float rawSuccessPercent = ((float)successCount / safeAttemptCount) * 100.0f;
+	float clampedSuccessPercent = rawSuccessPercent;
+
+	if (clampedSuccessPercent < 0.0f) {
+		clampedSuccessPercent = 0.0f;
+	}
+	else if (clampedSuccessPercent > 100.0f) {
+		clampedSuccessPercent = 100.0f;
+	}
+
+	#if VERBOSE_SYSTEM_LOGS
+	if (clampedSuccessPercent != rawSuccessPercent) {
+		Log.info("Success rate corrected: raw=%.2f clamped=%.2f", rawSuccessPercent, clampedSuccessPercent);
+	}
+	#endif
+
+	return clampedSuccessPercent;
+}
 }
 
 
@@ -256,14 +278,12 @@ bool LoRA_Functions::listenForLoRAMessageNode() {
 
 
 bool LoRA_Functions::composeDataReportNode() {
-	float successPercent;
+	float successPercent = 0.0f;
 
 	if (current.get_messageCount()==0) {		// 8-bit number so need to protect against divide by zero on reset or wrap around
-		successPercent = 0.0;	
 		current.set_messageCount(0);
 		current.set_successCount(0);
 	}
-	else successPercent = ((current.get_successCount()+1.0)/(float)current.get_messageCount()) * 100.0;  // Add one to success because we are receving the message
 	current.set_messageCount(current.get_messageCount()+1);
 
 	digitalWrite(BLUE_LED,HIGH);
@@ -298,6 +318,7 @@ bool LoRA_Functions::composeDataReportNode() {
 		// It has been reliably delivered to the next node.
 		// Now wait for a reply from the ultimate server 
 		current.set_successCount(current.get_successCount()+1);
+		successPercent = computeSuccessPercent(current.get_messageCount(), current.get_successCount());
 		current.set_RSSI(driver.lastRssi());				// Set these here - will send on next data report
 		current.set_SNR(driver.lastSNR());
 		Log.info("Node %d data report delivered - success rate %4.2f and  RSSI/SNR of %d / %d ",sysStatus.get_nodeNumber(),successPercent,current.get_RSSI(), current.get_SNR());
@@ -305,12 +326,15 @@ bool LoRA_Functions::composeDataReportNode() {
 		return true;
 	}
 	else if (result == RH_ROUTER_ERROR_NO_ROUTE) {
+		successPercent = computeSuccessPercent(current.get_messageCount(), current.get_successCount());
         Log.info("Node %d - Data report send to gateway %d failed - No Route - success rate %4.2f", sysStatus.get_nodeNumber(), GATEWAY_ADDRESS, successPercent);
     }
     else if (result == RH_ROUTER_ERROR_UNABLE_TO_DELIVER) {
+		successPercent = computeSuccessPercent(current.get_messageCount(), current.get_successCount());
         Log.info("Node %d - Data report send to gateway %d failed - Unable to Deliver - success rate %4.2f", sysStatus.get_nodeNumber(), GATEWAY_ADDRESS,successPercent);
 	}
 	else  {
+		successPercent = computeSuccessPercent(current.get_messageCount(), current.get_successCount());
 		Log.info("Node %d - Data report send to gateway %d failed  - Unknown - success rate %4.2f", sysStatus.get_nodeNumber(), GATEWAY_ADDRESS,successPercent);
 	}
 	digitalWrite(BLUE_LED, LOW);
