@@ -56,7 +56,7 @@ const pin_t LED_POWER_PIN = A3;
 bool initializePinModes() {
     Log.info("Initalizing the pinModes");
     // Define as inputs or outputs
-    pinMode(BUTTON_PIN,INPUT);               // User button on the carrier board - active LOW
+    pinMode(BUTTON_PIN,INPUT);                      // User button on the carrier board - active LOW
     pinMode(WAKEUP_PIN,INPUT);                      // This pin is active HIGH
     pinMode(BLUE_LED,OUTPUT);                       // On the Boron itself
     pinMode(INT_PIN, INPUT);
@@ -71,10 +71,10 @@ void sensorControl(int sensorType, bool enableSensor) { // What is the sensor ty
     digitalWrite(MODULE_POWER_PIN,false);           // Enable or disable the sensor
 
     if (sensorType == 0) {                          // This is the pressure sensor and we are enabling it
-        digitalWrite(LED_POWER_PIN,HIGH);        // For the pressure sensor, this is how you activate it
+        digitalWrite(LED_POWER_PIN,HIGH);           // For the pressure sensor, this is how you activate it
     }
     else {
-        digitalWrite(LED_POWER_PIN,LOW);         // Turns on the LED on the PIR sensor board
+        digitalWrite(LED_POWER_PIN,LOW);            // Turns on the LED on the PIR sensor board
     }
   }
 
@@ -82,7 +82,7 @@ void sensorControl(int sensorType, bool enableSensor) { // What is the sensor ty
     digitalWrite(MODULE_POWER_PIN,true);
 
     if (sensorType == 0) {                          // This is the pressure sensor and we are enabling it
-        digitalWrite(LED_POWER_PIN,LOW);         // Turns off the LED on the pressure sensor board
+        digitalWrite(LED_POWER_PIN,LOW);            // Turns off the LED on the pressure sensor board
     }
     else {
         digitalWrite(LED_POWER_PIN,HIGH);        // Turns off the LED on the PIR sensor board
