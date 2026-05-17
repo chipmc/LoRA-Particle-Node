@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## v22.00 - 2026-05-17
+
+### Changed
+- Added battery wake stabilization and long-window `Energy24h` trend instrumentation for outdoor solar soak and field stability analysis.
+- Hardened PMIC fault remediation logging, charging reset/recovery visibility, and compact power-source reporting without intended occupancy or sleep-policy behavior changes.
+- Reduced routine serial truncation with compact PMIC, connect, sleep, and wake log cleanup.
+
+### Validated
+- Successful soak validation with no intended changes to occupancy handling, sleep timing, connect sequencing, watchdog behavior, or connection budgets.
+
 ## v14.1 - 2026-04-26
 
 ### Changed

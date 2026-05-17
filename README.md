@@ -8,8 +8,8 @@ The gateway is not implemented in this repository. This firmware expects a compa
 
 ## Current Release
 
-- Firmware release: `v20`
-- Particle product version: `20`
+- Firmware release: `v22.00`
+- Particle product version: `22`
 - Target Device OS used in this workspace: `6.4.0`
 - System mode: `MANUAL`
 - Normal operating model: LoRa-only wake, no cloud dependency during normal reporting
@@ -81,7 +81,7 @@ The code currently supports two sensor modes:
 
 ## Dependencies
 
-The project depends on the following Particle libraries from `project.properties`:
+The release build uses the vendored library copies under `lib/`:
 
 - `AB1805_RK`
 - `MB85RC256V-FRAM-RK`
@@ -234,6 +234,7 @@ In normal field operation:
 
 - Success-rate logging is clamped to `0.00` to `100.00`.
 - Production logging is centralized through `Log.*`.
+- `Energy24h` provides a compact 24-hour energy-balance summary for soak validation and field drift analysis.
 - Verbose field diagnostics should be enabled only through `VERBOSE_SYSTEM_LOGS` or `FIELD_DEBUG_BUILD`.
 - The node will try to rejoin if its identity is invalid or if time is not valid.
 
@@ -261,6 +262,14 @@ In normal field operation:
 See `CHANGELOG.md` for release history.
 
 ## Release Notes
+
+### v22.00
+
+- Added `Energy24h` long-window energy trend instrumentation for outdoor solar soak validation and field stability analysis.
+- Improved PMIC fault/reset visibility, charging recovery summaries, and compact source-selection logging.
+- Reduced serial truncation with connect, sleep, wake, and PMIC log cleanup.
+- No intended occupancy, sleep-policy, watchdog, or connection-budget behavior changes.
+- Successful outdoor soak validation prior to release packaging.
 
 ### v20
 

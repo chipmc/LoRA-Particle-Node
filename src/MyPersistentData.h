@@ -259,6 +259,7 @@ public:
 		// You may want to keep a version number in your data.
 		int8_t internalTempC;                             // Enclosure temperature in degrees C
 		double stateOfCharge;                             // Battery charge level
+		float batteryVoltage;                             // Last observed battery voltage
 		uint8_t batteryState;                             // Stores the current battery state (charging, discharging, etc)
 		time_t lastSampleTime;                            // Timestamp of last data collection
 		int16_t RSSI;                                     // Latest signal strength value (updated adter ack and sent to gateway on next data report)
@@ -268,6 +269,21 @@ public:
 		time_t lastCountTime;                             // When did we last record a count
 		uint16_t hourlyCount;                             // Current Hourly Count
 		uint16_t dailyCount;                              // Current Daily Count
+		time_t energyBaselineTimestamp;                   // Start of the current long-window energy summary
+		float energyBaselineSoc;                          // SOC at the beginning of the current window
+		float energyBaselineVcell;                        // Battery voltage at the beginning of the current window
+		uint16_t energyWakeCount;                         // Wake cycles accumulated in the current window
+		uint16_t energyConnectionCount;                   // Successful cloud connection sessions in the current window
+		uint32_t energyConnectionMs;                      // Total connected duration in the current window
+		uint32_t energyAwakeMs;                           // Total awake duration in the current window
+		uint16_t energyFaultResetCount;                   // PMIC fault reset/remediation count in the current window
+		uint16_t energyChargeFaultCount;                  // Charge fault observations in the current window
+		uint16_t energyCloudConnectionFailures;           // Failed cloud connection attempts in the current window
+		uint16_t energyOccupancyTriggerCount;             // Occupancy events recorded in the current window
+		float energyMinSoc;                               // Lowest observed SOC in the current window
+		float energyMinVcell;                             // Lowest observed battery voltage in the current window
+		uint32_t energyLongestAwakeMs;                    // Longest awake cycle in the current window
+		uint32_t energyLongestConnectionMs;               // Longest cloud connection session in the current window
 		// OK to add more fields here 
 	};
 	CurrentData currentData;
@@ -303,6 +319,9 @@ public:
 	double get_stateOfCharge() const;
 	void set_stateOfCharge(double value);
 
+	float get_batteryVoltage() const;
+	void set_batteryVoltage(float value);
+
 	uint8_t get_batteryState() const;
 	void set_batteryState(uint8_t value);
 
@@ -329,6 +348,51 @@ public:
 
 	uint16_t get_dailyCount() const;
 	void set_dailyCount(uint16_t value);
+
+	time_t get_energyBaselineTimestamp() const;
+	void set_energyBaselineTimestamp(time_t value);
+
+	float get_energyBaselineSoc() const;
+	void set_energyBaselineSoc(float value);
+
+	float get_energyBaselineVcell() const;
+	void set_energyBaselineVcell(float value);
+
+	uint16_t get_energyWakeCount() const;
+	void set_energyWakeCount(uint16_t value);
+
+	uint16_t get_energyConnectionCount() const;
+	void set_energyConnectionCount(uint16_t value);
+
+	uint32_t get_energyConnectionMs() const;
+	void set_energyConnectionMs(uint32_t value);
+
+	uint32_t get_energyAwakeMs() const;
+	void set_energyAwakeMs(uint32_t value);
+
+	uint16_t get_energyFaultResetCount() const;
+	void set_energyFaultResetCount(uint16_t value);
+
+	uint16_t get_energyChargeFaultCount() const;
+	void set_energyChargeFaultCount(uint16_t value);
+
+	uint16_t get_energyCloudConnectionFailures() const;
+	void set_energyCloudConnectionFailures(uint16_t value);
+
+	uint16_t get_energyOccupancyTriggerCount() const;
+	void set_energyOccupancyTriggerCount(uint16_t value);
+
+	float get_energyMinSoc() const;
+	void set_energyMinSoc(float value);
+
+	float get_energyMinVcell() const;
+	void set_energyMinVcell(float value);
+
+	uint32_t get_energyLongestAwakeMs() const;
+	void set_energyLongestAwakeMs(uint32_t value);
+
+	uint32_t get_energyLongestConnectionMs() const;
+	void set_energyLongestConnectionMs(uint32_t value);
 
 		//Members here are internal only and therefore protected
 protected:
@@ -363,7 +427,7 @@ protected:
 
     //Since these variables are only used internally - They can be private. 
 	static const uint32_t CURRENT_DATA_MAGIC = 0x20a99e80;
-	static const uint16_t CURRENT_DATA_VERSION = 3;
+	static const uint16_t CURRENT_DATA_VERSION = 4;
 };
 
 

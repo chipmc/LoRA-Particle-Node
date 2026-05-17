@@ -1,6 +1,7 @@
 
 //Particle Functions
 #include "Particle.h"
+#include "energy_trend.h"
 #include "power_management.h"
 #include "take_measurements.h"
 #include "device_pinout.h"
@@ -19,8 +20,10 @@ bool takeMeasurements() {
     if (!(telemetrySoc == telemetrySoc)) telemetrySoc = current.get_stateOfCharge();
     if (!(telemetrySoc == telemetrySoc)) telemetrySoc = 0.0;
     current.set_stateOfCharge(telemetrySoc);
+    current.set_batteryVoltage(powerReport.reading.batteryVoltage);
     current.set_batteryState(PowerManager::encodeBatteryContext(powerReport.reading.batteryContext));
     current.set_lastSampleTime(Time.now());
+    EnergyTrend::instance().noteMeasurement(powerReport);
 
     if (isItSafeToCharge()) {
       Log.info("Battery State: %s, SOC: %.0f%% (%s), VBAT=%.2f, profile=%s", PowerManager::batteryContextLabel(current.get_batteryState()), current.get_stateOfCharge(), PowerManager::availabilityLabel(powerReport.reading.socStatus), powerReport.reading.batteryVoltage, PowerManager::powerInputProfileLabel(powerReport.activeInputProfile));
@@ -84,6 +87,7 @@ bool recordCount() // This is where we check to see if an interrupt is set when 
 {
   pinSetFast(BLUE_LED);                                                                               // Turn on the blue LED
 
+  EnergyTrend::instance().noteOccupancyTrigger();
   current.set_lastCountTime(Time.now());
   current.set_hourlyCount(current.get_hourlyCount() +1);                                              // Increment the PersonCount
   current.set_dailyCount(current.get_dailyCount() +1);                                               // Increment the PersonCount

@@ -1,7 +1,10 @@
 #include "Particle.h"
 #include "MB85RC256V-FRAM-RK.h"
 #include "StorageHelperRK.h"
+#include "config.h"
 #include "MyPersistentData.h"
+
+#include <math.h>
 
 MB85RC64 fram(Wire, 0);  
 
@@ -36,14 +39,19 @@ void sysStatusData::setup() {
         .withSaveDelayMs(100)
         .load();
 
+    if (sysStatus.get_firmwareRelease() != NODE_FIRMWARE_RELEASE) {
+        sysStatus.set_firmwareRelease(NODE_FIRMWARE_RELEASE);
+    }
+
     if (repairedFrequencyMinutes_) {
         sysStatus.flush(true);
         repairedFrequencyMinutes_ = false;
     }
 
     Log.info(
-        "sysStatus valid: node=%u frequency=%u openHours=%d lastConnection=%lu",
+        "sysStatus valid: node=%u fw=%u frequency=%u openHours=%d lastConnection=%lu",
         sysStatus.get_nodeNumber(),
+        sysStatus.get_firmwareRelease(),
         sysStatus.get_frequencyMinutes(),
         sysStatus.get_openHours() ? 1 : 0,
         (unsigned long)sysStatus.get_lastConnection());
@@ -86,7 +94,7 @@ void sysStatusData::initialize() {
     sysStatus.set_nodeNumber(11);
     sysStatus.set_structuresVersion(1);
     sysStatus.set_magicNumber(27617);
-    // sysStatus.set_firmwareRelease(1);
+    sysStatus.set_firmwareRelease(NODE_FIRMWARE_RELEASE);
     sysStatus.set_resetCount(0);
     sysStatus.set_frequencyMinutes(DEFAULT_REPORT_FREQUENCY_MINUTES);
     sysStatus.set_alertCodeNode(1);
@@ -226,6 +234,22 @@ void currentStatusData::resetEverything() {                             // The d
   sysStatus.set_resetCount(0);                                          // Reset the reset count as well
   current.set_messageCount(0);
   current.set_successCount(0);
+    current.set_batteryVoltage(NAN);
+    current.set_energyBaselineTimestamp(0);
+    current.set_energyBaselineSoc(NAN);
+    current.set_energyBaselineVcell(NAN);
+    current.set_energyWakeCount(0);
+    current.set_energyConnectionCount(0);
+    current.set_energyConnectionMs(0);
+    current.set_energyAwakeMs(0);
+    current.set_energyFaultResetCount(0);
+    current.set_energyChargeFaultCount(0);
+    current.set_energyCloudConnectionFailures(0);
+    current.set_energyOccupancyTriggerCount(0);
+    current.set_energyMinSoc(NAN);
+    current.set_energyMinVcell(NAN);
+    current.set_energyLongestAwakeMs(0);
+    current.set_energyLongestConnectionMs(0);
 }
 
 bool currentStatusData::validate(size_t dataSize) {
@@ -266,6 +290,14 @@ double currentStatusData::get_stateOfCharge() const {
 
 void currentStatusData::set_stateOfCharge(double value) {
     setValue<double>(offsetof(CurrentData, stateOfCharge), value);
+}
+
+float currentStatusData::get_batteryVoltage() const {
+	return getValue<float>(offsetof(CurrentData, batteryVoltage));
+}
+
+void currentStatusData::set_batteryVoltage(float value) {
+	setValue<float>(offsetof(CurrentData, batteryVoltage), value);
 }
 
 uint8_t currentStatusData::get_batteryState() const {
@@ -338,5 +370,125 @@ uint16_t currentStatusData::get_dailyCount() const {
 
 void currentStatusData::set_dailyCount(uint16_t value) {
     setValue<uint16_t>(offsetof(CurrentData, dailyCount), value);
+}
+
+time_t currentStatusData::get_energyBaselineTimestamp() const {
+    return getValue<time_t>(offsetof(CurrentData, energyBaselineTimestamp));
+}
+
+void currentStatusData::set_energyBaselineTimestamp(time_t value) {
+    setValue<time_t>(offsetof(CurrentData, energyBaselineTimestamp), value);
+}
+
+float currentStatusData::get_energyBaselineSoc() const {
+    return getValue<float>(offsetof(CurrentData, energyBaselineSoc));
+}
+
+void currentStatusData::set_energyBaselineSoc(float value) {
+    setValue<float>(offsetof(CurrentData, energyBaselineSoc), value);
+}
+
+float currentStatusData::get_energyBaselineVcell() const {
+    return getValue<float>(offsetof(CurrentData, energyBaselineVcell));
+}
+
+void currentStatusData::set_energyBaselineVcell(float value) {
+    setValue<float>(offsetof(CurrentData, energyBaselineVcell), value);
+}
+
+uint16_t currentStatusData::get_energyWakeCount() const {
+    return getValue<uint16_t>(offsetof(CurrentData, energyWakeCount));
+}
+
+void currentStatusData::set_energyWakeCount(uint16_t value) {
+    setValue<uint16_t>(offsetof(CurrentData, energyWakeCount), value);
+}
+
+uint16_t currentStatusData::get_energyConnectionCount() const {
+    return getValue<uint16_t>(offsetof(CurrentData, energyConnectionCount));
+}
+
+void currentStatusData::set_energyConnectionCount(uint16_t value) {
+    setValue<uint16_t>(offsetof(CurrentData, energyConnectionCount), value);
+}
+
+uint32_t currentStatusData::get_energyConnectionMs() const {
+    return getValue<uint32_t>(offsetof(CurrentData, energyConnectionMs));
+}
+
+void currentStatusData::set_energyConnectionMs(uint32_t value) {
+    setValue<uint32_t>(offsetof(CurrentData, energyConnectionMs), value);
+}
+
+uint32_t currentStatusData::get_energyAwakeMs() const {
+    return getValue<uint32_t>(offsetof(CurrentData, energyAwakeMs));
+}
+
+void currentStatusData::set_energyAwakeMs(uint32_t value) {
+    setValue<uint32_t>(offsetof(CurrentData, energyAwakeMs), value);
+}
+
+uint16_t currentStatusData::get_energyFaultResetCount() const {
+    return getValue<uint16_t>(offsetof(CurrentData, energyFaultResetCount));
+}
+
+void currentStatusData::set_energyFaultResetCount(uint16_t value) {
+    setValue<uint16_t>(offsetof(CurrentData, energyFaultResetCount), value);
+}
+
+uint16_t currentStatusData::get_energyChargeFaultCount() const {
+    return getValue<uint16_t>(offsetof(CurrentData, energyChargeFaultCount));
+}
+
+void currentStatusData::set_energyChargeFaultCount(uint16_t value) {
+    setValue<uint16_t>(offsetof(CurrentData, energyChargeFaultCount), value);
+}
+
+uint16_t currentStatusData::get_energyCloudConnectionFailures() const {
+    return getValue<uint16_t>(offsetof(CurrentData, energyCloudConnectionFailures));
+}
+
+void currentStatusData::set_energyCloudConnectionFailures(uint16_t value) {
+    setValue<uint16_t>(offsetof(CurrentData, energyCloudConnectionFailures), value);
+}
+
+uint16_t currentStatusData::get_energyOccupancyTriggerCount() const {
+    return getValue<uint16_t>(offsetof(CurrentData, energyOccupancyTriggerCount));
+}
+
+void currentStatusData::set_energyOccupancyTriggerCount(uint16_t value) {
+    setValue<uint16_t>(offsetof(CurrentData, energyOccupancyTriggerCount), value);
+}
+
+float currentStatusData::get_energyMinSoc() const {
+    return getValue<float>(offsetof(CurrentData, energyMinSoc));
+}
+
+void currentStatusData::set_energyMinSoc(float value) {
+    setValue<float>(offsetof(CurrentData, energyMinSoc), value);
+}
+
+float currentStatusData::get_energyMinVcell() const {
+    return getValue<float>(offsetof(CurrentData, energyMinVcell));
+}
+
+void currentStatusData::set_energyMinVcell(float value) {
+    setValue<float>(offsetof(CurrentData, energyMinVcell), value);
+}
+
+uint32_t currentStatusData::get_energyLongestAwakeMs() const {
+    return getValue<uint32_t>(offsetof(CurrentData, energyLongestAwakeMs));
+}
+
+void currentStatusData::set_energyLongestAwakeMs(uint32_t value) {
+    setValue<uint32_t>(offsetof(CurrentData, energyLongestAwakeMs), value);
+}
+
+uint32_t currentStatusData::get_energyLongestConnectionMs() const {
+    return getValue<uint32_t>(offsetof(CurrentData, energyLongestConnectionMs));
+}
+
+void currentStatusData::set_energyLongestConnectionMs(uint32_t value) {
+    setValue<uint32_t>(offsetof(CurrentData, energyLongestConnectionMs), value);
 }
 

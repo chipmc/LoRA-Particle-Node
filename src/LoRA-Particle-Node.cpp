@@ -37,6 +37,7 @@
 // v15.00 - Recovery build branched from the known-good v13 LoRa behavior for clean production deployment ordering
 // v18.00 - Node resiliency, persistent schedule repair, and Boron PowerManager PMIC profile control for bench and solar deployments
 // v20.00 - Success-rate math hardening, centralized logging normalization, and debug-log gating cleanup for production field builds
+// v22.00 - Energy24h trend instrumentation, compact logging cleanup, PMIC/source visibility, and release-final soak validation
 
 
 #define NODENUMBEROFFSET 10000UL					// By how much do we off set each node by node number
@@ -46,8 +47,10 @@
 #include "Particle.h"                               // Because it is a CPP file not INO
 #include <math.h>
 // Application Libraries / Class Files
+#include "config.h"
 #include "LoRA_Functions.h"							// Where we store all the information on our LoRA implementation - application specific not a general library
 #include "device_pinout.h"							// Define pinouts and initialize them
+#include "energy_trend.h"
 #include "power_management.h"
 #include "take_measurements.h"						// Manages interactions with the sensors (default is temp for charging)
 #include "MyPersistentData.h"						// Persistent Storage
@@ -59,7 +62,7 @@ STARTUP(System.enableFeature(FEATURE_RESET_INFO));
 // For monitoring / debugging, you have some options on the next few lines - uncomment one
 SerialLogHandler logHandler(LOG_LEVEL_INFO);     // Easier to see the program flow
 
-PRODUCT_VERSION(20);									// For now, we are putting nodes and gateways in the same product group - need to deconflict #
+PRODUCT_VERSION(NODE_FIRMWARE_RELEASE);					// For now, we are putting nodes and gateways in the same product group - need to deconflict #
 
 #ifndef ENABLE_MESH_RELAY_LISTEN_WINDOW
 #define ENABLE_MESH_RELAY_LISTEN_WINDOW 0
@@ -170,8 +173,10 @@ void setup() {
 
 	sysStatus.setup();								// Initialize persistent storage
 	current.setup();
+	EnergyTrend::instance().setup();
 	PowerManager::instance().setup();
 	PowerManager::instance().beginWakeCycle(false);
+	EnergyTrend::instance().noteWake();
 
 	takeMeasurements();                             // Populates values so you can read them before the hour
 
@@ -180,16 +185,21 @@ void setup() {
 		Particle.connect();													// Connects to Particle and stays connected until reset
 		if (!waitFor(Particle.connected,600000)) {
 			Log.info("Connection timeout - disconnect and reset");
+			EnergyTrend::instance().noteConnectionFailure();
 			disconnectFromParticle();										// Times out after 10 minutes - then disconnects and continues
+			EnergyTrend::instance().noteResetImminent();
 			System.reset();
 		}
 		else {
 			Log.info("Connected - staying online for update");
+	    	uint32_t connectedAtMs = millis();
  	    	unsigned long start = millis();
 			while (millis() - start < (120 * 1000)) {							// Stay on-line for two minutes
 				Particle.process();
 			}
+			EnergyTrend::instance().noteConnection(millis() - connectedAtMs);
 			disconnectFromParticle();
+			EnergyTrend::instance().noteResetImminent();
 			System.reset();        				// You won't reach this point if there is an update but we need to reset to take the device back off-line
 		}
 	}
@@ -219,7 +229,7 @@ void setup() {
 	updateSensorPowerState(shouldSensorBePowered(), "startup");
 
 	if (state == INITIALIZATION_STATE) state = SLEEPING_STATE;               	// Sleep unless otherwise from above code
-  	Log.info("Startup complete for the Node with alert code %d and last connect %s", sysStatus.get_alertCodeNode(), Time.format(sysStatus.get_lastConnection(), "%T").c_str());
+	Log.info("Startup %s complete: alert=%d lastConnect=%s", NODE_FIRMWARE_RELEASE_LABEL, sysStatus.get_alertCodeNode(), Time.format(sysStatus.get_lastConnection(), "%T").c_str());
   	digitalWrite(BLUE_LED,LOW);                                          	// Signal the end of startup
 }
 
@@ -336,10 +346,12 @@ void loop() {
 				.gpio(BUTTON_PIN,CHANGE)
 				.gpio(INT_PIN,RISING)
 				.duration((wakeInSeconds) * 1000L);							// Configuring sleep
+			EnergyTrend::instance().noteSleepEntry();
 			ab1805.stopWDT();  												// No watchdogs interrupting our slumber
 			SystemSleepResult result = System.sleep(config);              	// Put the device to sleep device continues operations from here
 			ab1805.resumeWDT();                                             // Wakey Wakey - WDT can resume
 			PowerManager::instance().beginWakeCycle(true);
+			EnergyTrend::instance().noteWake();
 			updateSensorPowerState(shouldSensorBePowered(), "post-wake");
 			if (result.wakeupPin() == BUTTON_PIN) {                         // If the user woke the device we need to get up - device was sleeping so we need to reset opening hours
 				waitFor(Serial.isConnected, 10000);							// Wait for serial connection if we are using the button - we may want to monito serial 
@@ -506,6 +518,7 @@ void loop() {
 					sysStatus.set_alertCodeNode(0);							// Need to clear so we don't get in a retry cycle
 					sysStatus.set_alertTimestampNode(Time.now());
 					sysStatus.flush(true);									// All this is required as we are done trainsiting loop
+					EnergyTrend::instance().noteResetImminent("alert3");
 					delay(2000);
 					ab1805.deepPowerDown();
 				}
@@ -559,6 +572,7 @@ void loop() {
 
 	if (outOfMemory >= 0) {                         // In this function we are going to reset the system if there is an out of memory error
 		Log.info("Resetting due to low memory");
+		EnergyTrend::instance().noteResetImminent("oom");
 		delay(2000);
 		System.reset();
   	}
