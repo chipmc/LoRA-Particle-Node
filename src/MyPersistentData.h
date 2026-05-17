@@ -84,7 +84,7 @@ public:
 		uint16_t magicNumber;							  // A way to identify nodes and gateways so they can trust each other
 		uint8_t firmwareRelease;                          // Version of the device firmware (integer - aligned to particle product firmware)
 		uint8_t resetCount;                               // reset count of device (0-256)
-		time_t lastConnection;                     		  // Last time we successfully connected to Particle
+		time_t lastConnection;                     		  // Last time we successfully received a valid gateway ACK
 		uint16_t frequencyMinutes;                        // When we are reporing at minute increments - what are they - for Gateways
 		uint8_t alertCodeNode;                            // Alert code from node
 		time_t alertTimestampNode;                 	      // Timestamp of alert
@@ -393,6 +393,8 @@ public:
 
 	uint32_t get_energyLongestConnectionMs() const;
 	void set_energyLongestConnectionMs(uint32_t value);
+
+	bool migrateFromV3();
 
 		//Members here are internal only and therefore protected
 protected:

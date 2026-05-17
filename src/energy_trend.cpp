@@ -1,11 +1,16 @@
 #include "energy_trend.h"
 
 #include "MyPersistentData.h"
+#include "node_time.h"
 
 #include <math.h>
 #include <stdio.h>
 
 namespace {
+
+constexpr time_t ENERGY_TREND_MIN_SUMMARY_AGE_SECONDS = 23 * 60 * 60;
+constexpr time_t ENERGY_TREND_MAX_SUMMARY_AGE_SECONDS = 72 * 60 * 60;
+constexpr time_t ENERGY_TREND_MAX_FUTURE_SKEW_SECONDS = 5 * 60;
 
 uint16_t saturatingIncrement16(uint16_t value) {
 	return (value == 0xFFFF) ? value : (uint16_t)(value + 1);
@@ -32,6 +37,30 @@ void formatAge(char *buffer, size_t bufferSize, time_t ageSeconds) {
 	else {
 		snprintf(buffer, bufferSize, "%luh", (unsigned long)((ageSeconds + 1800) / 3600));
 	}
+}
+
+const char *invalidBaselineReason(time_t sampleTime) {
+	time_t baselineTimestamp = current.get_energyBaselineTimestamp();
+	if (baselineTimestamp == 0) {
+		return nullptr;
+	}
+	if (!nodeTimeIsSaneEpoch(baselineTimestamp)) {
+		return "invalid";
+	}
+	if (!nodeTimeIsSaneEpoch(sampleTime)) {
+		return "sample";
+	}
+	if (baselineTimestamp > sampleTime + ENERGY_TREND_MAX_FUTURE_SKEW_SECONDS) {
+		return "future";
+	}
+	time_t ageSeconds = sampleTime - baselineTimestamp;
+	if (ageSeconds < 0) {
+		return "future";
+	}
+	if (ageSeconds > ENERGY_TREND_MAX_SUMMARY_AGE_SECONDS) {
+		return "stale";
+	}
+	return nullptr;
 }
 
 } // anonymous namespace
@@ -229,7 +258,12 @@ void EnergyTrend::noteMeasurement(const PowerReport &report) {
 	float vcell = currentVcellValue(&report);
 	time_t sampleTime = currentSampleTime();
 	current.set_batteryVoltage(vcell);
-	bool baselineCreated = ensureBaseline(sampleTime, soc, vcell);
+	const char *baselineReason = invalidBaselineReason(sampleTime);
+	if (baselineReason) {
+		Log.info("Energy24h: baseline reset reason=%s", baselineReason);
+		resetWindow(nodeTimeHasAuthoritativeAck() ? sampleTime : 0, soc, vcell);
+	}
+	bool baselineCreated = ensureBaseline(nodeTimeHasAuthoritativeAck() ? sampleTime : 0, soc, vcell);
 	updateMinima(soc, vcell);
 
 	if (report.reading.batteryContext == PowerBatteryContext::Fault && (!haveLastBatteryContext_ || lastBatteryContext_ != PowerBatteryContext::Fault)) {
@@ -238,6 +272,13 @@ void EnergyTrend::noteMeasurement(const PowerReport &report) {
 
 	bool nowLowPowerMode = isLowPowerMode(report.policy.mode);
 	if (baselineCreated) {
+		lowPowerModeActive_ = nowLowPowerMode;
+		lastBatteryContext_ = report.reading.batteryContext;
+		haveLastBatteryContext_ = true;
+		return;
+	}
+
+	if (!nodeTimeHasAuthoritativeAck()) {
 		lowPowerModeActive_ = nowLowPowerMode;
 		lastBatteryContext_ = report.reading.batteryContext;
 		haveLastBatteryContext_ = true;
@@ -258,9 +299,18 @@ void EnergyTrend::noteMeasurement(const PowerReport &report) {
 
 void EnergyTrend::maybeEmit24hEnergySummary(const PowerReport *report, const char *reason, bool force) {
 	ensureInitialized();
+	if (!nodeTimeHasAuthoritativeAck()) {
+		return;
+	}
 	float soc = currentSocValue(report);
 	float vcell = currentVcellValue(report);
 	time_t sampleTime = currentSampleTime();
+	const char *baselineReason = invalidBaselineReason(sampleTime);
+	if (baselineReason) {
+		Log.info("Energy24h: baseline reset reason=%s", baselineReason);
+		resetWindow(sampleTime, soc, vcell);
+		return;
+	}
 	if (ensureBaseline(sampleTime, soc, vcell)) {
 		return;
 	}
@@ -270,8 +320,11 @@ void EnergyTrend::maybeEmit24hEnergySummary(const PowerReport *report, const cha
 
 	time_t baselineTimestamp = current.get_energyBaselineTimestamp();
 	time_t ageSeconds = (sampleTime > baselineTimestamp) ? (sampleTime - baselineTimestamp) : 0;
-	bool overdue = ageSeconds >= ENERGY_TREND_INTERVAL_SECONDS;
+	bool overdue = ageSeconds >= ENERGY_TREND_MIN_SUMMARY_AGE_SECONDS;
 	if (!force && !overdue) {
+		return;
+	}
+	if (ageSeconds < ENERGY_TREND_MIN_SUMMARY_AGE_SECONDS) {
 		return;
 	}
 

@@ -13,6 +13,7 @@ The gateway is not implemented in this repository. This firmware expects a compa
 - Target Device OS used in this workspace: `6.4.0`
 - System mode: `MANUAL`
 - Normal operating model: LoRa-only wake, no cloud dependency during normal reporting
+- Time authority model: boot RTC restore is provisional; only a valid gateway ACK timestamp updates system time, the AB1805 RTC, and `Energy24h` timing
 
 ## What This Repo Does
 
@@ -177,7 +178,9 @@ A compatible gateway must:
 3. Understand the join and data packet layouts defined in `src/LoRA_Functions.h`.
 4. Reply to join requests with a valid `JOIN_ACK`.
 5. Assign a node number in the range `1` to `10`.
-6. Provide valid time and report interval data in acknowledgements.
+6. Provide valid non-zero time and report interval data in acknowledgements.
+
+If an ACK timestamp is zero or outside the accepted sane epoch range, the node ignores it, does not update time or RTC state, and continues with the existing retry/fallback scheduling behavior.
 
 ### Node join sequence
 
@@ -190,7 +193,7 @@ The node-side join flow is:
    - `nodeNumber`
    - `sensorType`
    - `alertCodeNode`
-   - current time
+   - current time, only when the ACK timestamp is valid
    - report interval
 5. Node switches its mesh manager address to the assigned node number.
 6. Node enters normal report mode.
@@ -209,6 +212,7 @@ After joining, each report cycle is:
 3. Send `DATA_RPT`.
 4. Listen for `DATA_ACK`.
 5. Update time, frequency, alert code, and `openHours` from the gateway ack.
+   Invalid ACK timestamps are ignored and do not advance local time or long-window energy timing.
 6. Save state to FRAM.
 7. Return to sleep.
 

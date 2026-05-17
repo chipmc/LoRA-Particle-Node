@@ -4,6 +4,9 @@
 #include "config.h"
 #include "device_pinout.h"
 #include "MyPersistentData.h"
+#include "node_time.h"
+
+extern AB1805 ab1805;
 
 #ifndef LORA_VERBOSE_DIAGNOSTICS
 #define LORA_VERBOSE_DIAGNOSTICS 0
@@ -121,10 +124,16 @@ void logRejectedGatewayValue(const char *fieldName, uint8_t value, const char *c
 	Log.warn("Rejecting invalid gateway %s %u in %s", fieldName, value, context);
 }
 
-void applyGatewayAckTiming() {
-	Time.setTime(((buf[2] << 24) | (buf[3] << 16) | (buf[4] << 8) | buf[5]));
+time_t gatewayAckEpoch() {
+	return (time_t)((buf[2] << 24) | (buf[3] << 16) | (buf[4] << 8) | buf[5]);
+}
+
+bool applyGatewayAckTiming(const char *context) {
+	if (!nodeTimeApplyGatewayAck(gatewayAckEpoch(), ab1805, context)) {
+		return false;
+	}
 	sysStatus.set_frequencyMinutes((buf[6] << 8 | buf[7]));
-	Log.info("Set clock to %s and report frequency to %d minutes", Time.timeStr().c_str(),sysStatus.get_frequencyMinutes());
+	return true;
 }
 
 
@@ -349,7 +358,9 @@ bool LoRA_Functions::receiveAcknowledmentDataReportNode() {
 		return false;
 	}
 
-	applyGatewayAckTiming();
+	if (!applyGatewayAckTiming("DATA_ACK")) {
+		return false;
+	}
 
 	// contents of response for 1-7 handled in common function above
 	sysStatus.set_alertCodeNode(buf[8]);
@@ -427,7 +438,9 @@ bool LoRA_Functions::receiveAcknowledmentJoinRequestNode() {
 		return false;
 	}
 
-	applyGatewayAckTiming();
+	if (!applyGatewayAckTiming("JOIN_ACK")) {
+		return false;
+	}
 	sysStatus.set_alertCodeNode(buf[8]);
 	if (sysStatus.get_alertCodeNode() != 0) {
 		sysStatus.set_alertTimestampNode(Time.now());

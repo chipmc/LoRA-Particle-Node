@@ -8,6 +8,46 @@
 
 MB85RC64 fram(Wire, 0);  
 
+namespace {
+
+constexpr int CURRENT_DATA_FRAM_OFFSET = 100;
+constexpr uint32_t CURRENT_DATA_MAGIC_VALUE = 0x20a99e80;
+constexpr uint16_t CURRENT_DATA_VERSION_V3 = 3;
+
+struct CurrentDataV3 {
+    StorageHelperRK::PersistentDataBase::SavedDataHeader currentHeader;
+    int8_t internalTempC;
+    double stateOfCharge;
+    uint8_t batteryState;
+    time_t lastSampleTime;
+    int16_t RSSI;
+    int16_t SNR;
+    uint8_t messageCount;
+    uint8_t successCount;
+    time_t lastCountTime;
+    uint16_t hourlyCount;
+    uint16_t dailyCount;
+};
+
+bool isValidCurrentDataV3(const CurrentDataV3 &saved) {
+    if (saved.currentHeader.magic != CURRENT_DATA_MAGIC_VALUE ||
+        saved.currentHeader.version != CURRENT_DATA_VERSION_V3 ||
+        saved.currentHeader.size != sizeof(CurrentDataV3)) {
+        return false;
+    }
+
+    CurrentDataV3 copy = saved;
+    uint32_t savedHash = copy.currentHeader.hash;
+    copy.currentHeader.hash = 0;
+    uint32_t computedHash = StorageHelperRK::murmur3_32(
+        (const uint8_t *)&copy,
+        copy.currentHeader.size,
+        StorageHelperRK::PersistentDataBase::HASH_SEED);
+    return savedHash == computedHash;
+}
+
+} // anonymous namespace
+
 // *******************  SysStatus Storage Object **********************
 //
 // ********************************************************************
@@ -219,8 +259,18 @@ void currentStatusData::setup() {
 
     current
     //    .withLogData(true)
-        .withSaveDelayMs(250)
-        .load();
+        .withSaveDelayMs(250);
+
+    StorageHelperRK::PersistentDataBase::SavedDataHeader savedHeader = {};
+    fram.readData(CURRENT_DATA_FRAM_OFFSET, (uint8_t *)&savedHeader, sizeof(savedHeader));
+    if (savedHeader.magic == CURRENT_DATA_MAGIC_VALUE && savedHeader.version == CURRENT_DATA_VERSION_V3 && migrateFromV3()) {
+        return;
+    }
+    if (savedHeader.magic == CURRENT_DATA_MAGIC_VALUE && savedHeader.version != 0 && savedHeader.version != CURRENT_DATA_VERSION) {
+        Log.info("Current data reset: version=%u expected=%u", savedHeader.version, CURRENT_DATA_VERSION);
+    }
+
+    current.load();
 }
 
 void currentStatusData::loop() {
@@ -273,6 +323,48 @@ void currentStatusData::initialize() {
 
     // If you manually update fields here, be sure to update the hash
     updateHash();
+}
+
+bool currentStatusData::migrateFromV3() {
+    CurrentDataV3 saved = {};
+    fram.readData(CURRENT_DATA_FRAM_OFFSET, (uint8_t *)&saved, sizeof(saved));
+    if (!isValidCurrentDataV3(saved)) {
+        Log.info("Current data reset: invalid v3 payload");
+        return false;
+    }
+
+    PersistentDataFRAM::initialize();
+    currentData.internalTempC = saved.internalTempC;
+    currentData.stateOfCharge = saved.stateOfCharge;
+    currentData.batteryVoltage = NAN;
+    currentData.batteryState = saved.batteryState;
+    currentData.lastSampleTime = saved.lastSampleTime;
+    currentData.RSSI = saved.RSSI;
+    currentData.SNR = saved.SNR;
+    currentData.messageCount = saved.messageCount;
+    currentData.successCount = saved.successCount;
+    currentData.lastCountTime = saved.lastCountTime;
+    currentData.hourlyCount = saved.hourlyCount;
+    currentData.dailyCount = saved.dailyCount;
+    currentData.energyBaselineTimestamp = 0;
+    currentData.energyBaselineSoc = NAN;
+    currentData.energyBaselineVcell = NAN;
+    currentData.energyWakeCount = 0;
+    currentData.energyConnectionCount = 0;
+    currentData.energyConnectionMs = 0;
+    currentData.energyAwakeMs = 0;
+    currentData.energyFaultResetCount = 0;
+    currentData.energyChargeFaultCount = 0;
+    currentData.energyCloudConnectionFailures = 0;
+    currentData.energyOccupancyTriggerCount = 0;
+    currentData.energyMinSoc = NAN;
+    currentData.energyMinVcell = NAN;
+    currentData.energyLongestAwakeMs = 0;
+    currentData.energyLongestConnectionMs = 0;
+    updateHash();
+    flush(true);
+    Log.info("Current data migrated: v3->v4 preserving counters");
+    return true;
 }
 
 

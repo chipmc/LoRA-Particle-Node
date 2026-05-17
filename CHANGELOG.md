@@ -9,6 +9,12 @@ All notable changes to this project will be documented in this file.
 - Hardened PMIC fault remediation logging, charging reset/recovery visibility, and compact power-source reporting without intended occupancy or sleep-policy behavior changes.
 - Reduced routine serial truncation with compact PMIC, connect, sleep, and wake log cleanup.
 
+### Fixed
+- Made gateway ACK time authoritative for both system clock and AB1805 RTC updates, with boot RTC restore treated as provisional until a valid ACK is received.
+- Added `CurrentData` FRAM migration support so v3 persisted data upgrades cleanly to the v22 layout without losing legacy counts and telemetry fields.
+- Hardened `Energy24h` baseline handling to reject invalid, future, or stale timestamps and to suppress summary timing until an authoritative gateway ACK has occurred this boot.
+- Ignored zero or invalid gateway ACK timestamps without updating system time, RTC, or Energy24h baseline timing, while preserving the existing retry and fallback scheduling behavior.
+
 ### Validated
 - Successful soak validation with no intended changes to occupancy handling, sleep timing, connect sequencing, watchdog behavior, or connection budgets.
 

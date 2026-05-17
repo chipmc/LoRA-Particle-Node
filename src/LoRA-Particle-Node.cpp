@@ -51,6 +51,7 @@
 #include "LoRA_Functions.h"							// Where we store all the information on our LoRA implementation - application specific not a general library
 #include "device_pinout.h"							// Define pinouts and initialize them
 #include "energy_trend.h"
+#include "node_time.h"
 #include "power_management.h"
 #include "take_measurements.h"						// Manages interactions with the sensors (default is temp for charging)
 #include "MyPersistentData.h"						// Persistent Storage
@@ -170,6 +171,8 @@ void setup() {
 	waitFor(Serial.isConnected, 10000);				// Wait for serial connection
 
     initializePinModes();                           // Sets the pinModes
+	ab1805.withFOUT(D8).setup();                      // Restore system time from the RTC before any time-based logic runs
+	nodeTimeNoteBootRtcState(Time.isValid() && ab1805.isRTCSet());
 
 	sysStatus.setup();								// Initialize persistent storage
 	current.setup();
@@ -204,7 +207,6 @@ void setup() {
 		}
 	}
                               
-    ab1805.withFOUT(D8).setup();                	// The carrier board has D8 connected to FOUT for wake interrupts
     ab1805.setWDT(AB1805::WATCHDOG_MAX_SECONDS);	// Enable watchdog
 
 	System.on(out_of_memory, outOfMemoryHandler);   // Enabling an out of memory handler is a good safety tip. If we run out of memory a System.reset() is done.
@@ -389,7 +391,6 @@ void loop() {
 				consecutiveFailedReportCycles = 0;
 				sustainedFailureAlert3Pending = false;
 				randomSeed(sysStatus.get_lastConnection() * sysStatus.get_nodeNumber());			// Done so we can genrate rando numbers later
-				ab1805.setRtcFromTime(Time.now());
 				if (Time.hour() != lastReportingHour) {
 					current.set_hourlyCount(0);					    								// Zero the hourly count
 					lastReportingHour = Time.hour();
