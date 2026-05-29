@@ -129,9 +129,11 @@ time_t gatewayAckEpoch() {
 }
 
 bool applyGatewayAckTiming(const char *context) {
-	if (!nodeTimeApplyGatewayAck(gatewayAckEpoch(), ab1805, context)) {
+	time_t ackEpoch = gatewayAckEpoch();
+	if (!nodeTimeApplyGatewayAck(ackEpoch, ab1805, context)) {
 		return false;
 	}
+	sysStatus.set_lastConnection(ackEpoch);
 	sysStatus.set_frequencyMinutes((buf[6] << 8 | buf[7]));
 	return true;
 }
