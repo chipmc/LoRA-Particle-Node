@@ -38,6 +38,7 @@
 // v18.00 - Node resiliency, persistent schedule repair, and Boron PowerManager PMIC profile control for bench and solar deployments
 // v20.00 - Success-rate math hardening, centralized logging normalization, and debug-log gating cleanup for production field builds
 // v22.00 - Energy24h trend instrumentation, compact logging cleanup, PMIC/source visibility, and release-final soak validation
+// v22.01 - Soak hardening for LoRa transmit reentrancy guard, button-busy suppression, same-state transition diagnostics, and UTC sync logging
 
 
 #define NODENUMBEROFFSET 10000UL					// By how much do we off set each node by node number
@@ -90,6 +91,11 @@ bool isLoRaWindowState(State candidateState);
 void updateSensorPowerState(bool enableSensor, const char *reason);
 void stopLoRaWindowTimers();
 void prepareForGatewayAckSleep();
+const char *sleepTimeSourceLabel();
+time_t nextScheduledWakeEpoch(time_t nowEpoch, time_t anchorEpoch, unsigned long wakeBoundary);
+void logSleepCalculation(time_t nowEpoch, time_t targetEpoch, unsigned long wakeInSeconds);
+bool requestLoRaTransmit(const char *reason);
+String formatUtcDateTime(time_t epochUtc);
 
 // Initialize Functions
 SystemSleepConfiguration config;                    // Initialize new Sleep 2.0 Api
@@ -112,6 +118,10 @@ bool sustainedFailureAlert3Pending = false;
 bool deepPowerDownAttemptedThisBoot = false;
 system_tick_t errorStateEnteredAt = 0;
 uint8_t errorStateAlertCode = 0;
+bool ackSyncOccurredThisCycle = false;
+volatile bool loraTransactionActive = false;
+volatile uint32_t loraTransactionGuardRejectCount = 0;
+volatile uint32_t sameStateTransitionCount = 0;
 
 const unsigned long DISCOVERY_SLEEP_SECONDS = 7UL * 60UL;
 const unsigned long DISCOVERY_STALE_ACK_SECONDS = 3UL * 60UL * 60UL;
@@ -120,6 +130,38 @@ const uint8_t LORA_DEEP_POWERDOWN_AFTER_FAILED_CYCLES = 4;
 
 Timer transmitDelayTimer(10000,transmitDelayTimerISR,true);
 Timer listeningDurationTimer(300000,listeningDurationTimerISR,true);
+
+String formatUtcDateTime(time_t epochUtc) {
+	if (epochUtc <= 0) {
+		return "invalid";
+	}
+	struct tm utcTm;
+	gmtime_r(&epochUtc, &utcTm);
+	char buffer[24];
+	snprintf(buffer, sizeof(buffer), "%04d-%02d-%02d %02d:%02d:%02d",
+		utcTm.tm_year + 1900,
+		utcTm.tm_mon + 1,
+		utcTm.tm_mday,
+		utcTm.tm_hour,
+		utcTm.tm_min,
+		utcTm.tm_sec);
+	return String(buffer);
+}
+
+bool requestLoRaTransmit(const char *reason) {
+	if (state == LoRA_TRANSMISSION_STATE) {
+		sameStateTransitionCount++;
+		Log.warn("Illegal same-state transition request: %s reason=%s count=%lu", stateNames[state], reason ? reason : "unknown", (unsigned long)sameStateTransitionCount);
+		return false;
+	}
+	if (loraTransactionActive) {
+		loraTransactionGuardRejectCount++;
+		Log.warn("Blocked LoRa transmit request while active: state=%s reason=%s rejects=%lu", stateNames[state], reason ? reason : "unknown", (unsigned long)loraTransactionGuardRejectCount);
+		return false;
+	}
+	state = LoRA_TRANSMISSION_STATE;
+	return true;
+}
 
 bool isSupportedSensorType(uint8_t sensorType) {
 	return sensorType == 0 || sensorType == 1;
@@ -152,6 +194,7 @@ void stopLoRaWindowTimers() {
 	listeningDurationTimer.stop();
 	transmitDelayPending = false;
 	listeningWindowExpired = false;
+	loraTransactionActive = false;
 }
 
 void stopListeningDurationTimer() {
@@ -167,12 +210,58 @@ void prepareForGatewayAckSleep() {
 	state = SLEEPING_STATE;
 }
 
+const char *sleepTimeSourceLabel() {
+	if (!Time.isValid()) {
+		return "invalid";
+	}
+	if (ackSyncOccurredThisCycle) {
+		return "ack";
+	}
+	if (nodeTimeIsProvisional()) {
+		return "rtc-provisional";
+	}
+	if (nodeTimeHasAuthoritativeAck()) {
+		return "authoritative";
+	}
+	return "system";
+}
+
+time_t nextScheduledWakeEpoch(time_t nowEpoch, time_t anchorEpoch, unsigned long wakeBoundary) {
+	if (wakeBoundary == 0) {
+		return nowEpoch;
+	}
+
+	if (anchorEpoch > 0) {
+		time_t targetEpoch = anchorEpoch;
+		while (targetEpoch <= nowEpoch) {
+			targetEpoch += (time_t)wakeBoundary;
+		}
+		return targetEpoch;
+	}
+
+	return nowEpoch + (time_t)(wakeBoundary - ((unsigned long)nowEpoch % wakeBoundary));
+}
+
+void logSleepCalculation(time_t nowEpoch, time_t targetEpoch, unsigned long wakeInSeconds) {
+	String nowUtc = formatUtcDateTime(nowEpoch);
+	String nextWakeUtc = formatUtcDateTime(targetEpoch);
+
+	Log.info(
+		"SleepCalc: nowUtc=%s nextWakeUtc=%s sleepSeconds=%lu",
+		nowUtc.c_str(),
+		nextWakeUtc.c_str(),
+		wakeInSeconds);
+}
+
 void setup() {
 	waitFor(Serial.isConnected, 10000);				// Wait for serial connection
 
     initializePinModes();                           // Sets the pinModes
 	ab1805.withFOUT(D8).setup();                      // Restore system time from the RTC before any time-based logic runs
 	nodeTimeNoteBootRtcState(Time.isValid() && ab1805.isRTCSet());
+ 	if (Time.isValid()) {
+		Log.info("TimeSync: bootUtc=%s", formatUtcDateTime(Time.now()).c_str());
+	}
 
 	sysStatus.setup();								// Initialize persistent storage
 	current.setup();
@@ -180,6 +269,7 @@ void setup() {
 	PowerManager::instance().setup();
 	PowerManager::instance().beginWakeCycle(false);
 	EnergyTrend::instance().noteWake();
+	ackSyncOccurredThisCycle = false;
 
 	takeMeasurements();                             // Populates values so you can read them before the hour
 
@@ -238,6 +328,23 @@ void setup() {
 void loop() {
 	static State timerManagedState = INITIALIZATION_STATE;
 	static bool loggedStaleListeningWindowExpired = false;
+	static bool previousTimeValid = false;
+
+	if (loraTransactionActive && !isLoRaWindowState(state)) {
+		loraTransactionActive = false;
+		Log.warn("Cleared stale LoRa transaction guard outside LoRa window (state=%s)", stateNames[state]);
+	}
+
+	bool timeValid = Time.isValid();
+	if (timeValid != previousTimeValid) {
+		if (timeValid) {
+			Log.info("TimeSync: valid utc=%s", formatUtcDateTime(Time.now()).c_str());
+		}
+		else {
+			Log.warn("TimeSync: invalid");
+		}
+		previousTimeValid = timeValid;
+	}
 
 	if (state != timerManagedState) {
 		if (timerManagedState == LoRA_LISTENING_STATE && state != LoRA_LISTENING_STATE) {
@@ -264,7 +371,7 @@ void loop() {
 	else if (transmitDelayPending && state == LoRA_LISTENING_STATE) {
 		transmitDelayPending = false;
 		stopListeningDurationTimer();
-		state = LoRA_TRANSMISSION_STATE;
+		requestLoRaTransmit("transmit-delay-expired");
 	}
 	else if (transmitDelayPending) {
 		transmitDelayPending = false;
@@ -284,17 +391,18 @@ void loop() {
 
 		case SLEEPING_STATE: {
 			unsigned long wakeInSeconds, wakeBoundary;
-			time_t time;
+			time_t targetEpoch = 0;
+			time_t nowEpoch = Time.isValid() ? Time.now() : 0;
 			bool usingDiscoverySleep = false;
 			const char *discoveryReason = nullptr;
 			time_t lastConnection = sysStatus.get_lastConnection();
 			time_t ackAgeSeconds = 0;
 
-			publishStateTransition();              							// Publish state transition
+			if (state != oldState) publishStateTransition();              							// Publish state transition
 			if (!Time.isValid()) discoveryReason = "time invalid";
 			else if (lastConnection <= 0) discoveryReason = "no successful gateway ACK";
 			else {
-				ackAgeSeconds = Time.now() - lastConnection;
+				ackAgeSeconds = nowEpoch - lastConnection;
 				if (ackAgeSeconds >= (time_t) DISCOVERY_STALE_ACK_SECONDS) discoveryReason = "stale gateway ACK";
 			}
 
@@ -316,6 +424,7 @@ void loop() {
 					discoveryModeActive = true;
 					discoverySleepCycles++;
 					wakeInSeconds = DISCOVERY_SLEEP_SECONDS;
+					targetEpoch = nowEpoch + (time_t)wakeInSeconds;
 					usingDiscoverySleep = true;
 					Log.info("Discovery sleep interval %u - sleeping for %lu seconds", discoverySleepCycles, wakeInSeconds);
 				}
@@ -324,22 +433,28 @@ void loop() {
 			if (!usingDiscoverySleep && Time.isValid()) {
 				wakeBoundary = (sysStatus.get_frequencyMinutes() * 60UL);
 				if (sysStatus.get_openHours()) {
-					wakeInSeconds = constrain(wakeBoundary - Time.now() % wakeBoundary, 0UL, wakeBoundary);  // If Time is valid, we can compute time to the start of the next report window
+					targetEpoch = nextScheduledWakeEpoch(nowEpoch, lastConnection, wakeBoundary);
+					wakeInSeconds = (unsigned long)(targetEpoch - nowEpoch);
 				}
 				else {
 					wakeInSeconds = wakeBoundary;
+					targetEpoch = nowEpoch + (time_t)wakeInSeconds;
 				}
-				time = Time.now() + wakeInSeconds;
+				logSleepCalculation(nowEpoch, targetEpoch, wakeInSeconds);
 				if (sysStatus.get_openHours()) {
-					Log.info("Sleep for %lu seconds until next event at %s with sensor %s", wakeInSeconds, Time.format(time, "%T").c_str(), "on");
+					Log.info("Sleep for %lu seconds until next event at %s with sensor %s", wakeInSeconds, Time.format(targetEpoch, "%T").c_str(), "on");
 				}
 				else {
-					Log.info("Closed-hours sleep for %u minutes until %s", sysStatus.get_frequencyMinutes(), Time.format(time, "%T").c_str());
+					Log.info("Closed-hours sleep for %u minutes until %s", sysStatus.get_frequencyMinutes(), Time.format(targetEpoch, "%T").c_str());
 				}
 			}
 			else if (!usingDiscoverySleep) {
 				wakeInSeconds = 60UL;
+				logSleepCalculation(0, 0, wakeInSeconds);
 				Log.info("Time not valid, sleeping for 60 seconds");
+			}
+			else {
+				logSleepCalculation(nowEpoch, targetEpoch, wakeInSeconds);
 			}
 			// Turn things off to save power
 			updateSensorPowerState(shouldSensorBePowered(), "pre-sleep");
@@ -354,6 +469,7 @@ void loop() {
 			ab1805.resumeWDT();                                             // Wakey Wakey - WDT can resume
 			PowerManager::instance().beginWakeCycle(true);
 			EnergyTrend::instance().noteWake();
+			ackSyncOccurredThisCycle = false;
 			updateSensorPowerState(shouldSensorBePowered(), "post-wake");
 			if (result.wakeupPin() == BUTTON_PIN) {                         // If the user woke the device we need to get up - device was sleeping so we need to reset opening hours
 				waitFor(Serial.isConnected, 10000);							// Wait for serial connection if we are using the button - we may want to monito serial 
@@ -378,13 +494,21 @@ void loop() {
 				if (!listeningDurationTimer.isActive()) listeningDurationTimer.start();				// Bound the direct-to-gateway ACK wait window
 				if (oldState != LoRA_TRANSMISSION_STATE) {
 					if (sysStatus.get_nodeNumber() < 11) transmitDelayTimer.changePeriod(sysStatus.get_nodeNumber()*NODENUMBEROFFSET);		// Wait a beat before transmitting
-					else state = LoRA_TRANSMISSION_STATE;
+					else requestLoRaTransmit("listening-unconfigured-node");
 				}
 				publishStateTransition();                   										// Publish state transition
 			}
 
 			if (LoRA_Functions::instance().listenForLoRAMessageNode()) {							// Listen for LoRA signals - could be an acknowledgement or a message to relay to another node
-				sysStatus.set_lastConnection(Time.now());											// Came back as true - message was for our node
+				ackSyncOccurredThisCycle = true;
+				if (sysStatus.get_lastConnection() > 0) {
+					Log.info(
+						"ACK TimeSync: gatewayUtc=%s nodeUtcBefore=%s driftSeconds=%+ld reportFrequencyMinutes=%u",
+						formatUtcDateTime(nodeTimeLastGatewayAckUtc()).c_str(),
+						formatUtcDateTime(nodeTimeLastNodeUtcBeforeAck()).c_str(),
+						(long)nodeTimeLastAckDriftSeconds(),
+						sysStatus.get_frequencyMinutes());
+				}
 				if (discoveryModeActive || discoverySleepCycles != 0) Log.info("Discovery mode exit after ACK after %u discovery sleeps", discoverySleepCycles);
 				discoveryModeActive = false;
 				discoverySleepCycles = 0;
@@ -406,7 +530,10 @@ void loop() {
 			bool result = false;
 			static int retryCount = 0;
 
-			publishStateTransition();                   					// Let everyone know we are changing state
+			if (state != oldState) publishStateTransition();                   					// Let everyone know we are changing state
+			if (!loraTransactionActive) {
+				loraTransactionActive = true;
+			}
 			takeMeasurements();												// Taking measurements now should allow for accurate battery measurements
 			LoRA_Functions::instance().clearBuffer();
 			// Based on Alert code, determine what message to send
@@ -414,6 +541,7 @@ void loop() {
 			else if (sysStatus.get_alertCodeNode() == 1 || sysStatus.get_alertCodeNode() == 2) result = LoRA_Functions::instance().composeJoinRequesttNode();
 			else {
 				Log.info("Alert code = %d",sysStatus.get_alertCodeNode());
+				loraTransactionActive = false;
 				state = ERROR_STATE;
 				break;														// Resolve the alert code in ERROR_STATE
 			}		
@@ -469,7 +597,7 @@ void loop() {
 				Log.info("Going to retry in %lu seconds", variableDelay/1000UL);
 			}
 
-			if (millis() >= startDelay + variableDelay) state = LoRA_TRANSMISSION_STATE;
+			if (millis() >= startDelay + variableDelay) requestLoRaTransmit("retry-delay-expired");
 
 		} break;
 
@@ -581,9 +709,15 @@ void loop() {
 	if (userSwitchDectected) {
 		delay(100);									// Debounce the button press
 		userSwitchDectected = false;				// Clear the interrupt flag
-		if (!listeningDurationTimer.isActive()) listeningDurationTimer.start();				// Don't reset timer if it is already running
-		Log.info("Detected button press");
-		state = LoRA_TRANSMISSION_STATE;
+		if (loraTransactionActive) {
+			loraTransactionGuardRejectCount++;
+			Log.warn("Ignoring button-triggered transmit while LoRa transaction active (state=%s rejects=%lu)", stateNames[state], (unsigned long)loraTransactionGuardRejectCount);
+		}
+		else {
+			if (!listeningDurationTimer.isActive()) listeningDurationTimer.start();				// Don't reset timer if it is already running
+			Log.info("Detected button press");
+			requestLoRaTransmit("user-button");
+		}
 	}
 
 }
@@ -597,6 +731,11 @@ void loop() {
 void publishStateTransition(void)
 {
 	char stateTransitionString[256];
+	if (state == oldState) {
+		sameStateTransitionCount++;
+		Log.warn("Illegal same-state transition: %s count=%lu", stateNames[state], (unsigned long)sameStateTransitionCount);
+		return;
+	}
 	if (state == IDLE_STATE) {
 		if (!Time.isValid()) snprintf(stateTransitionString, sizeof(stateTransitionString), "From %s to %s with invalid time", stateNames[oldState],stateNames[state]);
 		else snprintf(stateTransitionString, sizeof(stateTransitionString), "From %s to %s", stateNames[oldState],stateNames[state]);

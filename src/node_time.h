@@ -13,5 +13,8 @@ bool nodeTimeApplyGatewayAck(time_t epoch, AB1805 &rtc, const char *context = nu
 bool nodeTimeHasAuthoritativeAck();
 bool nodeTimeIsProvisional();
 bool nodeTimeIsSaneEpoch(time_t epoch);
+time_t nodeTimeLastGatewayAckUtc();
+time_t nodeTimeLastNodeUtcBeforeAck();
+int32_t nodeTimeLastAckDriftSeconds();
 
 #endif
