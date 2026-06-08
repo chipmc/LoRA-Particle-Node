@@ -5,41 +5,8 @@
  * Date: 7-25-22
  */
 
-// Version list 
-// v0.01 - initial attempt - no sleep
-// v0.02 - Adding sleep and scheduling using localTimeRK
-// v0.03 - Refactoring the code to break up the main file monolith
-// v0.04 - Tested with Join and Report - works!
-// v0.05 - Added the Alert Report type 
-// v0.06 - Added settings for selecting sensor type and recording counts - 
-// v0.07 - StorageHelperRK support
-// v0.08 - LoRA Functions moved to Class
-// v0.09 - Added LoRA Radio sleep / clear buffer
-// v0.10 - Lots of little fixes minimally works now
-// v0.11 - Big changes to messages and storage.  Works reliably now.
-// v0.12 - Better management of node number at startup, also explicit set time for RTC
-// v0.13 - Gateway sets open / close and alerts - sysStatus object and join ack updated
-// v0.14 - Gateway can trigger join request to fix issues with deviceID and sensorType
-// v0.15 - Implementing recovery steps for missed connections
-// v0.16 - More robust try and less missed reporting events
-// v0.17 - Implemented full alert suite
-// v1 - Release Candidate - sending to Pilot mountain
-// v1.07 - Aligning numbers to Gateway - added nodeNumber validation, removed Alert message type
-// v1.08 - Added logic for pressure and PIR sensor light control
-// v1.09 - Changed startup behaviour - pressing the user button puts device into 60 second connect mode
-// v3.00 - Updated to reset the device after connecting so there is not an attempt to reconnect on each wake. (Gateway v2)
-// v4.00 - Makig the disconnect process cleaner and disabling watchdog during update
-// v5.00 - Updates to improve reliability
-// v8.00 - Fixed issue with unconstrained blinking - need to get to Pilot mountain - changed battery montiroing / center freq for stick antenna (v8 Node / v7 Gateway)
-// v10.00 - Breaking Change - v9 Gateway required - Node reports RSSI / SNR to Gateway - Listening / repeating mode, Simplified error handling
-// v12.00 - Debounce for button press-to transmit
-// v13.00 - Adding code to ensure the device charges reliably - Removed PMIC - Fixed the internal temp to int8_t
-// v15.00 - Recovery build branched from the known-good v13 LoRa behavior for clean production deployment ordering
-// v18.00 - Node resiliency, persistent schedule repair, and Boron PowerManager PMIC profile control for bench and solar deployments
-// v20.00 - Success-rate math hardening, centralized logging normalization, and debug-log gating cleanup for production field builds
-// v22.00 - Energy24h trend instrumentation, compact logging cleanup, PMIC/source visibility, and release-final soak validation
-// v22.01 - Soak hardening for LoRa transmit reentrancy guard, button-busy suppression, same-state transition diagnostics, and UTC sync logging
-// v24.00 - Released LoRa transmit guard retry-loop fix as product version 24
+// Current release: v24.00
+// Historical release notes live in CHANGELOG.md.
 
 
 #define NODENUMBEROFFSET 10000UL					// By how much do we off set each node by node number

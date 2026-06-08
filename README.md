@@ -267,24 +267,11 @@ See `CHANGELOG.md` for release history.
 
 ## Release Notes
 
-### v22.00
+### v24.00
 
-- Added `Energy24h` long-window energy trend instrumentation for outdoor solar soak validation and field stability analysis.
-- Improved PMIC fault/reset visibility, charging recovery summaries, and compact source-selection logging.
-- Reduced serial truncation with connect, sleep, wake, and PMIC log cleanup.
-- No intended occupancy, sleep-policy, watchdog, or connection-budget behavior changes.
-- Successful outdoor soak validation prior to release packaging.
+- Fixed the LoRa transmit guard so internally scheduled retry sends can advance from retry wait back into transmit without getting trapped in a runaway loop.
+- Reduced blocked-transmit log spam by collapsing repeated guard rejections into storm diagnostics.
+- Added retry-wait deadlock recovery telemetry so field logs show when the guard had to be cleared.
 
-### v20
-
-- Hardened node success-rate reporting so logged delivery percentages are zero-safe, bounded to `0.00`-`100.00`, and no longer exceed 100 after resets or low-sample startup windows.
-- Normalized runtime firmware logging to the centralized `Log.*` handler in app code and active runtime support libraries, reducing partial-line output that could interleave with system logs on Boron-class devices.
-- Added production-safe debug gates for field-only diagnostics using `FIELD_DEBUG_BUILD` and the existing `VERBOSE_SYSTEM_LOGS` controls.
-
-### v18
-
-- Added node resiliency hardening for LoRa retry, direct-to-gateway post-ACK sleep, and closed-hours scheduling behavior.
-- Preserved node identity and last known schedule across firmware updates by repairing invalid persisted frequency values in place instead of reinitializing sysStatus.
-- Added reusable node PowerManager support for normalized battery telemetry, conservative fallback SOC handling, and Boron PMIC input profile selection for UsbBench, Solar35W, and Auto modes.
-- Reduced PMIC log noise by caching the last applied profile and only reapplying SystemPowerConfiguration on cold boot or profile changes.
+For prior release history, see `CHANGELOG.md`.
 
