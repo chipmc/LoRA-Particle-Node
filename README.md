@@ -8,8 +8,8 @@ The gateway is not implemented in this repository. This firmware expects a compa
 
 ## Current Release
 
-- Firmware release: `v22.00`
-- Particle product version: `22`
+- Firmware release: `v24.00`
+- Particle product version: `24`
 - Target Device OS used in this workspace: `6.4.0`
 - System mode: `MANUAL`
 - Normal operating model: LoRa-only wake, no cloud dependency during normal reporting

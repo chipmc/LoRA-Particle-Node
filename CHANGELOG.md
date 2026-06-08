@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## v24.00 - 2026-06-08
+
+### Fixed
+- Stopped the LoRa transmit guard from trapping internally scheduled retry sends in a runaway retry-wait loop after a failed transmit.
+
+### Validated
+- Promoted the retry-guard hardening fix for release packaging as firmware product version 24.
+
 ## v22.00 - 2026-05-17
 
 ### Changed

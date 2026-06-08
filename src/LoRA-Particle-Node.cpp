@@ -39,6 +39,7 @@
 // v20.00 - Success-rate math hardening, centralized logging normalization, and debug-log gating cleanup for production field builds
 // v22.00 - Energy24h trend instrumentation, compact logging cleanup, PMIC/source visibility, and release-final soak validation
 // v22.01 - Soak hardening for LoRa transmit reentrancy guard, button-busy suppression, same-state transition diagnostics, and UTC sync logging
+// v24.00 - Released LoRa transmit guard retry-loop fix as product version 24
 
 
 #define NODENUMBEROFFSET 10000UL					// By how much do we off set each node by node number
@@ -96,6 +97,7 @@ time_t nextScheduledWakeEpoch(time_t nowEpoch, time_t anchorEpoch, unsigned long
 void logSleepCalculation(time_t nowEpoch, time_t targetEpoch, unsigned long wakeInSeconds);
 bool requestLoRaTransmit(const char *reason);
 String formatUtcDateTime(time_t epochUtc);
+void logBlockedTransmitReject(const char *reason);
 
 // Initialize Functions
 SystemSleepConfiguration config;                    // Initialize new Sleep 2.0 Api
@@ -121,7 +123,10 @@ uint8_t errorStateAlertCode = 0;
 bool ackSyncOccurredThisCycle = false;
 volatile bool loraTransactionActive = false;
 volatile uint32_t loraTransactionGuardRejectCount = 0;
+volatile uint32_t loraTransactionDeadlockRecoveryCount = 0;
 volatile uint32_t sameStateTransitionCount = 0;
+State lastBlockedTransmitState = INITIALIZATION_STATE;
+bool lastBlockedTransmitStateKnown = false;
 
 const unsigned long DISCOVERY_SLEEP_SECONDS = 7UL * 60UL;
 const unsigned long DISCOVERY_STALE_ACK_SECONDS = 3UL * 60UL * 60UL;
@@ -137,14 +142,10 @@ String formatUtcDateTime(time_t epochUtc) {
 	}
 	struct tm utcTm;
 	gmtime_r(&epochUtc, &utcTm);
-	char buffer[24];
-	snprintf(buffer, sizeof(buffer), "%04d-%02d-%02d %02d:%02d:%02d",
-		utcTm.tm_year + 1900,
-		utcTm.tm_mon + 1,
-		utcTm.tm_mday,
-		utcTm.tm_hour,
-		utcTm.tm_min,
-		utcTm.tm_sec);
+	char buffer[32];
+	if (strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", &utcTm) == 0) {
+		return "invalid";
+	}
 	return String(buffer);
 }
 
@@ -154,13 +155,27 @@ bool requestLoRaTransmit(const char *reason) {
 		Log.warn("Illegal same-state transition request: %s reason=%s count=%lu", stateNames[state], reason ? reason : "unknown", (unsigned long)sameStateTransitionCount);
 		return false;
 	}
-	if (loraTransactionActive) {
+	const bool internalRetryAdvance = loraTransactionActive && state == LoRA_RETRY_WAIT_STATE;
+	if (loraTransactionActive && !internalRetryAdvance) {
 		loraTransactionGuardRejectCount++;
-		Log.warn("Blocked LoRa transmit request while active: state=%s reason=%s rejects=%lu", stateNames[state], reason ? reason : "unknown", (unsigned long)loraTransactionGuardRejectCount);
+		logBlockedTransmitReject(reason);
 		return false;
 	}
 	state = LoRA_TRANSMISSION_STATE;
 	return true;
+}
+
+void logBlockedTransmitReject(const char *reason) {
+	const bool isFirstReject = (loraTransactionGuardRejectCount == 1UL);
+	const bool isThousandReject = ((loraTransactionGuardRejectCount % 1000UL) == 0UL);
+	const bool isStateChange = (!lastBlockedTransmitStateKnown || lastBlockedTransmitState != state);
+
+	if (isFirstReject || isThousandReject || isStateChange) {
+		Log.warn("Blocked transmit storm: state=%s reason=%s rejects=%lu", stateNames[state], reason ? reason : "unknown", (unsigned long)loraTransactionGuardRejectCount);
+	}
+
+	lastBlockedTransmitState = state;
+	lastBlockedTransmitStateKnown = true;
 }
 
 bool isSupportedSensorType(uint8_t sensorType) {
@@ -322,6 +337,7 @@ void setup() {
 
 	if (state == INITIALIZATION_STATE) state = SLEEPING_STATE;               	// Sleep unless otherwise from above code
 	Log.info("Startup %s complete: alert=%d lastConnect=%s", NODE_FIRMWARE_RELEASE_LABEL, sysStatus.get_alertCodeNode(), Time.format(sysStatus.get_lastConnection(), "%T").c_str());
+	Log.info("Startup diagnostics: transactionRecoveries=%lu", (unsigned long)loraTransactionDeadlockRecoveryCount);
   	digitalWrite(BLUE_LED,LOW);                                          	// Signal the end of startup
 }
 
@@ -509,6 +525,11 @@ void loop() {
 						(long)nodeTimeLastAckDriftSeconds(),
 						sysStatus.get_frequencyMinutes());
 				}
+				Log.info(
+					"ACK Diagnostics: transactionActive=%s blockedRejects=%lu deadlockRecoveries=%lu",
+					loraTransactionActive ? "true" : "false",
+					(unsigned long)loraTransactionGuardRejectCount,
+					(unsigned long)loraTransactionDeadlockRecoveryCount);
 				if (discoveryModeActive || discoverySleepCycles != 0) Log.info("Discovery mode exit after ACK after %u discovery sleeps", discoverySleepCycles);
 				discoveryModeActive = false;
 				discoverySleepCycles = 0;
@@ -595,6 +616,22 @@ void loop() {
 				variableDelay = 2000 + random(18000);						// a random delay from 2 to 20 seconds
 				startDelay = millis();
 				Log.info("Going to retry in %lu seconds", variableDelay/1000UL);
+			}
+
+			if (loraTransactionActive) {
+				const unsigned long elapsedMs = millis() - startDelay;
+				const unsigned long recoveryThresholdMs = variableDelay + 10000UL;
+				if (elapsedMs > recoveryThresholdMs) {
+					loraTransactionDeadlockRecoveryCount++;
+					loraTransactionActive = false;
+					Log.warn(
+						"RetryWait deadlock recovery triggered: elapsed=%lu retryDelay=%lu recoveries=%lu",
+						elapsedMs / 1000UL,
+						variableDelay / 1000UL,
+						(unsigned long)loraTransactionDeadlockRecoveryCount);
+					state = LoRA_TRANSMISSION_STATE;
+					break;
+				}
 			}
 
 			if (millis() >= startDelay + variableDelay) requestLoRaTransmit("retry-delay-expired");
@@ -711,7 +748,7 @@ void loop() {
 		userSwitchDectected = false;				// Clear the interrupt flag
 		if (loraTransactionActive) {
 			loraTransactionGuardRejectCount++;
-			Log.warn("Ignoring button-triggered transmit while LoRa transaction active (state=%s rejects=%lu)", stateNames[state], (unsigned long)loraTransactionGuardRejectCount);
+			logBlockedTransmitReject("user-button");
 		}
 		else {
 			if (!listeningDurationTimer.isActive()) listeningDurationTimer.start();				// Don't reset timer if it is already running
