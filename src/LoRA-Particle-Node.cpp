@@ -5,7 +5,7 @@
  * Date: 7-25-22
  */
 
-// Current release: v24.00
+// Current release: v25.00
 // Historical release notes live in CHANGELOG.md.
 
 

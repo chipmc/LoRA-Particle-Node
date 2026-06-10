@@ -71,6 +71,20 @@ uint8_t buf[RH_MESH_MAX_MESSAGE_LEN];               // Related to max message si
 
 namespace {
 
+constexpr uint8_t DATA_REPORT_PACKET_SIZE = 19;
+constexpr uint8_t DATA_REPORT_RSSI_OFFSET = 15;
+constexpr uint8_t DATA_REPORT_SNR_OFFSET = 17;
+
+void writeSignedInt16(uint8_t *buffer, uint8_t offset, int16_t value) {
+	const uint16_t encoded = static_cast<uint16_t>(value);
+	buffer[offset] = static_cast<uint8_t>(encoded >> 8);
+	buffer[offset + 1] = static_cast<uint8_t>(encoded & 0xff);
+}
+
+int16_t readSignedInt16(const uint8_t *buffer, uint8_t offset) {
+	return static_cast<int16_t>((static_cast<uint16_t>(buffer[offset]) << 8) | buffer[offset + 1]);
+}
+
 const char *radioModeName(RHGenericDriver::RHMode mode) {
 	switch (mode) {
 		case RHGenericDriver::RHModeInitialising: return "Initialising";
@@ -96,7 +110,9 @@ const char *modemConfigName(RH_RF95::ModemConfigChoice config) {
 
 void logLoRaSetupDiagnostics() {
 	Log.info(
-		"LoRa setup diag: RH=%d.%d libStatus=runtime-unavailable gateway=%u freq=%.2f modem=%d/%s timeout=%u txPower=%d useRFO=%s pins(cs=%d irq=%d rst=%d) regVersion=0x%02x",
+		"LoRa setup diag: fw=%s product=%u RH=%d.%d libStatus=runtime-unavailable gateway=%u freq=%.2f modem=%d/%s timeout=%u txPower=%d useRFO=%s pins(cs=%d irq=%d rst=%d) regVersion=0x%02x",
+		NODE_FIRMWARE_RELEASE_LABEL,
+		NODE_FIRMWARE_RELEASE,
 		RH_VERSION_MAJOR,
 		RH_VERSION_MINOR,
 		GATEWAY_ADDRESS,
@@ -258,19 +274,18 @@ bool LoRA_Functions::listenForLoRAMessageNode() {
 	uint8_t messageFlag;
 	uint8_t hops;
 	if (manager.recvfromAck(buf, &len, &from, &dest, &id, &messageFlag, &hops))	{	// We have received a message
-		(void) len;
 		#if LORA_VERBOSE_DIAGNOSTICS
-		Log.info("recvfromAck ok: from=%u dest=%u id=%u flag=%u/%s hops=%u RSSI/SNR=%d/%d", from, dest, id, messageFlag, loraStateNames[(messageFlag <= ALERT_ACK) ? messageFlag : 0], hops, driver.lastRssi(), driver.lastSNR());
+		Log.info("recvfromAck ok: from=%u dest=%u id=%u flag=%u/%s hops=%u len=%u fw=%s RSSI/SNR=%d/%d", from, dest, id, messageFlag, loraStateNames[(messageFlag <= ALERT_ACK) ? messageFlag : 0], hops, len, NODE_FIRMWARE_RELEASE_LABEL, driver.lastRssi(), driver.lastSNR());
 		#endif
 		if ((buf[0] << 8 | buf[1]) != sysStatus.get_magicNumber()) {
 			#if LORA_VERBOSE_DIAGNOSTICS
-			Log.info("Magic Number mismatch - ignoring message from=%u dest=%u id=%u RSSI/SNR=%d/%d", from, dest, id, driver.lastRssi(), driver.lastSNR());
+			Log.info("Magic Number mismatch - ignoring message from=%u dest=%u id=%u len=%u fw=%s RSSI/SNR=%d/%d", from, dest, id, len, NODE_FIRMWARE_RELEASE_LABEL, driver.lastRssi(), driver.lastSNR());
 			#endif
 			return false;
 		} 
 		lora_state = (LoRA_State)messageFlag;
 		#if LORA_VERBOSE_DIAGNOSTICS
-		Log.info("Received from node %d with RSSI / SNR of %d / %d - a %s message with %d hops", from, driver.lastRssi(), driver.lastSNR(), loraStateNames[lora_state], hops);
+		Log.info("Received from node %d with RSSI / SNR of %d / %d - a %s message with %d hops len=%u fw=%s", from, driver.lastRssi(), driver.lastSNR(), loraStateNames[lora_state], hops, len, NODE_FIRMWARE_RELEASE_LABEL);
 		#endif
 
 		if (lora_state == DATA_ACK) { if(LoRA_Functions::instance().receiveAcknowledmentDataReportNode()) return true;}
@@ -280,7 +295,7 @@ bool LoRA_Functions::listenForLoRAMessageNode() {
 	}
 	else {
 		#if LORA_VERBOSE_DIAGNOSTICS
-		Log.info("recvfromAck false: mode=%s rxGood=%u rxBad=%u RSSI/SNR=%d/%d", radioModeName(driver.mode()), driver.rxGood(), driver.rxBad(), driver.lastRssi(), driver.lastSNR());
+		Log.info("recvfromAck false: mode=%s rxGood=%u rxBad=%u len=%u fw=%s RSSI/SNR=%d/%d", radioModeName(driver.mode()), driver.rxGood(), driver.rxBad(), len, NODE_FIRMWARE_RELEASE_LABEL, driver.lastRssi(), driver.lastSNR());
 		#endif
 		LoRA_Functions::clearBuffer();
 	}
@@ -290,6 +305,8 @@ bool LoRA_Functions::listenForLoRAMessageNode() {
 
 bool LoRA_Functions::composeDataReportNode() {
 	float successPercent = 0.0f;
+	const int16_t reportRssi = current.get_RSSI();
+	const int16_t reportSnr = current.get_SNR();
 
 	if (current.get_messageCount()==0) {		// 8-bit number so need to protect against divide by zero on reset or wrap around
 		current.set_messageCount(0);
@@ -316,23 +333,38 @@ bool LoRA_Functions::composeDataReportNode() {
 	buf[12] = sysStatus.get_resetCount();
 	buf[13] = current.get_messageCount();
 	buf[14] = current.get_successCount();
-	buf[15] = highByte(current.get_RSSI());
-	buf[16] = lowByte(current.get_RSSI());
-	buf[17] = highByte(current.get_SNR());
-	buf[18] = lowByte(current.get_SNR());
+	writeSignedInt16(buf, DATA_REPORT_RSSI_OFFSET, reportRssi);
+	writeSignedInt16(buf, DATA_REPORT_SNR_OFFSET, reportSnr);
+
+	#if LORA_VERBOSE_DIAGNOSTICS
+	Log.info(
+		"DATA_RPT tx prepared: fw=%s size=%u magic=0x%04x node=%u msg=%u success=%u rssiRaw=%d rssiEnc=0x%04x rssiDec=%d snrRaw=%d snrEnc=0x%04x snrDec=%d",
+		NODE_FIRMWARE_RELEASE_LABEL,
+		DATA_REPORT_PACKET_SIZE,
+		sysStatus.get_magicNumber(),
+		sysStatus.get_nodeNumber(),
+		current.get_messageCount(),
+		current.get_successCount(),
+		reportRssi,
+		static_cast<uint16_t>((static_cast<uint16_t>(buf[DATA_REPORT_RSSI_OFFSET]) << 8) | buf[DATA_REPORT_RSSI_OFFSET + 1]),
+		readSignedInt16(buf, DATA_REPORT_RSSI_OFFSET),
+		reportSnr,
+		static_cast<uint16_t>((static_cast<uint16_t>(buf[DATA_REPORT_SNR_OFFSET]) << 8) | buf[DATA_REPORT_SNR_OFFSET + 1]),
+		readSignedInt16(buf, DATA_REPORT_SNR_OFFSET));
+	#endif
 
 	// Send a message to manager_server
   	// A route to the destination will be automatically discovered.
-	unsigned char result = manager.sendtoWait(buf, 19, GATEWAY_ADDRESS, DATA_RPT);
+	unsigned char result = manager.sendtoWait(buf, DATA_REPORT_PACKET_SIZE, GATEWAY_ADDRESS, DATA_RPT);
 	
 	if ( result == RH_ROUTER_ERROR_NONE) {
 		// It has been reliably delivered to the next node.
 		// Now wait for a reply from the ultimate server 
 		current.set_successCount(current.get_successCount()+1);
 		successPercent = computeSuccessPercent(current.get_messageCount(), current.get_successCount());
-		current.set_RSSI(driver.lastRssi());				// Set these here - will send on next data report
-		current.set_SNR(driver.lastSNR());
-		Log.info("Node %d data report delivered - success rate %4.2f and  RSSI/SNR of %d / %d ",sysStatus.get_nodeNumber(),successPercent,current.get_RSSI(), current.get_SNR());
+		current.set_RSSI(static_cast<int16_t>(driver.lastRssi()));				// Set these here - will send on next data report
+		current.set_SNR(static_cast<int16_t>(driver.lastSNR()));
+		Log.info("DATA_RPT tx confirmed: fw=%s size=%u node=%d success=%4.2f rawRSSI/SNR=%d/%d storedRSSI/SNR=%d/%d", NODE_FIRMWARE_RELEASE_LABEL, DATA_REPORT_PACKET_SIZE, sysStatus.get_nodeNumber(), successPercent, driver.lastRssi(), driver.lastSNR(), current.get_RSSI(), current.get_SNR());
 		digitalWrite(BLUE_LED, LOW);
 		return true;
 	}
@@ -417,9 +449,9 @@ bool LoRA_Functions::composeJoinRequesttNode() {
 	digitalWrite(BLUE_LED, LOW);
 
 	if (result == RH_ROUTER_ERROR_NONE) {					// It has been reliably delivered to the next node.
-		current.set_RSSI(driver.lastRssi());				// Set these here - will send on next data report
-		current.set_SNR(driver.lastSNR());
-		Log.info("Join request sent to gateway successfully RSSI/SNR of %d / %d ",current.get_RSSI(), current.get_SNR());
+		current.set_RSSI(static_cast<int16_t>(driver.lastRssi()));				// Set these here - will send on next data report
+		current.set_SNR(static_cast<int16_t>(driver.lastSNR()));
+		Log.info("Join request sent to gateway successfully fw=%s rawRSSI/SNR=%d/%d storedRSSI/SNR=%d/%d", NODE_FIRMWARE_RELEASE_LABEL, driver.lastRssi(), driver.lastSNR(), current.get_RSSI(), current.get_SNR());
 		return true;
 	}
 	else {

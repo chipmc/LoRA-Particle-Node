@@ -5,5 +5,5 @@
         "*.ino": "cpp"
     },
     "particle.targetPlatform": "boron",
-    "particle.firmwareVersion": "6.4.0"
+    "particle.firmwareVersion": "6.4.1"
 }

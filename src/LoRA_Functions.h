@@ -21,8 +21,8 @@ buf[11] battState;                          // Battery State
 buf[12] resets                              // Reset count
 buf[13] messageCount;                       // Sequential message number
 buf[14] successCount;                       // How Many successful sends
-buf[15-16] RSSI                             // From the Node's perspective
-buf[17-18] SNR                              // From the Node's perspective
+buf[15-16] RSSI                             // From the Node's perspective, signed int16_t big-endian
+buf[17-18] SNR                              // From the Node's perspective, signed int16_t big-endian
 */
 
 // Format of a data acknowledgement
