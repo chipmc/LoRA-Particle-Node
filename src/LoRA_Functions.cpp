@@ -8,6 +8,14 @@
 
 extern AB1805 ab1805;
 
+// External references from main program for diagnostic logging
+extern volatile bool loraTransactionActive;
+extern volatile uint32_t loraTransactionGuardRejectCount;
+extern volatile uint32_t loraTransactionDeadlockRecoveryCount;
+enum State { INITIALIZATION_STATE, ERROR_STATE, IDLE_STATE, SLEEPING_STATE, LoRA_TRANSMISSION_STATE, LoRA_LISTENING_STATE, LoRA_RETRY_WAIT_STATE, CONNECTING_STATE, DISCONNECTING_STATE, REPORTING_STATE};
+extern State state;
+extern char stateNames[10][16];
+
 #ifndef LORA_VERBOSE_DIAGNOSTICS
 #define LORA_VERBOSE_DIAGNOSTICS 0
 #endif
@@ -81,9 +89,11 @@ void writeSignedInt16(uint8_t *buffer, uint8_t offset, int16_t value) {
 	buffer[offset + 1] = static_cast<uint8_t>(encoded & 0xff);
 }
 
+#if LORA_VERBOSE_DIAGNOSTICS
 int16_t readSignedInt16(const uint8_t *buffer, uint8_t offset) {
 	return static_cast<int16_t>((static_cast<uint16_t>(buffer[offset]) << 8) | buffer[offset + 1]);
 }
+#endif
 
 const char *radioModeName(RHGenericDriver::RHMode mode) {
 	switch (mode) {
@@ -110,18 +120,19 @@ const char *modemConfigName(RH_RF95::ModemConfigChoice config) {
 
 void logLoRaSetupDiagnostics() {
 	Log.info(
-		"LoRa setup diag: fw=%s product=%u RH=%d.%d libStatus=runtime-unavailable gateway=%u freq=%.2f modem=%d/%s timeout=%u txPower=%d useRFO=%s pins(cs=%d irq=%d rst=%d) regVersion=0x%02x",
+		"LoRa setup: fw=%s product=%u RH=%d.%d gateway=%u freq=%.2f modem=%s timeout=%u txPower=%d useRFO=%s",
 		NODE_FIRMWARE_RELEASE_LABEL,
 		NODE_FIRMWARE_RELEASE,
 		RH_VERSION_MAJOR,
 		RH_VERSION_MINOR,
 		GATEWAY_ADDRESS,
 		RF95_FREQ,
-		(int) RF95_MODEM_CONFIG,
 		modemConfigName(RF95_MODEM_CONFIG),
 		LORA_MANAGER_TIMEOUT_MS,
 		RF95_TX_POWER_DBM,
-		RF95_USE_RFO ? "true" : "false",
+		RF95_USE_RFO ? "true" : "false");
+	Log.info(
+		"LoRa hardware: pins(cs=%d irq=%d rst=%d) regVersion=0x%02x",
 		RFM95_CS,
 		RFM95_INT,
 		RFM95_RST,
@@ -150,7 +161,29 @@ bool applyGatewayAckTiming(const char *context) {
 		return false;
 	}
 	sysStatus.set_lastConnection(ackEpoch);
-	sysStatus.set_frequencyMinutes((buf[6] << 8 | buf[7]));
+	// Gateway ACK schedule field buf[6-7] = reporting frequency in minutes
+	// This represents the fixed reporting interval (e.g., 60 = hourly reporting)
+	// NOT "minutes until next window" - it's the repeating period
+	// Schedule alignment uses fixed wall-clock boundaries based on this frequency
+	uint16_t scheduleField = (buf[6] << 8 | buf[7]);
+	sysStatus.set_frequencyMinutes(scheduleField);
+	
+	// Calculate next aligned wake time for diagnostics
+	if (Time.isValid() && scheduleField > 0) {
+		time_t nowEpoch = Time.now();
+		unsigned long wakeBoundary = scheduleField * 60UL;
+		// Wall-clock boundary alignment calculation
+		unsigned long secondsPastBoundary = (unsigned long)nowEpoch % wakeBoundary;
+		unsigned long secondsUntilBoundary = wakeBoundary - secondsPastBoundary;
+		time_t nextWakeEpoch = nowEpoch + (time_t)secondsUntilBoundary;
+		
+		Log.info("ACK Schedule: gatewayUtc=%s scheduleField=%u nextWakeUtc=%s secondsPastBoundary=%lu secondsUntilBoundary=%lu",
+			Time.format(ackEpoch, "%Y-%m-%d %H:%M:%S").c_str(),
+			scheduleField,
+			Time.format(nextWakeEpoch, "%Y-%m-%d %H:%M:%S").c_str(),
+			secondsPastBoundary,
+			secondsUntilBoundary);
+	}
 	return true;
 }
 
@@ -368,17 +401,27 @@ bool LoRA_Functions::composeDataReportNode() {
 		digitalWrite(BLUE_LED, LOW);
 		return true;
 	}
-	else if (result == RH_ROUTER_ERROR_NO_ROUTE) {
-		successPercent = computeSuccessPercent(current.get_messageCount(), current.get_successCount());
-        Log.info("Node %d - Data report send to gateway %d failed - No Route - success rate %4.2f", sysStatus.get_nodeNumber(), GATEWAY_ADDRESS, successPercent);
-    }
-    else if (result == RH_ROUTER_ERROR_UNABLE_TO_DELIVER) {
-		successPercent = computeSuccessPercent(current.get_messageCount(), current.get_successCount());
-        Log.info("Node %d - Data report send to gateway %d failed - Unable to Deliver - success rate %4.2f", sysStatus.get_nodeNumber(), GATEWAY_ADDRESS,successPercent);
-	}
-	else  {
-		successPercent = computeSuccessPercent(current.get_messageCount(), current.get_successCount());
-		Log.info("Node %d - Data report send to gateway %d failed  - Unknown - success rate %4.2f", sysStatus.get_nodeNumber(), GATEWAY_ADDRESS,successPercent);
+	else {
+		// ACK timeout or delivery failure - log diagnostics before recovery/cleanup
+		Log.info("ACK Timeout: msg=%u txActive=%s blockedRejects=%lu deadlockRecoveries=%lu state=%s",
+			current.get_messageCount(),
+			loraTransactionActive ? "true" : "false",
+			(unsigned long)loraTransactionGuardRejectCount,
+			(unsigned long)loraTransactionDeadlockRecoveryCount,
+			stateNames[state]);
+		
+		if (result == RH_ROUTER_ERROR_NO_ROUTE) {
+			successPercent = computeSuccessPercent(current.get_messageCount(), current.get_successCount());
+			Log.info("Node %d - Data report send to gateway %d failed - No Route - success rate %4.2f", sysStatus.get_nodeNumber(), GATEWAY_ADDRESS, successPercent);
+		}
+		else if (result == RH_ROUTER_ERROR_UNABLE_TO_DELIVER) {
+			successPercent = computeSuccessPercent(current.get_messageCount(), current.get_successCount());
+			Log.info("Node %d - Data report send to gateway %d failed - Unable to Deliver - success rate %4.2f", sysStatus.get_nodeNumber(), GATEWAY_ADDRESS,successPercent);
+		}
+		else  {
+			successPercent = computeSuccessPercent(current.get_messageCount(), current.get_successCount());
+			Log.info("Node %d - Data report send to gateway %d failed  - Unknown - success rate %4.2f", sysStatus.get_nodeNumber(), GATEWAY_ADDRESS,successPercent);
+		}
 	}
 	digitalWrite(BLUE_LED, LOW);
 	return false;

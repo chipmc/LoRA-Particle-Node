@@ -209,18 +209,22 @@ const char *sleepTimeSourceLabel() {
 }
 
 time_t nextScheduledWakeEpoch(time_t nowEpoch, time_t anchorEpoch, unsigned long wakeBoundary) {
+	(void)anchorEpoch;  // Unused - retained for API compatibility
+	
 	if (wakeBoundary == 0) {
 		return nowEpoch;
 	}
 
-	if (anchorEpoch > 0) {
-		time_t targetEpoch = anchorEpoch;
-		while (targetEpoch <= nowEpoch) {
-			targetEpoch += (time_t)wakeBoundary;
-		}
-		return targetEpoch;
-	}
-
+	// Fixed wall-clock boundary alignment based on frequencyMinutes
+	// Always aligns to the next boundary (e.g., :00:00 for hourly schedules)
+	// to prevent drift accumulation from ACK processing delays.
+	// 
+	// This implementation ONLY supports fixed-period schedules where the wake
+	// boundary is a simple modulo of epoch time (e.g., hourly, every N minutes).
+	// It does NOT support arbitrary anchor times or offset schedules.
+	//
+	// Example: nowEpoch = 07:15:42, wakeBoundary = 3600 (60 min)
+	//   => nextWake = 08:00:00 (strips seconds, aligns to hour)
 	return nowEpoch + (time_t)(wakeBoundary - ((unsigned long)nowEpoch % wakeBoundary));
 }
 
@@ -448,6 +452,11 @@ void loop() {
 				.duration((wakeInSeconds) * 1000L);							// Configuring sleep
 			EnergyTrend::instance().noteSleepEntry();
 			ab1805.stopWDT();  												// No watchdogs interrupting our slumber
+			// Drain serial buffer if USB connected to prevent split log messages
+			if (Serial.isConnected()) {
+				Serial.flush();
+				delay(75);  												// Allow USB CDC transmission to complete
+			}
 			SystemSleepResult result = System.sleep(config);              	// Put the device to sleep device continues operations from here
 			ab1805.resumeWDT();                                             // Wakey Wakey - WDT can resume
 			PowerManager::instance().beginWakeCycle(true);
@@ -554,6 +563,10 @@ void loop() {
 						sysStatus.set_alertCodeNode(3);
 						sysStatus.set_alertTimestampNode(Time.now());
 						state = ERROR_STATE;
+						Log.info("ACK Timeout Recovery: msg=%u txActive=%s nextState=%s",
+							current.get_messageCount(),
+							loraTransactionActive ? "true" : "false",
+							stateNames[state]);
 						break;
 					}
 				}
@@ -565,12 +578,21 @@ void loop() {
 				current.flush(true);
 				sysStatus.flush(true);
 				LoRA_Functions::instance().sleepLoRaRadio();
-				stopLoRaWindowTimers();
+				stopLoRaWindowTimers();									// NOTE: This clears loraTransactionActive
 				state = SLEEPING_STATE;
+				Log.info("ACK Timeout Recovery: msg=%u txActive=%s nextState=%s",
+					current.get_messageCount(),
+					loraTransactionActive ? "true" : "false",
+					stateNames[state]);
 			}
 			else {
 				Log.info("Transmission failed - retry number %d",retryCount++);
 				state = LoRA_RETRY_WAIT_STATE;
+				// NOTE: loraTransactionActive remains true during retry - will be cleared if transition out of LoRA window states
+				Log.info("ACK Timeout Recovery: msg=%u txActive=%s nextState=%s",
+					current.get_messageCount(),
+					loraTransactionActive ? "true" : "false",
+					stateNames[state]);
 			}
 		} break;
 
