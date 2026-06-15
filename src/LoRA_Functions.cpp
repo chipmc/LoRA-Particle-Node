@@ -161,23 +161,23 @@ bool applyGatewayAckTiming(const char *context) {
 		return false;
 	}
 	sysStatus.set_lastConnection(ackEpoch);
-	// Gateway ACK schedule field buf[6-7] = reporting frequency in minutes
-	// This represents the fixed reporting interval (e.g., 60 = hourly reporting)
-	// NOT "minutes until next window" - it's the repeating period
-	// Schedule alignment uses fixed wall-clock boundaries based on this frequency
+	// Gateway ACK buf[6-7] = scheduleIntervalMinutes (dual semantics)
+	// When openHours=true: wall-clock boundary reporting interval (e.g., 60 = hourly at :00:00)
+	// When openHours=false: relative sleep duration until next opening/window
+	// Stored in sysStatus.frequencyMinutes (persistent field name unchanged)
 	uint16_t scheduleField = (buf[6] << 8 | buf[7]);
 	sysStatus.set_frequencyMinutes(scheduleField);
 	
-	// Calculate next aligned wake time for diagnostics
+	// Diagnostic logging - only shows boundary-aligned calculation
+	// Actual sleep behavior depends on openHours (handled in SLEEPING_STATE)
 	if (Time.isValid() && scheduleField > 0) {
 		time_t nowEpoch = Time.now();
 		unsigned long wakeBoundary = scheduleField * 60UL;
-		// Wall-clock boundary alignment calculation
 		unsigned long secondsPastBoundary = (unsigned long)nowEpoch % wakeBoundary;
 		unsigned long secondsUntilBoundary = wakeBoundary - secondsPastBoundary;
 		time_t nextWakeEpoch = nowEpoch + (time_t)secondsUntilBoundary;
 		
-		Log.info("ACK Schedule: gatewayUtc=%s scheduleField=%u nextWakeUtc=%s secondsPastBoundary=%lu secondsUntilBoundary=%lu",
+		Log.info("ACK Schedule: gatewayUtc=%s scheduleIntervalMinutes=%u nextBoundaryUtc=%s secondsPast=%lu secondsUntil=%lu",
 			Time.format(ackEpoch, "%Y-%m-%d %H:%M:%S").c_str(),
 			scheduleField,
 			Time.format(nextWakeEpoch, "%Y-%m-%d %H:%M:%S").c_str(),
