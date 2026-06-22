@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## v26.00 - 2026-06-22
+
+### Added
+- Discovery mode for systematic gateway reconnection and recovery.
+- Sustained failure counter with LoRa reinitialization on threshold.
+- Alert 3 recovery powerdown behavior for improved field resilience.
+
+### Changed
+- Hardened transaction guard to prevent runaway retry loops.
+- Enhanced outage recovery validation and diagnostics.
+
+### Validated
+- Promoted the stabilization and recovery hardening fixes for release packaging as firmware product version 26.
+
 ## v24.00 - 2026-06-08
 
 ### Fixed

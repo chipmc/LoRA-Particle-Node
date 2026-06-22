@@ -29,7 +29,7 @@ buf[17-18] SNR                              // From the Node's perspective, sign
 /*    
     buf[0 - 1 ] magicNumber                 // Magic Number
     buf[2 - 5 ] Time.now()                  // Set the time 
-    buf[6 - 7] frequencyMinutes             // For the Gateway minutes on the hour
+    buf[6 - 7] scheduleIntervalMinutes      // Dual-semantics: if openHours=true, wall-clock boundary interval; if openHours=false, relative sleep duration
     buf[8] alertCode                        // This lets the Gateway trigger an alert on the node - typically a join request
     buf[9] sensorType                       // Let's the Gateway reset the sensor if needed 
     buf[10] openHours                       // From the Gateway to the node - is the park open?
@@ -48,10 +48,10 @@ buf[29] sensorType				            // Identifies sensor type to Gateway
 /*
     buf[0 - 1 ]  magicNumber                // Magic Number
     buf[2 - 5 ] Time.now()                  // Set the time 
-    buf[6 - 7] frequencyMinutes             // For the Gateway minutes on the hour  
+    buf[6 - 7] scheduleIntervalMinutes      // Schedule interval (semantics depend on openHours in future DATA_ACK; JOIN_ACK has no openHours field)
     buf[8] alertCodeNode                    // Gateway can set an alert code here
     buf[9]  newNodeNumber                   // New Node Number for device
-    buf[10]  sensorType				        // Gateway confirms sensor type
+    buf[10]  sensorType				        // Gateway confirms sensor type (NOT openHours for JOIN_ACK)
 */
 
 #ifndef __LORA_FUNCTIONS_H

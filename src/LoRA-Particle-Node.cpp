@@ -5,7 +5,7 @@
  * Date: 7-25-22
  */
 
-// Current release: v25.00
+// Current release: v26.00
 // Historical release notes live in CHANGELOG.md.
 
 
@@ -429,10 +429,10 @@ void loop() {
 				}
 				logSleepCalculation(nowEpoch, targetEpoch, wakeInSeconds);
 				if (sysStatus.get_openHours()) {
-					Log.info("Sleep for %lu seconds until next event at %s with sensor %s", wakeInSeconds, Time.format(targetEpoch, "%T").c_str(), "on");
+					Log.info("Sleep for %lu seconds until next boundary-aligned event at %s with sensor %s", wakeInSeconds, Time.format(targetEpoch, "%T").c_str(), "on");
 				}
 				else {
-					Log.info("Closed-hours sleep for %u minutes until %s", sysStatus.get_frequencyMinutes(), Time.format(targetEpoch, "%T").c_str());
+					Log.info("Closed-hours relative sleep for %u minutes until %s", sysStatus.get_frequencyMinutes(), Time.format(targetEpoch, "%T").c_str());
 				}
 			}
 			else if (!usingDiscoverySleep) {
@@ -495,7 +495,7 @@ void loop() {
 				ackSyncOccurredThisCycle = true;
 				if (sysStatus.get_lastConnection() > 0) {
 					Log.info(
-						"ACK TimeSync: gatewayUtc=%s nodeUtcBefore=%s driftSeconds=%+ld reportFrequencyMinutes=%u",
+					"ACK TimeSync: gatewayUtc=%s nodeUtcBefore=%s driftSeconds=%+ld scheduleIntervalMinutes=%u",
 						formatUtcDateTime(nodeTimeLastGatewayAckUtc()).c_str(),
 						formatUtcDateTime(nodeTimeLastNodeUtcBeforeAck()).c_str(),
 						(long)nodeTimeLastAckDriftSeconds(),
