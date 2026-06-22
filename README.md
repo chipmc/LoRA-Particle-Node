@@ -8,8 +8,8 @@ The gateway is not implemented in this repository. This firmware expects a compa
 
 ## Current Release
 
-- Firmware release: `v24.00`
-- Particle product version: `24`
+- Firmware release: `v26.00`
+- Particle product version: `26`
 - Target Device OS used in this workspace: `6.4.0`
 - System mode: `MANUAL`
 - Normal operating model: LoRa-only wake, no cloud dependency during normal reporting
@@ -265,13 +265,37 @@ In normal field operation:
 
 See `CHANGELOG.md` for release history.
 
+## Known Limitations
+
+### ACK Protocol v1
+
+The current acknowledgement protocol uses bytes 6-7 for `scheduleIntervalMinutes`, which serves a dual purpose:
+
+- **Open hours behavior**: Interprets this field as a boundary-aligned interval.
+- **Closed hours behavior**: Interprets this field as a relative sleep duration.
+
+This dual-use field is legacy behavior and may cause misalignment after gateway outage recovery. Future protocol versions will address this ambiguity.
+
+## Future Work
+
+### ACK Protocol v2
+
+Planned improvements include:
+
+- **Explicit cadence field**: Separate interval semantics from sleep duration.
+- **Explicit nextWakeEpoch**: Gateway-provided next wake time for deterministic scheduling.
+- **Protocol advertisement/version negotiation**: Allow nodes to negotiate protocol capabilities during join.
+
 ## Release Notes
 
-### v24.00
+### v26.00
 
-- Fixed the LoRa transmit guard so internally scheduled retry sends can advance from retry wait back into transmit without getting trapped in a runaway loop.
-- Reduced blocked-transmit log spam by collapsing repeated guard rejections into storm diagnostics.
-- Added retry-wait deadlock recovery telemetry so field logs show when the guard had to be cleared.
+- Stabilization release with improved LoRa recovery and transaction hardening.
+- Added discovery mode for systematic gateway reconnection.
+- Added sustained failure counter and LoRa reinitialization on threshold.
+- Added Alert 3 recovery powerdown behavior.
+- Hardened transaction guard to prevent runaway retry loops.
+- Enhanced outage recovery validation and diagnostics.
 
-For prior release history, see `CHANGELOG.md`.
+For complete release history, see `CHANGELOG.md`.
 
