@@ -170,6 +170,24 @@ const char *powerSourceLabel(int powerSource) {
 #endif
 }
 
+#if ENABLE_BORON_USB_SOURCE_OVERRIDE && PLATFORM_ID == PLATFORM_BORON
+/**
+ * @brief Detect USB enumeration via Boron hardware registers.
+ * 
+ * System.powerSource() can misclassify USB-powered Borons as VIN.
+ * Hardware USB registers are more reliable:
+ * - USBADDR nonzero means USB host enumeration occurred
+ * - USBREGSTATUS bit0 VBUSDETECT and bit1 OUTPUTRDY both set means USB regulator is active
+ * 
+ * @return true if USB is attached and enumerated
+ */
+bool isUsbEnumeratedBoron() {
+	uint32_t usbAddr = NRF_USBD->USBADDR;
+	uint32_t usbReg = NRF_POWER->USBREGSTATUS;
+	return (usbAddr != 0) && ((usbReg & 0x03) == 0x03);
+}
+#endif
+
 #if HAL_PLATFORM_POWER_MANAGEMENT && HAL_PLATFORM_PMIC_BQ24195
 struct PmicProfileSettings {
 	PowerInputProfile profile;
@@ -366,6 +384,19 @@ bool PowerManager::applyBasePowerProfile() {
 	}
 
 	int powerSource = readSystemPowerSource();
+
+#if ENABLE_BORON_USB_SOURCE_OVERRIDE && PLATFORM_ID == PLATFORM_BORON
+	// Override misclassified VIN/UNKNOWN to USB_HOST when USB hardware is enumerated.
+	// Do not override BATTERY - preserve battery-only behavior when USB is not present.
+	if ((powerSource == POWER_SOURCE_VIN || powerSource == 0) && isUsbEnumeratedBoron()) {
+		uint32_t usbAddr = NRF_USBD->USBADDR;
+		uint32_t usbReg = NRF_POWER->USBREGSTATUS;
+		Log.info("PowerSourceOverride: source=%s usbAddr=0x%02lx usbReg=0x%02lx -> USB_HOST reason=usb_enumerated",
+			powerSourceLabel(powerSource), usbAddr, usbReg);
+		powerSource = POWER_SOURCE_USB_HOST;
+	}
+#endif
+
 	const char *reason = "unsupported";
 	PowerInputProfile resolvedProfile = resolvePowerInputProfile(powerSource, reason);
 	activeInputProfile_ = resolvedProfile;

@@ -399,8 +399,12 @@ void loop() {
 				if (!powerReport.policy.shouldAllowDiscoveryMode) {
 					discoveryModeActive = false;
 					discoverySleepCycles = 0;
-					if (powerReport.reading.socStatus != PowerAvailability::Valid) Log.info("Discovery mode skipped - SOC %s, using normal sleep", PowerManager::availabilityLabel(powerReport.reading.socStatus));
-					else Log.info("Discovery mode skipped - SOC %.2f below policy threshold, using normal sleep", stateOfCharge);
+					if (powerReport.reading.socStatus != PowerAvailability::Valid) {
+						Log.info("Discovery mode skipped - SOC status %s, using normal sleep", PowerManager::availabilityLabel(powerReport.reading.socStatus));
+					}
+					else {
+						Log.info("Discovery mode skipped - SOC %.2f below policy threshold, using normal sleep", stateOfCharge);
+					}
 				}
 				else {
 					unsigned long ackAgeMinutes = (unsigned long)(ackAgeSeconds / 60);

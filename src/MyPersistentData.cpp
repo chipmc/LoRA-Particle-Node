@@ -107,8 +107,14 @@ bool sysStatusData::validate(size_t dataSize) {
     bool valid = PersistentDataFRAM::validate(dataSize);
     if (valid) {
         uint16_t frequencyMinutes = sysStatus.get_frequencyMinutes();
-        if (frequencyMinutes < MIN_REPORT_FREQUENCY_MINUTES || frequencyMinutes > MAX_REPORT_FREQUENCY_MINUTES) {
-            Log.info("sysStatus repaired frequencyMinutes from %u to 60", frequencyMinutes);
+        // Repair invalid cadence values: transient hints like 56, 30, 17, 12 or out-of-range values
+        // Valid persistent cadence: >= 60, <= 480, % 60 == 0
+        if (frequencyMinutes < MIN_REPORT_FREQUENCY_MINUTES || 
+            frequencyMinutes > MAX_REPORT_FREQUENCY_MINUTES ||
+            frequencyMinutes < 60 || 
+            frequencyMinutes > 480 ||
+            (frequencyMinutes % 60) != 0) {
+            Log.info("sysStatus repaired frequencyMinutes from %u to 60 (transient hint or invalid)", frequencyMinutes);
             sysStatus.set_frequencyMinutes(DEFAULT_REPORT_FREQUENCY_MINUTES);
             repairedFrequencyMinutes_ = true;
         }

@@ -151,6 +151,24 @@ void logRejectedGatewayValue(const char *fieldName, uint8_t value, const char *c
 	Log.warn("Rejecting invalid gateway %s %u in %s", fieldName, value, context);
 }
 
+/**
+ * @brief Validates report frequency for persistent cadence storage.
+ * 
+ * ACK v1 bytes 6-7 are overloaded. Valid persistent cadence values must be:
+ * - >= 60 (hourly minimum)
+ * - <= 480 (8 hours maximum)
+ * - % 60 == 0 (boundary-aligned)
+ * 
+ * Values like 56, 30, 17, 12 are transient ACK v1 scheduling hints
+ * and must not be persisted as cadence to prevent off-boundary drift.
+ * 
+ * @param minutes The scheduleField value from gateway ACK
+ * @return true if valid for persistent storage, false if transient hint
+ */
+bool isValidReportFrequencyMinutes(uint16_t minutes) {
+	return (minutes >= 60 && minutes <= 480 && (minutes % 60) == 0);
+}
+
 time_t gatewayAckEpoch() {
 	return (time_t)((buf[2] << 24) | (buf[3] << 16) | (buf[4] << 8) | buf[5]);
 }
@@ -166,23 +184,44 @@ bool applyGatewayAckTiming(const char *context) {
 	// NOT "minutes until next window" - it's the repeating period
 	// Schedule alignment uses fixed wall-clock boundaries based on this frequency
 	uint16_t scheduleField = (buf[6] << 8 | buf[7]);
-	sysStatus.set_frequencyMinutes(scheduleField);
 	
-	// Calculate next aligned wake time for diagnostics
-	if (Time.isValid() && scheduleField > 0) {
+	// ACK v1 cadence guard: only persist valid boundary-aligned cadence values
+	bool acceptedCadence = isValidReportFrequencyMinutes(scheduleField);
+	uint16_t persistedCadence = sysStatus.get_frequencyMinutes();
+	
+	if (acceptedCadence) {
+		sysStatus.set_frequencyMinutes(scheduleField);
+		persistedCadence = scheduleField;
+	}
+	
+	// Calculate next aligned wake time for diagnostics using persistedCadence
+	if (Time.isValid() && persistedCadence > 0) {
 		time_t nowEpoch = Time.now();
-		unsigned long wakeBoundary = scheduleField * 60UL;
+		unsigned long wakeBoundary = persistedCadence * 60UL;
 		// Wall-clock boundary alignment calculation
 		unsigned long secondsPastBoundary = (unsigned long)nowEpoch % wakeBoundary;
 		unsigned long secondsUntilBoundary = wakeBoundary - secondsPastBoundary;
-		time_t nextWakeEpoch = nowEpoch + (time_t)secondsUntilBoundary;
+		time_t nextBoundaryEpoch = nowEpoch + (time_t)secondsUntilBoundary;
 		
-		Log.info("ACK Schedule: gatewayUtc=%s scheduleField=%u nextWakeUtc=%s secondsPastBoundary=%lu secondsUntilBoundary=%lu",
-			Time.format(ackEpoch, "%Y-%m-%d %H:%M:%S").c_str(),
-			scheduleField,
-			Time.format(nextWakeEpoch, "%Y-%m-%d %H:%M:%S").c_str(),
-			secondsPastBoundary,
-			secondsUntilBoundary);
+		if (acceptedCadence) {
+			Log.info("ACK Schedule: context=%s scheduleField=%u acceptedCadence=yes persistedCadence=%u nextBoundaryUtc=%s",
+				context, scheduleField, persistedCadence, Time.format(nextBoundaryEpoch, "%Y-%m-%d %H:%M:%S").c_str());
+		}
+		else {
+			Log.info("ACK Schedule: context=%s scheduleField=%u acceptedCadence=no persistedCadence=%u reason=transient_hint nextBoundaryUtc=%s",
+				context, scheduleField, persistedCadence, Time.format(nextBoundaryEpoch, "%Y-%m-%d %H:%M:%S").c_str());
+		}
+	}
+	else {
+		// Fallback when Time is not valid
+		if (acceptedCadence) {
+			Log.info("ACK Schedule: context=%s scheduleField=%u acceptedCadence=yes persistedCadence=%u",
+				context, scheduleField, persistedCadence);
+		}
+		else {
+			Log.info("ACK Schedule: context=%s scheduleField=%u acceptedCadence=no persistedCadence=%u reason=transient_hint",
+				context, scheduleField, persistedCadence);
+		}
 	}
 	return true;
 }
