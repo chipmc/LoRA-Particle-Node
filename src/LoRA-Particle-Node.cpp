@@ -399,8 +399,12 @@ void loop() {
 				if (!powerReport.policy.shouldAllowDiscoveryMode) {
 					discoveryModeActive = false;
 					discoverySleepCycles = 0;
-					if (powerReport.reading.socStatus != PowerAvailability::Valid) Log.info("Discovery mode skipped - SOC %s, using normal sleep", PowerManager::availabilityLabel(powerReport.reading.socStatus));
-					else Log.info("Discovery mode skipped - SOC %.2f below policy threshold, using normal sleep", stateOfCharge);
+					if (powerReport.reading.socStatus != PowerAvailability::Valid) {
+						Log.info("Discovery mode skipped - SOC status %s, using normal sleep", PowerManager::availabilityLabel(powerReport.reading.socStatus));
+					}
+					else {
+						Log.info("Discovery mode skipped - SOC %.2f below policy threshold, using normal sleep", stateOfCharge);
+					}
 				}
 				else {
 					unsigned long ackAgeMinutes = (unsigned long)(ackAgeSeconds / 60);
@@ -547,6 +551,25 @@ void loop() {
 				retryCount = 0;												// Successful transmission - go listen for response
 				state = LoRA_LISTENING_STATE;
 			}
+			else if (discoveryModeActive) {
+				// Discovery mode: lightweight single-attempt TX, no retries, no failure escalation
+				// Applies to all discovery transmissions including user-button triggered attempts
+				// to conserve power during gateway reconnection efforts
+				Log.info("Discovery TX failed - no retry, sleeping for %lu seconds", DISCOVERY_SLEEP_SECONDS);
+				retryCount = 0;
+				// Do not increment consecutiveFailedReportCycles during discovery
+				// Do not set sustainedFailureAlert3Pending during discovery
+				// Do not trigger LoRa reinit during discovery
+				current.flush(true);
+				sysStatus.flush(true);
+				LoRA_Functions::instance().sleepLoRaRadio();
+				stopLoRaWindowTimers();									// NOTE: This clears loraTransactionActive
+				state = SLEEPING_STATE;
+				Log.info("Discovery mode lightweight exit: msg=%u txActive=%s nextState=%s",
+					current.get_messageCount(),
+					loraTransactionActive ? "true" : "false",
+					stateNames[state]);
+			}
 			else if (retryCount >= 3) {
 				Log.info("Too many retries - gateway unavailable, sleeping until next window");
 				retryCount = 0;
@@ -650,6 +673,22 @@ void loop() {
 			break;
 			case 3: {														// Case 3 is generic - power cycle device to recover from errors
 				if (millis() - errorStateEnteredAt > 30000L) {
+					// Discovery mode guard: suppress all Alert 3 recovery powerdowns during discovery
+					// to allow discovery reconnection attempts to continue
+					if (discoveryModeActive) {
+						Log.info("Discovery mode suppressing Alert 3 recovery powerdown");
+						sustainedFailureAlert3Pending = false;
+						sysStatus.set_alertCodeNode(0);
+						sysStatus.set_alertTimestampNode(Time.now());
+						current.flush(true);
+						sysStatus.flush(true);
+						LoRA_Functions::instance().sleepLoRaRadio();
+						stopLoRaWindowTimers();
+						state = SLEEPING_STATE;
+						break;
+					}
+					
+					// Normal Alert 3 handling when not in discovery mode
 					if (sustainedFailureAlert3Pending) {
 						const PowerReport &powerReport = PowerManager::instance().lastReport();
 						double stateOfCharge = current.get_stateOfCharge();

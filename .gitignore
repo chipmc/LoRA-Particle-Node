@@ -1,2 +1,3 @@
 /target/target/
-boron_firmware_*.bin
+
+.vscode/.vscode/

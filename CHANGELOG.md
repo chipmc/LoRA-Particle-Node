@@ -2,19 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
-## v26.00 - 2026-06-22
+## v25.00 - 2026-06-25
 
 ### Added
-- Discovery mode for systematic gateway reconnection and recovery.
-- Sustained failure counter with LoRa reinitialization on threshold.
-- Alert 3 recovery powerdown behavior for improved field resilience.
+- Lightweight discovery recovery mode for stale/missing gateway ACKs
+- Boron-only USB source override for USB bench misclassification
 
 ### Changed
-- Hardened transaction guard to prevent runaway retry loops.
-- Enhanced outage recovery validation and diagnostics.
+- ACK cadence persistence now accepts only 60–480 minute values in 60-minute increments
+- Transient gateway schedule hints (56, 59, 30, 17, 12) no longer overwrite persisted cadence
+- ACK schedule diagnostics now calculate nextBoundaryUtc using persisted cadence
+
+### Fixed
+- Invalid persisted frequencyMinutes repaired to default 60 at boot
+- SleepCalc alignment preserved after transient gateway ACK schedule hints
 
 ### Validated
-- Promoted the stabilization and recovery hardening fixes for release packaging as firmware product version 26.
+- ACK cadence guard behavior in production soak
+- Persisted cadence repair on boot
+- Boron USB source override functionality
+- Corrected ACK schedule diagnostics
+- Lightweight discovery recovery mode
 
 ## v24.00 - 2026-06-08
 

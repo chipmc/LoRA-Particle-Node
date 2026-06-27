@@ -25,4 +25,8 @@
 #define FIELD_DEBUG_BUILD 0
 #endif
 
+#ifndef ENABLE_BORON_USB_SOURCE_OVERRIDE
+#define ENABLE_BORON_USB_SOURCE_OVERRIDE 1
+#endif
+
 #endif
