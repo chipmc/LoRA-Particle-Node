@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## v25.00 - 2026-06-25
+
+### Added
+- Lightweight discovery recovery mode for stale/missing gateway ACKs
+- Boron-only USB source override for USB bench misclassification
+
+### Changed
+- ACK cadence persistence now accepts only 60–480 minute values in 60-minute increments
+- Transient gateway schedule hints (56, 59, 30, 17, 12) no longer overwrite persisted cadence
+- ACK schedule diagnostics now calculate nextBoundaryUtc using persisted cadence
+
+### Fixed
+- Invalid persisted frequencyMinutes repaired to default 60 at boot
+- SleepCalc alignment preserved after transient gateway ACK schedule hints
+
+### Validated
+- ACK cadence guard behavior in production soak
+- Persisted cadence repair on boot
+- Boron USB source override functionality
+- Corrected ACK schedule diagnostics
+- Lightweight discovery recovery mode
+
 ## v24.00 - 2026-06-08
 
 ### Fixed

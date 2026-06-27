@@ -8,8 +8,8 @@ The gateway is not implemented in this repository. This firmware expects a compa
 
 ## Current Release
 
-- Firmware release: `v24.00`
-- Particle product version: `24`
+- Firmware release: `v25.00`
+- Particle product version: `25`
 - Target Device OS used in this workspace: `6.4.0`
 - System mode: `MANUAL`
 - Normal operating model: LoRa-only wake, no cloud dependency during normal reporting
@@ -267,11 +267,13 @@ See `CHANGELOG.md` for release history.
 
 ## Release Notes
 
-### v24.00
+### v25.00
 
-- Fixed the LoRa transmit guard so internally scheduled retry sends can advance from retry wait back into transmit without getting trapped in a runaway loop.
-- Reduced blocked-transmit log spam by collapsing repeated guard rejections into storm diagnostics.
-- Added retry-wait deadlock recovery telemetry so field logs show when the guard had to be cleared.
+- **Lightweight discovery recovery mode**: Automatically recovers from stale or missing gateway ACKs without requiring full join sequence
+- **ACK cadence persistence guard**: Only accepts valid 60–480 minute cadence values in 60-minute increments; rejects transient schedule hints (56, 59, 30, 17, 12)
+- **Boot-time invalid frequency repair**: Automatically repairs invalid persisted frequencyMinutes to default 60 on boot
+- **Boron USB source override**: USB-powered Borons correctly identified, preventing misclassification as bench power
+- **Corrected ACK schedule diagnostics**: NextBoundaryUtc calculations now use persisted cadence, preserving SleepCalc alignment after transient gateway hints
 
 For prior release history, see `CHANGELOG.md`.
 
