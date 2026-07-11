@@ -60,6 +60,7 @@ buf[29] sensorType				            // Identifies sensor type to Gateway
 #include "Particle.h"
 
 extern uint16_t __system_product_version;
+extern uint16_t gatewayOneShotSleepMinutes;
 
 /**
  * This class is a singleton; you do not create one as a global, on the stack, or with new.

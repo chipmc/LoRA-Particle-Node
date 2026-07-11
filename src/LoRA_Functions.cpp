@@ -169,21 +169,41 @@ bool isValidReportFrequencyMinutes(uint16_t minutes) {
 	return (minutes >= 60 && minutes <= 480 && (minutes % 60) == 0);
 }
 
-time_t gatewayAckEpoch() {
+time_t decodeGatewayAckEpoch() {
 	return (time_t)((buf[2] << 24) | (buf[3] << 16) | (buf[4] << 8) | buf[5]);
 }
 
-bool applyGatewayAckTiming(const char *context) {
-	time_t ackEpoch = gatewayAckEpoch();
+uint16_t decodeGatewayScheduleField() {
+	return (uint16_t)((buf[6] << 8) | buf[7]);
+}
+
+bool applyGatewayAckTime(time_t ackEpoch, const char *context) {
 	if (!nodeTimeApplyGatewayAck(ackEpoch, ab1805, context)) {
 		return false;
 	}
 	sysStatus.set_lastConnection(ackEpoch);
+	return true;
+}
+
+void logDataAckSchedule(uint16_t scheduleField, bool openHours) {
+	Log.info(
+		"ACK Schedule: context=DATA_ACK scheduleField=%u openHours=%s persistedCadence=%u pendingClosedHoursSleep=%u",
+		scheduleField,
+		openHours ? "true" : "false",
+		sysStatus.get_frequencyMinutes(),
+		gatewayOneShotSleepMinutes);
+}
+
+bool applyGatewayAckTiming(const char *context) {
+	time_t ackEpoch = decodeGatewayAckEpoch();
+	if (!applyGatewayAckTime(ackEpoch, context)) {
+		return false;
+	}
 	// Gateway ACK schedule field buf[6-7] = reporting frequency in minutes
 	// This represents the fixed reporting interval (e.g., 60 = hourly reporting)
 	// NOT "minutes until next window" - it's the repeating period
 	// Schedule alignment uses fixed wall-clock boundaries based on this frequency
-	uint16_t scheduleField = (buf[6] << 8 | buf[7]);
+	uint16_t scheduleField = decodeGatewayScheduleField();
 	
 	// ACK v1 cadence guard: only persist valid boundary-aligned cadence values
 	bool acceptedCadence = isValidReportFrequencyMinutes(scheduleField);
@@ -468,22 +488,41 @@ bool LoRA_Functions::composeDataReportNode() {
 
 bool LoRA_Functions::receiveAcknowledmentDataReportNode() {
 	LEDStatus blinkBlue(RGB_COLOR_BLUE, LED_PATTERN_BLINK, LED_SPEED_NORMAL, LED_PRIORITY_IMPORTANT);
+	time_t ackEpoch = decodeGatewayAckEpoch();
+	uint16_t scheduleField = decodeGatewayScheduleField();
+	uint8_t alertCode = buf[8];
+	uint8_t sensorType = buf[9];
+	bool openHours = (buf[10] != 0);
+	uint8_t messageNumber = buf[11];
 
-	if (!isValidGatewayAlertCode(buf[8])) {
-		logRejectedGatewayValue("alert code", buf[8], "DATA_ACK");
+	if (!isValidGatewayAlertCode(alertCode)) {
+		logRejectedGatewayValue("alert code", alertCode, "DATA_ACK");
 		return false;
 	}
 
-	if (!applyGatewayAckTiming("DATA_ACK")) {
+	if (!applyGatewayAckTime(ackEpoch, "DATA_ACK")) {
 		return false;
 	}
 
-	// contents of response for 1-7 handled in common function above
-	sysStatus.set_alertCodeNode(buf[8]);
+	sysStatus.set_openHours(openHours);
+
+	if (!openHours) {
+		gatewayOneShotSleepMinutes = scheduleField;
+		logDataAckSchedule(scheduleField, openHours);
+	}
+	else {
+		gatewayOneShotSleepMinutes = 0;
+		if (isValidReportFrequencyMinutes(scheduleField)) {
+			sysStatus.set_frequencyMinutes(scheduleField);
+		}
+		logDataAckSchedule(scheduleField, openHours);
+	}
+
+	sysStatus.set_alertCodeNode(alertCode);
 
 	if (sysStatus.get_alertCodeNode() == 7) {		// This alert triggers an update to the sensor type on the node - handle it here
-		Log.info("The gatway is updating sensor type from %d to %d", sysStatus.get_sensorType(), buf[9]);
-		sysStatus.set_sensorType(buf[9]);
+		Log.info("The gatway is updating sensor type from %d to %d", sysStatus.get_sensorType(), sensorType);
+		sysStatus.set_sensorType(sensorType);
 		sysStatus.set_alertCodeNode(0);				// Sensor updated - clear alert
 	}
 	else if (sysStatus.get_alertCodeNode()) {
@@ -491,15 +530,12 @@ bool LoRA_Functions::receiveAcknowledmentDataReportNode() {
 		sysStatus.set_alertTimestampNode(Time.now());	
 	}
 
-	sysStatus.set_openHours(buf[10]);				// The Gateway tells us whether the park is open or closed
-
-	if (sysStatus.get_openHours() == 0) {			// Open Hours Processing
+	if (!openHours) {
 		current.resetEverything();
 		Log.info("Park is closed - reset everything");
 	}
-	else sysStatus.set_openHours(true);
 
-	Log.info("Data report acknowledged %s alert for message %d park is %s and alert code is %d", (sysStatus.get_alertCodeNode()) ? "with":"without", buf[11], (buf[10] ==1) ? "open":"closed", sysStatus.get_alertCodeNode());
+	Log.info("Data report acknowledged %s alert for message %d park is %s and alert code is %d", (sysStatus.get_alertCodeNode()) ? "with":"without", messageNumber, openHours ? "open":"closed", sysStatus.get_alertCodeNode());
 	
 	blinkBlue.setActive(true);
 	unsigned long strength = (unsigned long)(map(current.get_RSSI(),-10,-140,3000,100));

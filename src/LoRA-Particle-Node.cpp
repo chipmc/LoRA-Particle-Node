@@ -5,7 +5,7 @@
  * Date: 7-25-22
  */
 
-// Current release: v26.00
+// Current release: v25.01
 // Historical release notes live in CHANGELOG.md.
 
 
@@ -94,6 +94,7 @@ volatile uint32_t loraTransactionDeadlockRecoveryCount = 0;
 volatile uint32_t sameStateTransitionCount = 0;
 State lastBlockedTransmitState = INITIALIZATION_STATE;
 bool lastBlockedTransmitStateKnown = false;
+uint16_t gatewayOneShotSleepMinutes = 0;
 
 const unsigned long DISCOVERY_SLEEP_SECONDS = 7UL * 60UL;
 const unsigned long DISCOVERY_STALE_ACK_SECONDS = 3UL * 60UL * 60UL;
@@ -381,6 +382,7 @@ void loop() {
 			time_t targetEpoch = 0;
 			time_t nowEpoch = Time.isValid() ? Time.now() : 0;
 			bool usingDiscoverySleep = false;
+			bool usingGatewayOneShotSleep = false;
 			const char *discoveryReason = nullptr;
 			time_t lastConnection = sysStatus.get_lastConnection();
 			time_t ackAgeSeconds = 0;
@@ -393,7 +395,18 @@ void loop() {
 				if (ackAgeSeconds >= (time_t) DISCOVERY_STALE_ACK_SECONDS) discoveryReason = "stale gateway ACK";
 			}
 
-			if (discoveryReason) {
+			if (!sysStatus.get_openHours() && gatewayOneShotSleepMinutes > 0) {
+				uint16_t gatewaySleepMinutes = gatewayOneShotSleepMinutes;
+				gatewayOneShotSleepMinutes = 0;
+				wakeInSeconds = gatewaySleepMinutes * 60UL;
+				targetEpoch = nowEpoch + (time_t)wakeInSeconds;
+				usingGatewayOneShotSleep = true;
+				Log.info("Closed-hours one-shot sleep:");
+				Log.info("%u minutes", gatewaySleepMinutes);
+				Log.info("persistentCadence=%u", sysStatus.get_frequencyMinutes());
+			}
+
+			if (!usingGatewayOneShotSleep && discoveryReason) {
 				const PowerReport &powerReport = PowerManager::instance().lastReport();
 				double stateOfCharge = current.get_stateOfCharge();
 				if (!powerReport.policy.shouldAllowDiscoveryMode) {
@@ -421,7 +434,10 @@ void loop() {
 				}
 			}
 			// How long to sleep
-			if (!usingDiscoverySleep && Time.isValid()) {
+			if (usingGatewayOneShotSleep) {
+				logSleepCalculation(nowEpoch, targetEpoch, wakeInSeconds);
+			}
+			else if (!usingDiscoverySleep && Time.isValid()) {
 				wakeBoundary = (sysStatus.get_frequencyMinutes() * 60UL);
 				if (sysStatus.get_openHours()) {
 					targetEpoch = nextScheduledWakeEpoch(nowEpoch, lastConnection, wakeBoundary);
