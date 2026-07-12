@@ -193,4 +193,8 @@ Not current priorities:
 * New hardware
 * New features
 
-The project is currently in a stabilization and hardening phase.
+The project is currently paused after the Node v25.0.1 production stabilization handoff.
+
+Before future implementation work, read README.md and CHANGELOG.md to recover current release status, the ACK v1 schedule-field rationale, deferred backlog, and validation history.
+
+For this repo, preserve the current production posture unless Chip explicitly starts a new development cycle: documentation-only updates are acceptable, but firmware, protocol, FRAM, NodeDB, and release-version changes require renewed investigation, architecture review, and validation planning.

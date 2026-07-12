@@ -8,12 +8,13 @@ The gateway is not implemented in this repository. This firmware expects a compa
 
 ## Current Release
 
-- Firmware release: `v25.00`
+- Firmware release: `v25.0.1-production`
 - Particle product version: `25`
 - Target Device OS used in this workspace: `6.4.0`
 - System mode: `MANUAL`
 - Normal operating model: LoRa-only wake, no cloud dependency during normal reporting
 - Time authority model: boot RTC restore is provisional; only a valid gateway ACK timestamp updates system time, the AB1805 RTC, and `Energy24h` timing
+- Production status: bench validated, extended soak completed, overnight scheduling regression fixed, Raleigh validation complete, ready for NC State Parks deployment
 
 ## What This Repo Does
 
@@ -211,7 +212,9 @@ After joining, each report cycle is:
 2. Take measurements.
 3. Send `DATA_RPT`.
 4. Listen for `DATA_ACK`.
-5. Update time, frequency, alert code, and `openHours` from the gateway ack.
+5. Decode `openHours` before interpreting the DATA_ACK schedule field.
+   - During open hours, bytes 6-7 are treated as the persistent reporting cadence.
+   - During closed hours, bytes 6-7 are treated as a one-shot sleep interval for the next overnight wake only.
    Invalid ACK timestamps are ignored and do not advance local time or long-window energy timing.
 6. Save state to FRAM.
 7. Return to sleep.
@@ -261,13 +264,62 @@ In normal field operation:
 - `src/device_pinout.cpp`
 - `src/config.h`
 
+## Production Stabilization Summary
+
+The v25 production stabilization work focused on making scheduling, recovery, power-source detection, and field diagnostics deterministic enough for deployment.
+
+### v25.0.0
+
+- **ACK cadence guard**: ACK schedule values are persisted only when they are valid 60-480 minute reporting cadences in 60-minute increments.
+- **Transient schedule rejection**: Gateway one-off timing hints such as 56, 59, 30, 17, and 12 minutes no longer overwrite persistent cadence.
+- **Boot-time cadence repair**: Invalid persisted `frequencyMinutes` values are repaired to the default 60-minute cadence during boot.
+- **Lightweight discovery recovery**: Nodes with invalid time, no successful ACK, or stale ACK history use a conservative short discovery sleep instead of immediately escalating to heavier recovery behavior.
+- **Boron USB source override**: USB-powered Boron bench devices are classified correctly to avoid power-source misdiagnosis during validation.
+- **Logging improvements**: Scheduling, ACK, sleep calculation, power, and transaction diagnostics were tightened for soak testing and field triage.
+
+### v25.0.1
+
+v25.0.1 fixed the overnight scheduling regression found after the v25.0.0 cadence hardening.
+
+Root cause: DATA_ACK bytes 6-7 have dual semantics. During open hours they carry the persistent reporting cadence. During closed hours they carry the one-shot sleep interval until the next overnight wake. Cadence validation was happening before DATA_ACK `openHours` context was applied, so closed-hours values such as 479 minutes were rejected as invalid cadences, while 480 minutes could incorrectly overwrite the persistent reporting cadence.
+
+Architecture decision: this was fixed on the Node only. There were no gateway protocol changes, FRAM layout changes, NodeDB changes, or wire protocol changes. Preserving ACK v1 compatibility was more important than introducing a protocol revision during production stabilization.
+
+Implementation summary:
+
+- DATA_ACK now decodes `openHours` before interpreting bytes 6-7.
+- Closed-hours intervals are stored in the RAM-only `gatewayOneShotSleepMinutes` pending sleep variable.
+- Persistent cadence is never modified during closed-hours ACK handling.
+- Open-hours ACKs clear pending overnight sleep state before normal cadence handling resumes.
+- JOIN_ACK behavior remains unchanged and continues to use bytes 6-7 as the persistent cadence field.
+
+Validation summary:
+
+- Overnight bench test passed.
+- Extended overnight soak completed.
+- Raleigh validation completed.
+- Correct overnight closed-hours sleep was restored.
+- Normal morning reporting cadence resumed after open-hours ACK.
+
 ## Changelog
 
 See `CHANGELOG.md` for release history.
 
 ## Release Notes
 
-### v25.00
+### Current Production
+
+- Gateway: `v27.0.0-production`
+- Node: `v25.0.1-production`
+- Status: bench validated, extended soak completed, overnight regression fixed, Raleigh validation complete, ready for NC State Parks deployment
+
+### v25.0.1
+
+- **Overnight schedule fix**: DATA_ACK schedule bytes are interpreted after `openHours` is decoded, preventing closed-hours sleep intervals from being rejected or persisted as cadence.
+- **RAM-only overnight state**: Closed-hours one-shot sleep is held only until the next sleep calculation and does not change FRAM-backed cadence.
+- **Protocol compatibility preserved**: No gateway, NodeDB, FRAM, or wire-format changes were required.
+
+### v25.0.0
 
 - **Lightweight discovery recovery mode**: Automatically recovers from stale or missing gateway ACKs without requiring full join sequence
 - **ACK cadence persistence guard**: Only accepts valid 60–480 minute cadence values in 60-minute increments; rejects transient schedule hints (56, 59, 30, 17, 12)
@@ -276,4 +328,39 @@ See `CHANGELOG.md` for release history.
 - **Corrected ACK schedule diagnostics**: NextBoundaryUtc calculations now use persisted cadence, preserving SleepCalc alignment after transient gateway hints
 
 For prior release history, see `CHANGELOG.md`.
+
+## Future Enhancements
+
+These items were intentionally deferred. They are not required for the current production deployment.
+
+### 1. Multi-node collision reduction
+
+Proposal: delay the first transmission after wake by `nodeNumber x 2 seconds` so nodes that wake together do not all transmit at once. This should reduce simultaneous LoRa collisions in larger deployments without changing the reporting cadence.
+
+### 2. Gateway visibility of Node firmware
+
+Future gateway work should make Node firmware version visible for fleet management. Possible approaches include adding it to telemetry, exposing it through a Particle Function, recording it in NodeDB, or using another gateway-side reporting path. No implementation has been selected yet.
+
+### 3. Gateway uptime diagnostics
+
+Gateway uptime counter behavior after reflashing appeared inconsistent and needs investigation. Retained state, RTC-derived uptime, or reset/reflash interactions may be involved.
+
+### 4. RecoveryListen observations
+
+RecoveryListen exists to give the node a lightweight way to rediscover the gateway when ACK history is stale, missing, or time is invalid. It intentionally remains conservative: short discovery sleeps, power-policy gating, no retry storm, and no aggressive escalation during discovery attempts. The goal is to regain contact while protecting battery and avoiding unnecessary radio churn.
+
+### 5. ACK protocol evolution
+
+ACK v1 overloads bytes 6-7 for both persistent cadence and next sleep interval. A future protocol could separate persistent reporting cadence from transient next-sleep instructions. No ACK protocol changes are planned for the current production release.
+
+### 6. NodeDB persistence
+
+Gateway-side NodeDB save timing was discussed because LoRa receive-window timing is sensitive. Current testing found no evidence of a production issue. Treat any NodeDB persistence adjustment as a future optimization only if field data shows it is warranted.
+
+## Lessons Learned
+
+- Persistent configuration and transient operational state must be kept separate. The overnight bug came from treating a one-shot closed-hours sleep interval like a persistent cadence candidate.
+- RAM-only state was preferable to FRAM for closed-hours sleep because the value is consumed once, should not survive unrelated resets as configuration, and should not churn persistent storage.
+- Node-only fixes are preferred when protocol compatibility can be preserved. This reduced deployment risk and avoided gateway, NodeDB, FRAM, and wire-format changes during stabilization.
+- Production observability matters. The added ACK, cadence, sleep, recovery, power, and transaction logs made bench validation and overnight soak results much easier to interpret.
 

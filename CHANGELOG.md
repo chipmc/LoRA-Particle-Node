@@ -2,7 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
-## v25.00 - 2026-06-25
+## v25.0.1 - 2026-07-12
+
+### Fixed
+- Fixed the overnight scheduling regression caused by interpreting DATA_ACK bytes 6-7 as persistent cadence before decoding DATA_ACK `openHours` context.
+- Closed-hours DATA_ACK schedule values are now treated as one-shot sleep intervals, so overnight values such as 479 minutes are accepted for the next sleep without being persisted.
+- Prevented closed-hours 480-minute ACK values from overwriting the persistent reporting cadence.
+
+### Changed
+- DATA_ACK handling now decodes `openHours` before interpreting the schedule field.
+- Closed-hours sleep intervals are stored in RAM-only pending sleep state and cleared after use.
+- Open-hours DATA_ACK clears pending overnight state and resumes normal cadence handling.
+- JOIN_ACK cadence handling is unchanged.
+
+### Compatibility
+- Node-only fix.
+- No gateway protocol change.
+- No FRAM layout change.
+- No NodeDB change.
+- No wire protocol change.
+
+### Validated
+- Overnight bench test passed.
+- Extended overnight soak completed.
+- Raleigh validation completed.
+- Correct overnight sleep restored.
+- Normal morning cadence resumed.
+
+## v25.0.0 - 2026-06-25
 
 ### Added
 - Lightweight discovery recovery mode for stale/missing gateway ACKs
