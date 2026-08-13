@@ -463,6 +463,15 @@ void loop() {
 			else {
 				logSleepCalculation(nowEpoch, targetEpoch, wakeInSeconds);
 			}
+			// Apply per-node stagger for collision avoidance
+			if (!usingDiscoverySleep && (usingGatewayOneShotSleep || Time.isValid())) {
+				uint8_t nodeNum = sysStatus.get_nodeNumber();
+				if (nodeNum >= 1 && nodeNum <= 10) {
+					unsigned long staggerSeconds = (unsigned long)nodeNum * 2UL;
+					wakeInSeconds += staggerSeconds;
+					Log.info("Node %u stagger: +%lu seconds (total sleep %lu seconds)", nodeNum, staggerSeconds, wakeInSeconds);
+				}
+			}
 			// Turn things off to save power
 			updateSensorPowerState(shouldSensorBePowered(), "pre-sleep");
 			// Configure Sleep
