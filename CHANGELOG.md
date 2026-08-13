@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## v28.00 - 2026-08-13
+
+### Added
+- Per-node reporting stagger for collision avoidance: adds `nodeNumber * 2` seconds to the computed sleep duration.
+- Stagger is applied after cadence validation and persistence, never touching the FRAM-backed `frequencyMinutes` value.
+- Covers open-hours boundary-aligned reporting, closed-hours relative sleep, and closed-hours one-shot sleep.
+
+### Changed
+- Power manager input profile detection now defaults to AUTO (previously hardcoded to USB_BENCH), enabling dynamic detection based on actual power source at runtime.
+
+### Validated
+- Node 1 and Node 2 stagger formula verification across multiple sleep cycles.
+- Wake time offset consistency and zero drift/compounding behavior.
+
 ## v25.0.1 - 2026-07-12
 
 ### Fixed

@@ -8,13 +8,13 @@ The gateway is not implemented in this repository. This firmware expects a compa
 
 ## Current Release
 
-- Firmware release: `v25.0.1-production`
-- Particle product version: `25`
+- Firmware release: `v28.00-testing`
+- Particle product version: `28`
 - Target Device OS used in this workspace: `6.4.0`
 - System mode: `MANUAL`
 - Normal operating model: LoRa-only wake, no cloud dependency during normal reporting
 - Time authority model: boot RTC restore is provisional; only a valid gateway ACK timestamp updates system time, the AB1805 RTC, and `Energy24h` timing
-- Production status: bench validated, extended soak completed, overnight scheduling regression fixed, Raleigh validation complete, ready for NC State Parks deployment
+- Production status: reporting stagger collision avoidance added and hardware-verified; currently in 24-hour soak testing before handoff to field team
 
 ## What This Repo Does
 
